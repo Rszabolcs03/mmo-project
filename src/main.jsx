@@ -2284,21 +2284,7 @@ function App() {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousemove', updateMouse);
     };
-  }, [authUser, keys]);
-
-  if (!authReady || !authUser) {
-    return (
-      <AuthGate
-        authForm={authForm}
-        authMode={authMode}
-        authStatus={authReady ? authStatus : 'Checking session...'}
-        firebaseReady={hasFirebaseConfig}
-        onAuthChange={setAuthForm}
-        onAuthModeChange={setAuthMode}
-        onAuthSubmit={submitAuth}
-      />
-    );
-  }
+  }, [keys]);
 
   const currentClass = character ? CLASSES[character.classId] : null;
   const currentRace = character ? RACES[character.raceId] : null;
@@ -2322,7 +2308,18 @@ function App() {
     <main className="app-shell">
       <section className="game-stage" aria-label="Top-down game prototype">
         <canvas ref={canvasRef} className="game-canvas" />
-        {!character && (
+        {(!authReady || !authUser) && (
+          <AuthGate
+            authForm={authForm}
+            authMode={authMode}
+            authStatus={authReady ? authStatus : 'Checking session...'}
+            firebaseReady={hasFirebaseConfig}
+            onAuthChange={setAuthForm}
+            onAuthModeChange={setAuthMode}
+            onAuthSubmit={submitAuth}
+          />
+        )}
+        {authReady && authUser && !character && (
           <CharacterMenu
             authUser={authUser}
             characters={characters}
