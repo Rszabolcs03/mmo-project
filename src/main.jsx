@@ -485,6 +485,7 @@ async function loadTiledMap() {
   const spawnsLayer = map.layers.find((layer) => layer.name === 'Spawns');
   const bossSpawnsLayer = map.layers.find((layer) => layer.name === 'BossSpawns');
   const npcsLayer = map.layers.find((layer) => layer.name === 'NPCs');
+  const raceStartsLayer = map.layers.find((layer) => layer.name === 'raceStart');
   const spawns = [
     ...(spawnsLayer?.objects ?? []),
     ...(bossSpawnsLayer?.objects ?? []),
@@ -498,6 +499,7 @@ async function loadTiledMap() {
     enemySpawns: spawns.filter((spawn) => spawn.props.enemyType),
     bossSpawns: spawns.filter((spawn) => spawn.props.bossType || spawn.name.toLowerCase().includes('boss')),
     npcs: (npcsLayer?.objects ?? []).map((npc) => ({ ...npc, props: getProperties(npc) })),
+    raceStarts: (raceStartsLayer?.objects ?? []).map((start) => ({ ...start, props: getProperties(start) })),
   };
 }
 
@@ -561,6 +563,36 @@ function randomPointInBounds(bounds) {
     x: bounds.x + Math.random() * bounds.width,
     y: bounds.y + Math.random() * bounds.height,
   };
+}
+
+function getRaceStartPosition(tiledWorld, raceId) {
+  const normalizedRace = String(raceId ?? '').toLowerCase();
+  const start = tiledWorld?.raceStarts?.find((candidate) => (
+    candidate.name.toLowerCase().includes(normalizedRace)
+  )) ?? tiledWorld?.raceStarts?.find((candidate) => (
+    candidate.name.toLowerCase().includes('human')
+  ));
+
+  if (!start) return { x: 420, y: 420, facing: 0 };
+
+  return {
+    x: start.x,
+    y: start.y,
+    facing: Number(start.props.facing ?? 0),
+  };
+}
+
+function getCharacterStartPosition(tiledWorld, character) {
+  const savedPosition = character?.position;
+  if (Number.isFinite(savedPosition?.x) && Number.isFinite(savedPosition?.y)) {
+    return {
+      x: savedPosition.x,
+      y: savedPosition.y,
+      facing: Number(savedPosition.facing ?? 0),
+    };
+  }
+
+  return getRaceStartPosition(tiledWorld, character?.raceId);
 }
 
 function createEnemy(id, spawnObject, fallbackPosition) {
@@ -932,6 +964,13 @@ function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWid
       const localId = gid - tileset.firstgid;
       const sourceX = (localId % tileset.columns) * tileset.tilewidth;
       const sourceY = Math.floor(localId / tileset.columns) * tileset.tileheight;
+      const targetX = col * map.tilewidth;
+      const targetY = row * map.tileheight;
+
+      if (layer.name === 'Ground') {
+        context.fillStyle = gid >= 1300 ? '#7d6b58' : '#89945e';
+        context.fillRect(targetX, targetY, map.tilewidth, map.tileheight);
+      }
 
       context.drawImage(
         tileset.image,
@@ -939,8 +978,8 @@ function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWid
         sourceY,
         tileset.tilewidth,
         tileset.tileheight,
-        col * map.tilewidth,
-        row * map.tileheight,
+        targetX,
+        targetY,
         map.tilewidth,
         map.tileheight,
       );
@@ -1464,11 +1503,7 @@ function App() {
     nextSpawnAt.current = performance.now() + 700;
     nextBossSpawnAt.current = performance.now() + nextBossDelay();
     cooldowns.current = { 1: 0, 2: 0 };
-    player.current = {
-      x: nextCharacter.position?.x ?? 420,
-      y: nextCharacter.position?.y ?? 420,
-      facing: nextCharacter.position?.facing ?? 0,
-    };
+    player.current = getCharacterStartPosition(tiledWorld.current, nextCharacter);
     const stats = getTotalStats(nextCharacter);
     setVitalsValue({ hp: stats.health, mana: stats.mana });
     setIsDead(false);
@@ -1493,7 +1528,7 @@ function App() {
       gold: 0,
       talents: { spec: null },
       createdAt: new Date().toISOString(),
-      position: { x: 420, y: 420, facing: 0 },
+      position: getRaceStartPosition(tiledWorld.current, newCharacter.raceId),
     };
     const nextCharacters = [...characters, characterToSave];
     setCharacters(nextCharacters);
@@ -1660,7 +1695,7 @@ function App() {
     if (!activeCharacter) return;
 
     const stats = getTotalStats(activeCharacter);
-    player.current = { x: 420, y: 420, facing: 0 };
+    player.current = getRaceStartPosition(tiledWorld.current, activeCharacter.raceId);
     enemies.current = [];
     effects.current = [];
     nextSpawnAt.current = performance.now() + 900;
@@ -1865,7 +1900,7 @@ function App() {
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !authUser) return undefined;
+    if (!canvas) return undefined;
 
     const context = canvas.getContext('2d');
     if (!context) return undefined;
@@ -2329,7 +2364,7 @@ function App() {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousemove', updateMouse);
     };
-  }, [authUser, keys]);
+  }, [keys]);
 
   if (!authReady || !authUser) {
     return (
