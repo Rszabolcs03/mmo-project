@@ -1,10 +1,9 @@
 services:
   - type: web
     name: mmo-project-socket-server
-    runtime: node
+    runtime: docker
     plan: free
-    buildCommand: npm ci
-    startCommand: npm run start
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
