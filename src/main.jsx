@@ -29,7 +29,7 @@ import { deleteCloudCharacter, loadCloudCharacters, saveCloudCharacter } from '.
 import { auth, hasFirebaseConfig } from './firebaseClient';
 import './styles.css';
 
-const OFFLINE_DEMO = true;
+const OFFLINE_DEMO = false;
 const OFFLINE_USER = {
   uid: 'offline-demo',
   email: 'Offline demo',
@@ -2334,7 +2334,7 @@ function App() {
         )}
         <div className="hud top-left">
           <Gamepad2 size={18} />
-          <span>Offline demo | WASD / nyilak | {mapStatus} | {renderStatus}</span>
+          <span>Cloud save | WASD / nyilak | {mapStatus} | {renderStatus}</span>
         </div>
         {character && (
           <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
