@@ -17,6 +17,7 @@ import {
   HeartPulse,
   Leaf,
   Map,
+  MapPin,
   Shield,
   Skull,
   Sparkles,
@@ -1315,6 +1316,7 @@ function App() {
   const socketRef = React.useRef(null);
   const onlinePlayersRef = React.useRef([]);
   const lastSocketUpdateAt = React.useRef(0);
+  const lastRenderStatusAt = React.useRef(0);
   const vitalsRef = React.useRef({ hp: BASE_STATS.health, mana: BASE_STATS.mana });
   const deadRef = React.useRef(false);
   const shopOpenRef = React.useRef(false);
@@ -1337,6 +1339,7 @@ function App() {
   const [authReady, setAuthReady] = React.useState(!hasFirebaseConfig);
   const [onlinePlayers, setOnlinePlayers] = React.useState([]);
   const [socketStatus, setSocketStatus] = React.useState(getSocketUrl() ? 'Socket offline' : 'Socket server not configured');
+  const [renderStatus, setRenderStatus] = React.useState('Render starting...');
   const [authStatus, setAuthStatus] = React.useState(
     hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
   );
@@ -1705,6 +1708,16 @@ function App() {
     setIsDead(false);
     deadRef.current = false;
     setLastCast('Respawned');
+  };
+
+  const resetToMapStart = () => {
+    const activeCharacter = characterRef.current;
+    if (!activeCharacter) return;
+
+    const startPosition = getRaceStartPosition(tiledWorld.current, activeCharacter.raceId);
+    player.current = startPosition;
+    setPosition({ ...startPosition });
+    setLastCast('Moved to map start');
   };
 
   const saveCurrentCharacter = () => {
@@ -2093,6 +2106,7 @@ function App() {
           drawTiledZones(context, tiledWorld.current.zones);
         } catch (error) {
           console.error(error);
+          setRenderStatus(`Render error: ${error.message}`);
         }
       } else {
         const grass = context.createLinearGradient(0, 0, WORLD.width, WORLD.height);
@@ -2153,6 +2167,13 @@ function App() {
     const tick = (now) => {
       const delta = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
+
+      if (now - lastRenderStatusAt.current > 700) {
+        lastRenderStatusAt.current = now;
+        setRenderStatus(
+          `Render live ${canvas.clientWidth}x${canvas.clientHeight} | cam ${Math.round(camera.current.x)}, ${Math.round(camera.current.y)}`,
+        );
+      }
 
       if (selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
         enemies.current.push(createEnemy(nextEnemyId.current, pickSpawn(tiledWorld.current?.enemySpawns ?? []), player.current));
@@ -2414,7 +2435,7 @@ function App() {
         )}
         <div className="hud top-left">
           <Gamepad2 size={18} />
-          <span>WASD / nyilak | {mapStatus} | {socketStatus}</span>
+          <span>WASD / nyilak | {mapStatus} | {socketStatus} | {renderStatus}</span>
         </div>
         {character && (
           <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
@@ -2432,6 +2453,12 @@ function App() {
           <button className="talents-button" type="button" onClick={() => setTalentsOpen((open) => !open)}>
             <Sparkles size={18} />
             <span>Talents</span>
+          </button>
+        )}
+        {character && (
+          <button className="reset-position-button" type="button" onClick={resetToMapStart}>
+            <MapPin size={18} />
+            <span>Map Start</span>
           </button>
         )}
         <div className="hud top-right">
