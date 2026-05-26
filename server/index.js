@@ -43,6 +43,15 @@ const io = new Server(server, {
 const players = new Map();
 
 app.use(cors({ origin: CLIENT_ORIGIN }));
+app.get('/', (_request, response) => {
+  response.json({
+    ok: true,
+    service: 'mmo-project socket server',
+    health: '/health',
+    players: players.size,
+  });
+});
+
 app.get('/health', (_request, response) => {
   response.json({ ok: true, players: players.size });
 });
