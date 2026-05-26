@@ -2385,7 +2385,7 @@ function App() {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousemove', updateMouse);
     };
-  }, [keys]);
+  }, [authUser, keys]);
 
   if (!authReady || !authUser) {
     return (
