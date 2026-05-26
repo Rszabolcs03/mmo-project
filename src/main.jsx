@@ -826,11 +826,6 @@ function drawLocalPlayerMarker(context, player, character) {
 
   context.save();
   context.translate(player.x, player.y);
-  context.strokeStyle = 'rgba(139, 233, 253, 0.9)';
-  context.lineWidth = 3;
-  context.beginPath();
-  context.arc(0, 0, 26, 0, Math.PI * 2);
-  context.stroke();
 
   context.fillStyle = 'rgba(16, 24, 30, 0.78)';
   context.strokeStyle = 'rgba(139, 233, 253, 0.42)';
