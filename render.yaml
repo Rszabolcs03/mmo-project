@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: mmo-project-socket-server
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_ORIGIN
+        value: https://mmo-project-a4975.web.app
+      - key: REQUIRE_FIREBASE_AUTH
+        value: false
