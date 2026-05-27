@@ -201,6 +201,7 @@ body {
 .selection-screen {
   position: absolute;
   inset: 0;
+  z-index: 20;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -294,8 +295,10 @@ h1 {
 }
 
 .auth-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
   display: grid;
-  min-height: 100vh;
   place-items: center;
   padding: 24px;
   background:
