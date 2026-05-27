@@ -848,20 +848,19 @@ function drawLocalPlayerMarker(context, player, character) {
 }
 
 function drawOnlinePlayer(context, onlinePlayer) {
-  if (
-    !onlinePlayer
-    || !CLASSES[onlinePlayer.classId]
-    || !RACES[onlinePlayer.raceId]
-    || !Number.isFinite(onlinePlayer.x)
-    || !Number.isFinite(onlinePlayer.y)
-  ) {
-    return;
-  }
+  if (!onlinePlayer) return;
+  const x = Number.isFinite(onlinePlayer.x) ? onlinePlayer.x : onlinePlayer.targetX;
+  const y = Number.isFinite(onlinePlayer.y) ? onlinePlayer.y : onlinePlayer.targetY;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
-  drawPlayer(context, onlinePlayer, onlinePlayer.classId, onlinePlayer.raceId);
+  const classId = CLASSES[onlinePlayer.classId] ? onlinePlayer.classId : 'warrior';
+  const raceId = RACES[onlinePlayer.raceId] ? onlinePlayer.raceId : 'human';
+  const drawablePlayer = { ...onlinePlayer, x, y };
+
+  drawPlayer(context, drawablePlayer, classId, raceId);
 
   context.save();
-  context.translate(onlinePlayer.x, onlinePlayer.y);
+  context.translate(x, y);
   context.fillStyle = 'rgba(16, 24, 30, 0.78)';
   context.strokeStyle = 'rgba(139, 233, 253, 0.42)';
   context.lineWidth = 1;
@@ -879,14 +878,20 @@ function drawOnlinePlayer(context, onlinePlayer) {
 }
 
 function drawEnemy(context, enemy, now) {
-  const pulse = Math.sin(now / 180 + enemy.wobble) * 2;
-  const recentlyHit = now - enemy.hitAt < 140;
+  const x = Number.isFinite(enemy?.x) ? enemy.x : enemy?.targetX;
+  const y = Number.isFinite(enemy?.y) ? enemy.y : enemy?.targetY;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  const pulse = Math.sin(now / 180 + (enemy.wobble ?? 0)) * 2;
+  const recentlyHit = now - (enemy.hitAt ?? 0) < 140;
   const isBoss = enemy.type === 'boss';
   const isAggro = enemy.state === 'aggro';
   const radius = enemy.radius ?? ENEMY.radius;
+  const maxHp = enemy.maxHp || (isBoss ? 620 : 100);
+  const hp = clamp(enemy.hp ?? maxHp, 0, maxHp);
 
   context.save();
-  context.translate(enemy.x, enemy.y);
+  context.translate(x, y);
 
   context.fillStyle = 'rgba(0, 0, 0, 0.24)';
   context.beginPath();
@@ -936,7 +941,7 @@ function drawEnemy(context, enemy, now) {
   context.fillRect(
     isBoss ? -38 : -18,
     isBoss ? -44 : -30,
-    (isBoss ? 76 : 36) * (enemy.hp / enemy.maxHp),
+    (isBoss ? 76 : 36) * (hp / maxHp),
     isBoss ? 8 : 5,
   );
 
@@ -947,6 +952,27 @@ function drawEnemy(context, enemy, now) {
     context.fillText('idle', 0, isBoss ? -72 : -39);
   }
 
+  context.restore();
+}
+
+function drawEntityFallbackMarker(context, entity, label, color) {
+  const x = Number.isFinite(entity?.x) ? entity.x : entity?.targetX;
+  const y = Number.isFinite(entity?.y) ? entity.y : entity?.targetY;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  context.save();
+  context.translate(x, y);
+  context.fillStyle = color;
+  context.strokeStyle = '#0f172a';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(0, 0, 13, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+  context.fillStyle = '#f8fafc';
+  context.font = '900 10px Inter, Arial';
+  context.textAlign = 'center';
+  context.fillText(label, 0, -21);
   context.restore();
 }
 
@@ -1893,7 +1919,11 @@ function App() {
           onlinePlayersRef.current = mergedPlayers;
           lastPlayerSnapshotTotal.current = Array.isArray(players) ? players.length : 0;
           setOnlinePlayers(mergedPlayers);
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${remotePlayers.length}/${lastPlayerSnapshotTotal.current} | e ${enemies.current.length}`);
+          const firstRemote = mergedPlayers[0];
+          const remotePosition = firstRemote
+            ? ` | rp ${Math.round(firstRemote.targetX ?? firstRemote.x)},${Math.round(firstRemote.targetY ?? firstRemote.y)}`
+            : '';
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${remotePlayers.length}/${lastPlayerSnapshotTotal.current}${remotePosition} | e ${enemies.current.length}`);
         });
 
         socket.on('enemies:snapshot', (serverEnemies) => {
@@ -1908,7 +1938,14 @@ function App() {
             'id',
           );
           setEnemyCount(enemies.current.length);
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${onlinePlayersRef.current.length}/${lastPlayerSnapshotTotal.current} | e ${enemies.current.length}`);
+          const nearestEnemy = enemies.current
+            .filter((enemy) => Number.isFinite(enemy.targetX ?? enemy.x) && Number.isFinite(enemy.targetY ?? enemy.y))
+            .sort((a, b) => distance(player.current, { x: a.targetX ?? a.x, y: a.targetY ?? a.y })
+              - distance(player.current, { x: b.targetX ?? b.x, y: b.targetY ?? b.y }))[0];
+          const enemyPosition = nearestEnemy
+            ? ` | ne ${Math.round(nearestEnemy.targetX ?? nearestEnemy.x)},${Math.round(nearestEnemy.targetY ?? nearestEnemy.y)}`
+            : '';
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${onlinePlayersRef.current.length}/${lastPlayerSnapshotTotal.current} | e ${enemies.current.length}${enemyPosition}`);
         });
 
         socket.on('ability:effect', (effect) => {
@@ -2426,11 +2463,25 @@ function App() {
         } catch (error) {
           console.error(error);
         }
-        onlinePlayersRef.current.forEach((remotePlayer) => drawOnlinePlayer(context, remotePlayer));
+        onlinePlayersRef.current.forEach((remotePlayer) => {
+          try {
+            drawOnlinePlayer(context, remotePlayer);
+          } catch (error) {
+            console.error(error);
+            drawEntityFallbackMarker(context, remotePlayer, 'P', '#38bdf8');
+          }
+        });
         drawLocalPlayerMarker(context, player.current, activeCharacter);
       }
       drawShopkeeperAt(context, getShopkeeperFromMap(tiledWorld.current));
-      enemies.current.forEach((enemy) => drawEnemy(context, enemy, now));
+      enemies.current.forEach((enemy) => {
+        try {
+          drawEnemy(context, enemy, now);
+        } catch (error) {
+          console.error(error);
+          drawEntityFallbackMarker(context, enemy, 'E', '#f87171');
+        }
+      });
       effects.current.forEach((effect) => drawEffect(effect, now));
 
       context.restore();
