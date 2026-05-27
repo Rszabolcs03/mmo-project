@@ -64,7 +64,10 @@ const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
-const REMOTE_PLAYER_SMOOTHING = 18;
+const COLYSEUS_INPUT_MS = 50;
+const COLYSEUS_RECONNECT_MS = 1800;
+const REMOTE_PLAYER_LEAD_MS = 90;
+const REMOTE_PLAYER_SMOOTHING = 15;
 const REMOTE_PLAYER_SNAP_DISTANCE = 360;
 const BASE_STATS = {
   health: 100,
@@ -1810,26 +1813,32 @@ function App() {
     }
 
     let cancelled = false;
-    setColyseusStatus(`Connecting ${getColyseusUrl()}...`);
+    let reconnectTimer = null;
+    let reconnectAttempt = 0;
 
-    joinWorldRoom()
-      .then((room) => {
+    const connect = () => {
+      if (cancelled || !characterRef.current) return;
+      setColyseusStatus(`Connecting ${getColyseusUrl()}...`);
+
+      joinWorldRoom()
+        .then((room) => {
         if (cancelled) {
           room.leave();
           return;
         }
 
+        reconnectAttempt = 0;
         colyseusRoomRef.current = room;
         colyseusSessionIdRef.current = room.sessionId;
         setColyseusStatus(`Colyseus online | ${room.sessionId.slice(0, 5)}`);
-        const joinStats = getTotalStats(activeCharacter);
+        const joinStats = getTotalStats(characterRef.current ?? activeCharacter);
 
         room.send('joinGame', {
           character: {
-            name: activeCharacter.name,
-            classId: activeCharacter.classId,
-            raceId: activeCharacter.raceId,
-            level: activeCharacter.level ?? 1,
+            name: characterRef.current?.name ?? activeCharacter.name,
+            classId: characterRef.current?.classId ?? activeCharacter.classId,
+            raceId: characterRef.current?.raceId ?? activeCharacter.raceId,
+            level: characterRef.current?.level ?? activeCharacter.level ?? 1,
           },
           x: player.current.x,
           y: player.current.y,
@@ -1906,7 +1915,9 @@ function App() {
           colyseusSessionIdRef.current = null;
           remotePlayersRef.current = [];
           displayedRemotePlayersRef.current = [];
-          setColyseusStatus('Colyseus disconnected, offline fallback');
+          reconnectAttempt += 1;
+          setColyseusStatus(`Colyseus reconnecting... (${reconnectAttempt})`);
+          reconnectTimer = window.setTimeout(connect, COLYSEUS_RECONNECT_MS);
         });
       })
       .catch((error) => {
@@ -1915,11 +1926,17 @@ function App() {
         colyseusSessionIdRef.current = null;
         remotePlayersRef.current = [];
         displayedRemotePlayersRef.current = [];
-        setColyseusStatus(`Colyseus offline: ${error.message}`);
+        reconnectAttempt += 1;
+        setColyseusStatus(`Colyseus retry ${reconnectAttempt}: ${error.message}`);
+        reconnectTimer = window.setTimeout(connect, Math.min(6000, COLYSEUS_RECONNECT_MS * reconnectAttempt));
       });
+    };
+
+    connect();
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
       remotePlayersRef.current = [];
       displayedRemotePlayersRef.current = [];
       colyseusRoomRef.current?.leave();
@@ -2267,16 +2284,22 @@ function App() {
 
       displayedRemotePlayersRef.current = targets.map((target) => {
         const previous = previousDisplays.get(target.id);
-        if (!previous) return { ...target };
+        const leadSeconds = REMOTE_PLAYER_LEAD_MS / 1000;
+        const predictedTarget = {
+          ...target,
+          x: target.x + Number(target.vx ?? 0) * leadSeconds,
+          y: target.y + Number(target.vy ?? 0) * leadSeconds,
+        };
+        if (!previous) return predictedTarget;
 
-        const gap = distance(previous, target);
-        if (gap > REMOTE_PLAYER_SNAP_DISTANCE) return { ...target };
+        const gap = distance(previous, predictedTarget);
+        if (gap > REMOTE_PLAYER_SNAP_DISTANCE) return predictedTarget;
 
         return {
-          ...target,
-          x: previous.x + (target.x - previous.x) * amount,
-          y: previous.y + (target.y - previous.y) * amount,
-          facing: lerpAngle(previous.facing ?? target.facing ?? 0, target.facing ?? previous.facing ?? 0, amount),
+          ...predictedTarget,
+          x: previous.x + (predictedTarget.x - previous.x) * amount,
+          y: previous.y + (predictedTarget.y - previous.y) * amount,
+          facing: lerpAngle(previous.facing ?? predictedTarget.facing ?? 0, predictedTarget.facing ?? previous.facing ?? 0, amount),
         };
       });
     };
@@ -2446,7 +2469,7 @@ function App() {
         }
       }
 
-      if (onlineRoom && characterRef.current && now - lastColyseusInputAt.current > 33) {
+      if (onlineRoom && characterRef.current && now - lastColyseusInputAt.current > COLYSEUS_INPUT_MS) {
         lastColyseusInputAt.current = now;
         const stats = getTotalStats(characterRef.current);
         onlineRoom.send('player', {

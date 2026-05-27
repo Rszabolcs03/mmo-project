@@ -23,6 +23,8 @@ const ENEMY = {
   wanderSpeed: 34,
 };
 
+const WORLD_BROADCAST_MS = 50;
+
 const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
@@ -251,8 +253,14 @@ class WorldRoom extends Room {
     this.onMessage('player', (client, message) => {
       const player = this.players.get(client.sessionId);
       if (!player) return;
+      const now = Date.now();
+      const previousX = player.x;
+      const previousY = player.y;
+      const elapsed = Math.max(16, now - (player.updatedAt ?? now));
       player.x = clamp(Number(message?.x ?? player.x), PLAYER.radius, WORLD.width - PLAYER.radius);
       player.y = clamp(Number(message?.y ?? player.y), PLAYER.radius, WORLD.height - PLAYER.radius);
+      player.vx = ((player.x - previousX) / elapsed) * 1000;
+      player.vy = ((player.y - previousY) / elapsed) * 1000;
       player.facing = Number(message?.facing ?? player.facing);
       player.name = message?.name ?? player.name;
       player.classId = message?.classId ?? player.classId;
@@ -260,7 +268,7 @@ class WorldRoom extends Room {
       player.level = message?.level ?? player.level;
       player.maxHp = Math.max(1, Number(message?.maxHp ?? player.maxHp ?? 100));
       player.hp = clamp(Number(message?.hp ?? player.hp ?? player.maxHp), 0, player.maxHp);
-      player.updatedAt = Date.now();
+      player.updatedAt = now;
     });
 
     this.onMessage('partyInvite', (client, message) => {
@@ -381,7 +389,7 @@ class WorldRoom extends Room {
     });
 
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / 30);
-    this.clock.setInterval(() => this.broadcastWorld(), 33);
+    this.clock.setInterval(() => this.broadcastWorld(), WORLD_BROADCAST_MS);
   }
 
   onJoin(client) {
