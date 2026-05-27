@@ -7,13 +7,13 @@ import admin from 'firebase-admin';
 const PORT = Number(process.env.PORT ?? 3001);
 const REQUIRE_FIREBASE_AUTH = process.env.REQUIRE_FIREBASE_AUTH === 'true';
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? '*';
-const PLAYER_TIMEOUT_MS = 15000;
+const PLAYER_TIMEOUT_MS = 60000;
 const ENEMY_MAX_COUNT = 12;
 const ENEMY_SPAWN_EVERY = 1800;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
 const WORLD_SIZE = 6400;
-const PROTOCOL_VERSION = 'socket-session-v3-hit-sync';
+const PROTOCOL_VERSION = 'socket-session-v4-visible-entities';
 
 const players = new Map();
 const enemies = new Map();
@@ -22,6 +22,7 @@ let nextSpawnAt = Date.now() + 1200;
 let nextBossSpawnAt = Date.now() + nextBossDelay();
 let enemySpawns = [];
 let bossSpawns = [];
+let worldSpawnSignature = '';
 let lastTickAt = Date.now();
 let lastEnemyBroadcastAt = 0;
 let lastPlayerBroadcastAt = 0;
@@ -123,11 +124,37 @@ function sanitizeSpawn(spawn = {}) {
 }
 
 function updateWorldSpawns(payload = {}) {
+  const nextEnemySpawns = Array.isArray(payload.enemySpawns) && payload.enemySpawns.length > 0
+    ? payload.enemySpawns.map(sanitizeSpawn)
+    : enemySpawns;
+  const nextBossSpawns = Array.isArray(payload.bossSpawns) && payload.bossSpawns.length > 0
+    ? payload.bossSpawns.map(sanitizeSpawn)
+    : bossSpawns;
+  const nextSignature = JSON.stringify({
+    enemies: nextEnemySpawns.map((spawn) => [spawn.name, spawn.x, spawn.y, spawn.width, spawn.height]),
+    bosses: nextBossSpawns.map((spawn) => [spawn.name, spawn.x, spawn.y, spawn.width, spawn.height]),
+  });
+  const spawnLayoutChanged = nextSignature !== worldSpawnSignature && nextEnemySpawns.length > 0;
+
   if (Array.isArray(payload.enemySpawns) && payload.enemySpawns.length > 0) {
-    enemySpawns = payload.enemySpawns.map(sanitizeSpawn);
+    enemySpawns = nextEnemySpawns;
   }
   if (Array.isArray(payload.bossSpawns) && payload.bossSpawns.length > 0) {
-    bossSpawns = payload.bossSpawns.map(sanitizeSpawn);
+    bossSpawns = nextBossSpawns;
+  }
+
+  if (spawnLayoutChanged) {
+    worldSpawnSignature = nextSignature;
+    enemies.clear();
+    nextEnemyId = 1;
+    const seedCount = Math.min(ENEMY_MAX_COUNT, Math.max(4, enemySpawns.length * 2));
+    for (let index = 0; index < seedCount; index += 1) {
+      enemies.set(nextEnemyId, createEnemy(nextEnemyId, pickSpawn(enemySpawns), fallbackSpawnPosition()));
+      nextEnemyId += 1;
+    }
+    nextSpawnAt = Date.now() + ENEMY_SPAWN_EVERY;
+    nextBossSpawnAt = Date.now() + nextBossDelay();
+    broadcastEnemies();
   }
 }
 
@@ -330,6 +357,13 @@ function handleAbilityCast(socket, payload = {}) {
   };
   const facing = Number.isFinite(payload.facing) ? payload.facing : caster.facing;
   const now = Date.now();
+  players.set(socket.id, {
+    ...caster,
+    x: origin.x,
+    y: origin.y,
+    facing,
+    updatedAt: now,
+  });
   const clientHitEnemyIds = Array.isArray(payload.hitEnemyIds)
     ? new Set(payload.hitEnemyIds.map((id) => Number(id)).filter(Number.isFinite))
     : new Set();

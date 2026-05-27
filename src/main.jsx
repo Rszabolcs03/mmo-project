@@ -1839,6 +1839,8 @@ function App() {
 
     if (!socketUrl) return undefined;
 
+    let heartbeatId = null;
+
     authUser.getIdToken()
       .then((token) => {
         if (cancelled) return;
@@ -1851,7 +1853,7 @@ function App() {
         socket.on('connect', () => {
           setSocketStatus('Socket online');
           setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p 0 | e ${enemies.current.length}`);
-          socket.emit('player:join', {
+          const joinPayload = {
             name: character.name,
             level: character.level ?? 1,
             classId: character.classId,
@@ -1860,7 +1862,23 @@ function App() {
             y: Math.round(player.current.y),
             facing: player.current.facing,
             world: serializeSpawnsForSocket(tiledWorld.current),
-          });
+          };
+          socket.emit('player:join', joinPayload);
+
+          if (heartbeatId) window.clearInterval(heartbeatId);
+          heartbeatId = window.setInterval(() => {
+            const activeCharacter = characterRef.current;
+            if (!activeCharacter || !socket.connected) return;
+            socket.emit('player:update', {
+              name: activeCharacter.name,
+              level: activeCharacter.level ?? 1,
+              classId: activeCharacter.classId,
+              raceId: activeCharacter.raceId,
+              x: Math.round(player.current.x),
+              y: Math.round(player.current.y),
+              facing: player.current.facing,
+            });
+          }, 1000);
         });
 
         socket.on('players:snapshot', (players) => {
@@ -1935,6 +1953,8 @@ function App() {
         });
 
         socket.on('disconnect', () => {
+          if (heartbeatId) window.clearInterval(heartbeatId);
+          heartbeatId = null;
           onlineWorldRef.current = false;
           setSocketStatus('Socket offline');
           setSocketDebug('');
@@ -1947,6 +1967,7 @@ function App() {
 
     return () => {
       cancelled = true;
+      if (heartbeatId) window.clearInterval(heartbeatId);
       socketRef.current?.emit('player:leave');
       socketRef.current?.disconnect();
       socketRef.current = null;
@@ -2026,6 +2047,17 @@ function App() {
       );
       const clientCastId = `${authUserRef.current?.uid ?? 'local'}-${now}-${ability.key}-${Math.random().toString(16).slice(2)}`;
       const origin = { x: player.current.x, y: player.current.y };
+      if (activeCharacter) {
+        socket.emit('player:update', {
+          name: activeCharacter.name,
+          level: activeCharacter.level ?? 1,
+          classId: activeCharacter.classId,
+          raceId: activeCharacter.raceId,
+          x: Math.round(origin.x),
+          y: Math.round(origin.y),
+          facing,
+        });
+      }
       socket.emit('ability:cast', {
         key: ability.key,
         name: ability.name,
