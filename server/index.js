@@ -13,7 +13,7 @@ const ENEMY_SPAWN_EVERY = 1800;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
 const WORLD_SIZE = 6400;
-const PROTOCOL_VERSION = 'socket-session-v2';
+const PROTOCOL_VERSION = 'socket-session-v3-hit-sync';
 
 const players = new Map();
 const enemies = new Map();
@@ -24,6 +24,7 @@ let enemySpawns = [];
 let bossSpawns = [];
 let lastTickAt = Date.now();
 let lastEnemyBroadcastAt = 0;
+let lastPlayerBroadcastAt = 0;
 
 function createFirebaseApp() {
   if (admin.apps.length) return admin.app();
@@ -329,6 +330,9 @@ function handleAbilityCast(socket, payload = {}) {
   };
   const facing = Number.isFinite(payload.facing) ? payload.facing : caster.facing;
   const now = Date.now();
+  const clientHitEnemyIds = Array.isArray(payload.hitEnemyIds)
+    ? new Set(payload.hitEnemyIds.map((id) => Number(id)).filter(Number.isFinite))
+    : new Set();
 
   if (!payload.damageOnly) {
     io.emit('ability:effect', {
@@ -347,7 +351,8 @@ function handleAbilityCast(socket, payload = {}) {
   let bossKills = 0;
   let changed = false;
   enemies.forEach((enemy, id) => {
-    if (!abilityHitsEnemy(ability, origin, facing, enemy)) return;
+    const clientReportedHit = clientHitEnemyIds.has(Number(id)) && distance(enemy, origin) < 460;
+    if (!clientReportedHit && !abilityHitsEnemy(ability, origin, facing, enemy)) return;
 
     enemy.hp -= ability.damage;
     enemy.state = 'aggro';
@@ -437,11 +442,17 @@ function tickEnemies() {
     lastEnemyBroadcastAt = now;
     broadcastEnemies();
   }
+
+  if (now - lastPlayerBroadcastAt > 250) {
+    lastPlayerBroadcastAt = now;
+    broadcastPlayers();
+  }
 }
 
 io.use(verifySocket);
 
 io.on('connection', (socket) => {
+  socket.emit('players:snapshot', [...players.values()]);
   socket.emit('enemies:snapshot', serializeEnemies());
 
   socket.on('world:init', (payload) => {

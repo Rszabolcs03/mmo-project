@@ -1150,6 +1150,43 @@ function getRemoteEntityId(entity, preferredKey = 'id') {
   return entity?.[preferredKey] ?? entity?.socketId ?? entity?.uid ?? entity?.id;
 }
 
+function abilityHitsEnemyClient(ability, origin, facing, enemy) {
+  const fx = Math.cos(facing);
+  const fy = Math.sin(facing);
+  const hitRadius = (enemy.radius ?? ENEMY.radius) + 7;
+  const lineEnd = { x: origin.x + fx * 270, y: origin.y + fy * 270 };
+  const trapCenter = { x: origin.x + fx * 95, y: origin.y + fy * 95 };
+
+  if (ability.type === 'bolt') {
+    return distanceToSegment(enemy, origin, { x: origin.x + fx * 220, y: origin.y + fy * 220 }) < hitRadius;
+  }
+  if (ability.type === 'shot') {
+    return distanceToSegment(enemy, origin, lineEnd) < hitRadius - 4;
+  }
+  if (ability.type === 'trap') {
+    return distance(enemy, trapCenter) < 58 + hitRadius;
+  }
+  if (ability.type === 'strike') {
+    return distanceToSegment(enemy, origin, { x: origin.x + fx * 110, y: origin.y + fy * 110 }) < 44 + hitRadius;
+  }
+  if (ability.type === 'cleave') {
+    const enemyAngle = Math.atan2(enemy.y - origin.y, enemy.x - origin.x);
+    return distance(enemy, origin) < 90 + hitRadius && Math.abs(angleDifference(enemyAngle, facing)) < 1.05;
+  }
+  if (ability.type === 'channel') {
+    return distanceToSegment(enemy, origin, { x: origin.x + fx * 280, y: origin.y + fy * 280 }) < hitRadius + 3;
+  }
+
+  return distance(enemy, origin) < 118 + hitRadius;
+}
+
+function getHitEnemyIdsForAbility(ability, origin, facing, enemyList) {
+  return enemyList
+    .filter((enemy) => abilityHitsEnemyClient(ability, origin, facing, enemy))
+    .map((enemy) => enemy.id)
+    .filter((id) => Number.isFinite(Number(id)));
+}
+
 function serializeSpawnsForSocket(tiledWorld) {
   const toSocketSpawn = (spawn) => ({
     name: spawn.name,
@@ -1408,6 +1445,7 @@ function App() {
   const onlineWorldRef = React.useRef(false);
   const localCastIds = React.useRef(new Set());
   const lastSocketUpdateAt = React.useRef(0);
+  const lastPlayerSnapshotTotal = React.useRef(0);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
   const [position, setPosition] = React.useState(player.current);
@@ -1835,8 +1873,9 @@ function App() {
             : [];
           const mergedPlayers = mergeRemoteEntities(onlinePlayersRef.current, remotePlayers, 'socketId');
           onlinePlayersRef.current = mergedPlayers;
+          lastPlayerSnapshotTotal.current = Array.isArray(players) ? players.length : 0;
           setOnlinePlayers(mergedPlayers);
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${remotePlayers.length} | e ${enemies.current.length}`);
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${remotePlayers.length}/${lastPlayerSnapshotTotal.current} | e ${enemies.current.length}`);
         });
 
         socket.on('enemies:snapshot', (serverEnemies) => {
@@ -1851,7 +1890,7 @@ function App() {
             'id',
           );
           setEnemyCount(enemies.current.length);
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${onlinePlayersRef.current.length} | e ${enemies.current.length}`);
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${onlinePlayersRef.current.length}/${lastPlayerSnapshotTotal.current} | e ${enemies.current.length}`);
         });
 
         socket.on('ability:effect', (effect) => {
@@ -1940,8 +1979,6 @@ function App() {
   React.useEffect(() => {
     const applyAbilityDamage = (ability, facing, now) => {
       const origin = { x: player.current.x, y: player.current.y };
-      const fx = Math.cos(facing);
-      const fy = Math.sin(facing);
       const statBonus = characterRef.current
         ? Math.floor(
             ((getTotalStats(characterRef.current).strength ?? 0)
@@ -1950,29 +1987,9 @@ function App() {
           )
         : 0;
       const damage = ability.damage + statBonus;
-      const lineEnd = { x: origin.x + fx * 270, y: origin.y + fy * 270 };
-      const trapCenter = { x: origin.x + fx * 95, y: origin.y + fy * 95 };
 
       const damagedEnemies = enemies.current.map((enemy) => {
-          let hit = false;
-          const hitRadius = (enemy.radius ?? ENEMY.radius) + 7;
-
-          if (ability.type === 'bolt') {
-            hit = distanceToSegment(enemy, origin, { x: origin.x + fx * 220, y: origin.y + fy * 220 }) < hitRadius;
-          } else if (ability.type === 'shot') {
-            hit = distanceToSegment(enemy, origin, lineEnd) < hitRadius - 4;
-          } else if (ability.type === 'trap') {
-            hit = distance(enemy, trapCenter) < 58 + hitRadius;
-          } else if (ability.type === 'strike') {
-            hit = distanceToSegment(enemy, origin, { x: origin.x + fx * 110, y: origin.y + fy * 110 }) < 44 + hitRadius;
-          } else if (ability.type === 'cleave') {
-            const enemyAngle = Math.atan2(enemy.y - origin.y, enemy.x - origin.x);
-            hit = distance(enemy, origin) < 90 + hitRadius && Math.abs(angleDifference(enemyAngle, facing)) < 1.05;
-          } else {
-            hit = distance(enemy, origin) < 118 + hitRadius;
-          }
-
-          if (!hit) return enemy;
+          if (!abilityHitsEnemyClient(ability, origin, facing, enemy)) return enemy;
           lastCombatAt.current = now;
           return { ...enemy, state: 'aggro', hp: enemy.hp - damage, hitAt: now };
         });
@@ -2008,17 +2025,19 @@ function App() {
         ((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 8,
       );
       const clientCastId = `${authUserRef.current?.uid ?? 'local'}-${now}-${ability.key}-${Math.random().toString(16).slice(2)}`;
+      const origin = { x: player.current.x, y: player.current.y };
       socket.emit('ability:cast', {
         key: ability.key,
         name: ability.name,
         type: ability.type,
         color: ability.color,
         damage: ability.damage ? ability.damage + statBonus : 0,
+        hitEnemyIds: ability.damage ? getHitEnemyIdsForAbility(ability, origin, facing, enemies.current) : [],
         duration: ability.type === 'shield' || ability.type === 'heal'
           ? 900
           : ability.duration ?? 650,
-        x: Math.round(player.current.x),
-        y: Math.round(player.current.y),
+        x: Math.round(origin.x),
+        y: Math.round(origin.y),
         facing,
         clientCastId,
         ...extra,
@@ -2546,6 +2565,7 @@ function App() {
               type: effect.type,
               color: effect.color,
               damage,
+              hitEnemyIds: getHitEnemyIdsForAbility(effect, start, effect.facing, enemies.current),
               duration: effect.duration,
               x: Math.round(effect.x),
               y: Math.round(effect.y),
