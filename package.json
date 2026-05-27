@@ -9,11 +9,17 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:server": "node --watch server/index.js",
+    "start": "node server/index.js",
+    "start:server": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@colyseus/schema": "^4.0.25",
+    "@colyseus/sdk": "^0.17.42",
     "@vitejs/plugin-react": "latest",
+    "colyseus": "^0.17.10",
     "firebase": "^12.13.0",
     "lucide-react": "latest",
     "react": "latest",

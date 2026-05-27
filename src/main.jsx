@@ -26,6 +26,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { deleteCloudCharacter, loadCloudCharacters, saveCloudCharacter } from './characterCloud';
+import { getColyseusUrl, joinWorldRoom } from './colyseusGameClient';
 import { auth, hasFirebaseConfig } from './firebaseClient';
 import './styles.css';
 
@@ -63,6 +64,8 @@ const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
+const REMOTE_PLAYER_SMOOTHING = 18;
+const REMOTE_PLAYER_SNAP_DISTANCE = 360;
 const BASE_STATS = {
   health: 100,
   mana: 60,
@@ -336,6 +339,10 @@ function distanceToSegment(point, start, end) {
 
 function angleDifference(a, b) {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
+function lerpAngle(current, target, amount) {
+  return current + angleDifference(target, current) * amount;
 }
 
 function xpForLevel(level) {
@@ -842,6 +849,49 @@ function drawLocalPlayerMarker(context, player, character) {
   context.restore();
 }
 
+function drawHealthBar(context, x, y, width, hp, maxHp) {
+  const safeMaxHp = Math.max(1, Number(maxHp ?? 1));
+  const safeHp = clamp(Number(hp ?? safeMaxHp), 0, safeMaxHp);
+  context.fillStyle = 'rgba(15, 23, 42, 0.78)';
+  context.fillRect(x, y, width, 5);
+  context.fillStyle = '#22c55e';
+  context.fillRect(x, y, width * (safeHp / safeMaxHp), 5);
+}
+
+function drawRemotePlayerMarker(context, remotePlayer) {
+  if (!Number.isFinite(remotePlayer?.x) || !Number.isFinite(remotePlayer?.y)) return;
+
+  context.save();
+  context.translate(remotePlayer.x, remotePlayer.y);
+  context.fillStyle = 'rgba(16, 24, 30, 0.78)';
+  context.strokeStyle = 'rgba(251, 191, 36, 0.42)';
+  context.lineWidth = 1;
+  context.fillRect(-70, -78, 140, 34);
+  context.strokeRect(-70, -78, 140, 34);
+  drawHealthBar(context, -60, -42, 120, remotePlayer.hp, remotePlayer.maxHp);
+  context.fillStyle = '#f6f1df';
+  context.font = '900 12px Inter, Arial';
+  context.textAlign = 'center';
+  context.fillText(remotePlayer.name ?? 'Adventurer', 0, -64);
+  context.fillStyle = '#fbbf24';
+  context.font = '800 10px Inter, Arial';
+  context.fillText(`Lv ${remotePlayer.level ?? 1}`, 0, -51);
+  context.restore();
+}
+
+function drawSelectedPlayerRing(context, remotePlayer) {
+  if (!Number.isFinite(remotePlayer?.x) || !Number.isFinite(remotePlayer?.y)) return;
+
+  context.save();
+  context.translate(remotePlayer.x, remotePlayer.y);
+  context.strokeStyle = '#fbbf24';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.ellipse(0, 12, 30, 20, 0, 0, Math.PI * 2);
+  context.stroke();
+  context.restore();
+}
+
 function drawEnemy(context, enemy, now) {
   const x = Number.isFinite(enemy?.x) ? enemy.x : enemy?.targetX;
   const y = Number.isFinite(enemy?.y) ? enemy.y : enemy?.targetY;
@@ -1323,6 +1373,12 @@ function App() {
   const lastCombatAt = React.useRef(0);
   const authFlowRef = React.useRef(null);
   const authUserRef = React.useRef(null);
+  const colyseusRoomRef = React.useRef(null);
+  const colyseusSessionIdRef = React.useRef(null);
+  const remotePlayersRef = React.useRef([]);
+  const displayedRemotePlayersRef = React.useRef([]);
+  const selectedPlayerIdRef = React.useRef(null);
+  const lastColyseusInputAt = React.useRef(0);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
   const [position, setPosition] = React.useState(player.current);
@@ -1339,6 +1395,9 @@ function App() {
   const [authMode, setAuthMode] = React.useState('login');
   const [authReady, setAuthReady] = React.useState(OFFLINE_DEMO || !hasFirebaseConfig);
   const [renderStatus, setRenderStatus] = React.useState('Render starting...');
+  const [colyseusStatus, setColyseusStatus] = React.useState('Colyseus offline');
+  const [selectedPlayerId, setSelectedPlayerId] = React.useState(null);
+  const [partyInvite, setPartyInvite] = React.useState(null);
   const [authStatus, setAuthStatus] = React.useState(
     OFFLINE_DEMO ? 'Offline demo' : hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
   );
@@ -1350,6 +1409,7 @@ function App() {
   authUserRef.current = authUser;
   deadRef.current = isDead;
   shopOpenRef.current = shopOpen;
+  selectedPlayerIdRef.current = selectedPlayerId;
 
   const setVitalsValue = (nextVitals) => {
     vitalsRef.current = nextVitals;
@@ -1621,6 +1681,20 @@ function App() {
     setLastCast(`Sold: ${itemToSell.name} +${value}g`);
   };
 
+  const inviteSelectedPlayer = () => {
+    const targetId = selectedPlayerIdRef.current;
+    if (!targetId || !colyseusRoomRef.current) return;
+    colyseusRoomRef.current.send('partyInvite', { targetId });
+    setLastCast('Party invite sent');
+  };
+
+  const acceptPartyInvite = () => {
+    if (!partyInvite?.fromId || !colyseusRoomRef.current) return;
+    colyseusRoomRef.current.send('partyAccept', { fromId: partyInvite.fromId });
+    setPartyInvite(null);
+    setLastCast('Party invite accepted');
+  };
+
   const chooseTalentSpec = (specId) => {
     const activeCharacter = characterRef.current;
     const talentTree = activeCharacter ? TALENTS[activeCharacter.classId] : null;
@@ -1675,6 +1749,11 @@ function App() {
     const startPosition = getRaceStartPosition(tiledWorld.current, activeCharacter.raceId);
     player.current = startPosition;
     setPosition({ ...startPosition });
+    persistCharacter({
+      ...activeCharacter,
+      position: startPosition,
+      updatedAt: new Date().toISOString(),
+    });
     setLastCast('Moved to map start');
   };
 
@@ -1717,6 +1796,137 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  React.useEffect(() => {
+    const activeCharacter = character;
+    if (!activeCharacter) {
+      remotePlayersRef.current = [];
+      displayedRemotePlayersRef.current = [];
+      colyseusRoomRef.current?.leave();
+      colyseusRoomRef.current = null;
+      colyseusSessionIdRef.current = null;
+      setColyseusStatus('Colyseus offline');
+      return undefined;
+    }
+
+    let cancelled = false;
+    setColyseusStatus(`Connecting ${getColyseusUrl()}...`);
+
+    joinWorldRoom()
+      .then((room) => {
+        if (cancelled) {
+          room.leave();
+          return;
+        }
+
+        colyseusRoomRef.current = room;
+        colyseusSessionIdRef.current = room.sessionId;
+        setColyseusStatus(`Colyseus online | ${room.sessionId.slice(0, 5)}`);
+        const joinStats = getTotalStats(activeCharacter);
+
+        room.send('joinGame', {
+          character: {
+            name: activeCharacter.name,
+            classId: activeCharacter.classId,
+            raceId: activeCharacter.raceId,
+            level: activeCharacter.level ?? 1,
+          },
+          x: player.current.x,
+          y: player.current.y,
+          facing: player.current.facing,
+          hp: vitalsRef.current.hp,
+          maxHp: joinStats.health,
+        });
+
+        room.onMessage('world', (worldState) => {
+          remotePlayersRef.current = (worldState.players ?? [])
+            .filter((remotePlayer) => remotePlayer.id !== room.sessionId)
+            .map((remotePlayer) => ({ ...remotePlayer, receivedAt: performance.now() }));
+          if (
+            selectedPlayerIdRef.current
+            && !remotePlayersRef.current.some((remotePlayer) => remotePlayer.id === selectedPlayerIdRef.current)
+          ) {
+            setSelectedPlayerId(null);
+          }
+          enemies.current = (worldState.enemies ?? []).map((enemy) => ({ ...enemy }));
+          setEnemyCount(enemies.current.length);
+        });
+
+        room.onMessage('effect', (effect) => {
+          const now = performance.now();
+          effects.current.push({
+            ...effect,
+            start: now,
+            nextTickAt: effect.type === 'channel' ? now : effect.nextTickAt,
+            duration: effect.duration ?? (effect.type === 'channel' ? 3000 : 650),
+          });
+        });
+
+        room.onMessage('xp', (message) => {
+          if (message?.amount) awardExperience(message.amount);
+          for (let i = 0; i < (message?.bossKills ?? 0); i += 1) {
+            addLoot(rollBossLoot());
+          }
+        });
+
+        room.onMessage('hit', (message) => {
+          const damage = Number(message?.damage ?? 0);
+          if (deadRef.current || damage <= 0) return;
+          lastCombatAt.current = performance.now();
+          const nextHp = Math.max(0, vitalsRef.current.hp - damage);
+          setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+          setLastCast(`-${damage} HP`);
+          if (nextHp <= 0) killPlayer();
+        });
+
+        room.onMessage('heal', (message) => {
+          const amount = Number(message?.amount ?? 0);
+          if (!characterRef.current || deadRef.current || amount <= 0) return;
+          const stats = getTotalStats(characterRef.current);
+          const nextHp = Math.min(stats.health, vitalsRef.current.hp + amount);
+          setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+          setLastCast(`+${amount} HP`);
+        });
+
+        room.onMessage('partyInvite', (message) => {
+          if (!message?.fromId) return;
+          setPartyInvite({
+            fromId: message.fromId,
+            fromName: message.fromName ?? 'Adventurer',
+          });
+        });
+
+        room.onMessage('notice', (message) => {
+          if (message?.text) setLastCast(message.text);
+        });
+
+        room.onLeave(() => {
+          if (cancelled) return;
+          colyseusRoomRef.current = null;
+          colyseusSessionIdRef.current = null;
+          remotePlayersRef.current = [];
+          displayedRemotePlayersRef.current = [];
+          setColyseusStatus('Colyseus disconnected, offline fallback');
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        colyseusRoomRef.current = null;
+        colyseusSessionIdRef.current = null;
+        remotePlayersRef.current = [];
+        displayedRemotePlayersRef.current = [];
+        setColyseusStatus(`Colyseus offline: ${error.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+      remotePlayersRef.current = [];
+      displayedRemotePlayersRef.current = [];
+      colyseusRoomRef.current?.leave();
+      colyseusRoomRef.current = null;
+      colyseusSessionIdRef.current = null;
+    };
+  }, [character?.id]);
 
   React.useEffect(() => {
     const applyAbilityDamage = (ability, facing, now) => {
@@ -1775,20 +1985,38 @@ function App() {
       }
       const facing = Math.atan2(mouse.current.y - player.current.y, mouse.current.x - player.current.x);
       player.current.facing = facing;
+      const room = colyseusRoomRef.current;
+      const stats = activeCharacter ? getTotalStats(activeCharacter) : BASE_STATS;
+      const damage = ability.damage
+        ? ability.damage + Math.floor(((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 8)
+        : 0;
+      const healing = ability.healing
+        ? ability.healing + Math.floor((stats.intellect ?? 0) / 3)
+        : 0;
 
       if (ability.type === 'channel') {
         cooldowns.current[slot] = now + (ability.duration ?? 3000) + 800;
         effects.current = effects.current.filter((effect) => effect.type !== 'channel');
-        effects.current.push({
-          ...ability,
-          x: player.current.x,
-          y: player.current.y,
-          facing,
-          start: now,
-          nextTickAt: now,
-          duration: ability.duration ?? 3000,
-          tickRate: ability.tickRate ?? 500,
-        });
+        if (room) {
+          room.send('ability', {
+            ability,
+            origin: { x: player.current.x, y: player.current.y },
+            facing,
+            damage,
+            effectOnly: true,
+          });
+        } else {
+          effects.current.push({
+            ...ability,
+            x: player.current.x,
+            y: player.current.y,
+            facing,
+            start: now,
+            nextTickAt: now,
+            duration: ability.duration ?? 3000,
+            tickRate: ability.tickRate ?? 500,
+          });
+        }
         setLastCast(`${ability.key}: ${ability.name}`);
         return;
       }
@@ -1797,19 +2025,43 @@ function App() {
       cooldowns.current[slot] = now + 650;
 
       if (ability.damage) {
-        applyAbilityDamage(ability, facing, now);
+        if (room) {
+          room.send('ability', {
+            ability,
+            origin: { x: player.current.x, y: player.current.y },
+            facing,
+            damage,
+            healing,
+          });
+        } else {
+          applyAbilityDamage(ability, facing, now);
+        }
       }
       if (ability.healing) {
-        applyAbilityHealing(ability);
+        const isTargetedRemoteHeal = Boolean(room && selectedPlayerIdRef.current && ability.type === 'heal');
+        if (!isTargetedRemoteHeal) {
+          applyAbilityHealing(ability);
+        }
+        if (room && !ability.damage) {
+          room.send('ability', {
+            ability,
+            origin: { x: player.current.x, y: player.current.y },
+            facing,
+            healing,
+            targetPlayerId: selectedPlayerIdRef.current,
+          });
+        }
       }
-      effects.current.push({
-        ...ability,
-        x: player.current.x,
-        y: player.current.y,
-        facing,
-        start: now,
-        duration: ability.type === 'shield' || ability.type === 'heal' ? 900 : 650,
-      });
+      if (!room) {
+        effects.current.push({
+          ...ability,
+          x: player.current.x,
+          y: player.current.y,
+          facing,
+          start: now,
+          duration: ability.type === 'shield' || ability.type === 'heal' ? 900 : 650,
+        });
+      }
       setLastCast(`${ability.key}: ${ability.name}`);
     };
 
@@ -1868,6 +2120,14 @@ function App() {
       mouse.current.screenY = event.clientY - rect.top;
       mouse.current.x = mouse.current.screenX + camera.current.x;
       mouse.current.y = mouse.current.screenY + camera.current.y;
+    };
+
+    const selectPlayerAtMouse = (event) => {
+      updateMouse(event);
+      const clickedPlayer = [...displayedRemotePlayersRef.current]
+        .sort((a, b) => distance(a, mouse.current) - distance(b, mouse.current))
+        .find((remotePlayer) => distance(remotePlayer, mouse.current) <= 54);
+      setSelectedPlayerId(clickedPlayer?.id ?? null);
     };
 
     const drawTree = (x, y) => {
@@ -2000,6 +2260,27 @@ function App() {
       context.restore();
     };
 
+    const smoothRemotePlayers = (delta) => {
+      const targets = remotePlayersRef.current;
+      const previousDisplays = new globalThis.Map(displayedRemotePlayersRef.current.map((remotePlayer) => [remotePlayer.id, remotePlayer]));
+      const amount = clamp(1 - Math.exp(-REMOTE_PLAYER_SMOOTHING * delta), 0, 1);
+
+      displayedRemotePlayersRef.current = targets.map((target) => {
+        const previous = previousDisplays.get(target.id);
+        if (!previous) return { ...target };
+
+        const gap = distance(previous, target);
+        if (gap > REMOTE_PLAYER_SNAP_DISTANCE) return { ...target };
+
+        return {
+          ...target,
+          x: previous.x + (target.x - previous.x) * amount,
+          y: previous.y + (target.y - previous.y) * amount,
+          facing: lerpAngle(previous.facing ?? target.facing ?? 0, target.facing ?? previous.facing ?? 0, amount),
+        };
+      });
+    };
+
     const draw = (now) => {
       const viewWidth = canvas.clientWidth;
       const viewHeight = canvas.clientHeight;
@@ -2087,6 +2368,17 @@ function App() {
         drawLocalPlayerMarker(context, player.current, activeCharacter);
       }
       drawShopkeeperAt(context, getShopkeeperFromMap(tiledWorld.current));
+      displayedRemotePlayersRef.current.forEach((remotePlayer) => {
+        try {
+          if (remotePlayer.id === selectedPlayerIdRef.current) {
+            drawSelectedPlayerRing(context, remotePlayer);
+          }
+          drawPlayer(context, remotePlayer, remotePlayer.classId, remotePlayer.raceId);
+          drawRemotePlayerMarker(context, remotePlayer);
+        } catch (error) {
+          console.error(error);
+        }
+      });
       enemies.current.forEach((enemy) => {
         try {
           drawEnemy(context, enemy, now);
@@ -2100,17 +2392,20 @@ function App() {
     };
 
     const tick = (now) => {
-      const delta = Math.min((now - lastTime) / 1000, 0.05);
-      lastTime = now;
+      try {
+        const delta = Math.min((now - lastTime) / 1000, 0.05);
+        lastTime = now;
+        const onlineRoom = colyseusRoomRef.current;
+        smoothRemotePlayers(delta);
 
-      if (now - lastRenderStatusAt.current > 700) {
-        lastRenderStatusAt.current = now;
-        setRenderStatus(
-          `Render live ${canvas.clientWidth}x${canvas.clientHeight} | cam ${Math.round(camera.current.x)}, ${Math.round(camera.current.y)}`,
-        );
-      }
+        if (now - lastRenderStatusAt.current > 700) {
+          lastRenderStatusAt.current = now;
+          setRenderStatus(
+            `Render live ${canvas.clientWidth}x${canvas.clientHeight} | cam ${Math.round(camera.current.x)}, ${Math.round(camera.current.y)}`,
+          );
+        }
 
-      if (selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
+      if (!onlineRoom && selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
         enemies.current.push(createEnemy(nextEnemyId.current, pickSpawn(tiledWorld.current?.enemySpawns ?? []), player.current));
         nextEnemyId.current += 1;
         nextSpawnAt.current = now + ENEMY.spawnEvery;
@@ -2118,7 +2413,7 @@ function App() {
       }
 
       const bossAlive = enemies.current.some((enemy) => enemy.type === 'boss');
-      if (selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
+      if (!onlineRoom && selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
         enemies.current.push(createBoss(nextEnemyId.current, pickSpawn(tiledWorld.current?.bossSpawns ?? []), player.current));
         nextEnemyId.current += 1;
         nextBossSpawnAt.current = now + nextBossDelay();
@@ -2151,7 +2446,24 @@ function App() {
         }
       }
 
-      enemies.current = enemies.current.map((enemy) => {
+      if (onlineRoom && characterRef.current && now - lastColyseusInputAt.current > 33) {
+        lastColyseusInputAt.current = now;
+        const stats = getTotalStats(characterRef.current);
+        onlineRoom.send('player', {
+          x: player.current.x,
+          y: player.current.y,
+          facing: player.current.facing,
+          name: characterRef.current.name,
+          classId: characterRef.current.classId,
+          raceId: characterRef.current.raceId,
+          level: characterRef.current.level ?? 1,
+          hp: vitalsRef.current.hp,
+          maxHp: stats.health,
+        });
+      }
+
+      if (!onlineRoom) {
+        enemies.current = enemies.current.map((enemy) => {
         if (enemy.state !== 'aggro') {
           const bounds = enemy.spawnBounds;
           let target = enemy.wanderTarget;
@@ -2221,11 +2533,13 @@ function App() {
             WORLD.height - (enemy.radius ?? ENEMY.radius),
           ),
         };
-      });
+        });
+      }
 
       effects.current = effects.current
         .map((effect) => {
           if (effect.type !== 'channel' || deadRef.current) return effect;
+          if (effect.casterId && effect.casterId !== colyseusSessionIdRef.current) return effect;
           if (now < effect.nextTickAt) return effect;
 
           const manaCost = getAbilityManaCost(effect);
@@ -2243,21 +2557,31 @@ function App() {
           const stats = characterRef.current ? getTotalStats(characterRef.current) : BASE_STATS;
           const damage = effect.damage + Math.floor((stats.intellect ?? 0) / 5);
 
-          const damagedEnemies = enemies.current.map((enemy) => {
-            const hitRadius = (enemy.radius ?? ENEMY.radius) + 10;
-            if (distanceToSegment(enemy, start, end) >= hitRadius) return enemy;
-            lastCombatAt.current = now;
-            return { ...enemy, state: 'aggro', hp: enemy.hp - damage, hitAt: now };
-          });
-          const defeatedEnemies = damagedEnemies.filter((enemy) => enemy.hp <= 0);
-          enemies.current = damagedEnemies.filter((enemy) => enemy.hp > 0);
+          if (colyseusRoomRef.current) {
+            colyseusRoomRef.current.send('ability', {
+              ability: effect,
+              origin: start,
+              facing: effect.facing,
+              damage,
+              silent: true,
+            });
+          } else {
+            const damagedEnemies = enemies.current.map((enemy) => {
+              const hitRadius = (enemy.radius ?? ENEMY.radius) + 10;
+              if (distanceToSegment(enemy, start, end) >= hitRadius) return enemy;
+              lastCombatAt.current = now;
+              return { ...enemy, state: 'aggro', hp: enemy.hp - damage, hitAt: now };
+            });
+            const defeatedEnemies = damagedEnemies.filter((enemy) => enemy.hp <= 0);
+            enemies.current = damagedEnemies.filter((enemy) => enemy.hp > 0);
 
-          if (defeatedEnemies.length > 0) {
-            awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
-            defeatedEnemies
-              .filter((enemy) => enemy.type === 'boss')
-              .forEach(() => addLoot(rollBossLoot()));
-            setEnemyCount(enemies.current.length);
+            if (defeatedEnemies.length > 0) {
+              awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
+              defeatedEnemies
+                .filter((enemy) => enemy.type === 'boss')
+                .forEach(() => addLoot(rollBossLoot()));
+              setEnemyCount(enemies.current.length);
+            }
           }
 
           return { ...effect, nextTickAt: now + effect.tickRate };
@@ -2295,18 +2619,25 @@ function App() {
       if (shopOpenRef.current && distance(player.current, shopkeeper) > shopkeeper.interactRange + 45) {
         setShopOpen(false);
       }
-      animationFrame = requestAnimationFrame(tick);
+        animationFrame = requestAnimationFrame(tick);
+      } catch (error) {
+        console.error(error);
+        setRenderStatus(`Loop error: ${error.message}`);
+        animationFrame = requestAnimationFrame(tick);
+      }
     };
 
     resize();
     window.addEventListener('resize', resize);
     canvas.addEventListener('mousemove', updateMouse);
+    canvas.addEventListener('click', selectPlayerAtMouse);
     animationFrame = requestAnimationFrame(tick);
 
     return () => {
       cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousemove', updateMouse);
+      canvas.removeEventListener('click', selectPlayerAtMouse);
     };
   }, [keys]);
 
@@ -2327,6 +2658,7 @@ function App() {
   const nearShopkeeper = character && distance(position, activeShopkeeper) <= activeShopkeeper.interactRange;
   const talentTree = character ? TALENTS[character.classId] : null;
   const selectedTalentSpec = character?.talents?.spec ?? null;
+  const selectedPlayer = displayedRemotePlayersRef.current.find((remotePlayer) => remotePlayer.id === selectedPlayerId) ?? null;
 
   return (
     <main className="app-shell">
@@ -2356,7 +2688,7 @@ function App() {
         <div className="hud top-left">
           <Gamepad2 size={18} />
           <span>
-            Cloud save | WASD / nyilak | {mapStatus} | Offline world | {renderStatus}
+            Cloud save | WASD / nyilak | {mapStatus} | {colyseusStatus} | {renderStatus}
           </span>
         </div>
         {character && (
@@ -2389,6 +2721,28 @@ function App() {
             {Math.round(position.x)}, {Math.round(position.y)} | {gold}g
           </span>
         </div>
+        {selectedPlayer && (
+          <div className="target-panel">
+            <div>
+              <strong>{selectedPlayer.name ?? 'Adventurer'}</strong>
+              <span>Lv {selectedPlayer.level ?? 1}</span>
+            </div>
+            <div className="target-hp">
+              <span style={{ width: `${(clamp(selectedPlayer.hp ?? selectedPlayer.maxHp, 0, selectedPlayer.maxHp ?? 1) / Math.max(1, selectedPlayer.maxHp ?? 1)) * 100}%` }} />
+            </div>
+            <button type="button" title="Party invite" onClick={inviteSelectedPlayer}>
+              <User size={16} />
+            </button>
+          </div>
+        )}
+        {partyInvite && (
+          <div className="party-invite-panel">
+            <strong>{partyInvite.fromName}</strong>
+            <span>Party invite</span>
+            <button type="button" onClick={acceptPartyInvite}>Accept</button>
+            <button type="button" onClick={() => setPartyInvite(null)}>Decline</button>
+          </div>
+        )}
         {nearShopkeeper && !shopOpen && (
           <div className="interact-prompt">E - Shop</div>
         )}
