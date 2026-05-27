@@ -976,6 +976,28 @@ function drawEntityFallbackMarker(context, entity, label, color) {
   context.restore();
 }
 
+function drawEntityDebugMarker(context, entity, label, color) {
+  const x = Number.isFinite(entity?.targetX) ? entity.targetX : entity?.x;
+  const y = Number.isFinite(entity?.targetY) ? entity.targetY : entity?.y;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  context.save();
+  context.translate(x, y);
+  context.globalAlpha = 0.92;
+  context.strokeStyle = color;
+  context.fillStyle = 'rgba(15, 23, 42, 0.82)';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.arc(0, 0, 24, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+  context.fillStyle = color;
+  context.font = '900 14px Inter, Arial';
+  context.textAlign = 'center';
+  context.fillText(label, 0, 5);
+  context.restore();
+}
+
 function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWidth, viewHeight) {
   if (layer.type !== 'tilelayer' || !Array.isArray(layer.data) || !layer.visible) return;
 
@@ -2466,6 +2488,7 @@ function App() {
         onlinePlayersRef.current.forEach((remotePlayer) => {
           try {
             drawOnlinePlayer(context, remotePlayer);
+            drawEntityDebugMarker(context, remotePlayer, 'P', '#38bdf8');
           } catch (error) {
             console.error(error);
             drawEntityFallbackMarker(context, remotePlayer, 'P', '#38bdf8');
@@ -2477,6 +2500,7 @@ function App() {
       enemies.current.forEach((enemy) => {
         try {
           drawEnemy(context, enemy, now);
+          drawEntityDebugMarker(context, enemy, 'E', enemy.type === 'boss' ? '#c084fc' : '#f87171');
         } catch (error) {
           console.error(error);
           drawEntityFallbackMarker(context, enemy, 'E', '#f87171');
