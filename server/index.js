@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Room, Server } from 'colyseus';
@@ -522,6 +523,7 @@ class WorldRoom extends Room {
 }
 
 const port = Number(process.env.PORT ?? 2567);
+const host = process.env.HOST ?? '0.0.0.0';
 const gameServer = new Server({
   express: (app) => {
     app.get('/', (_request, response) => {
@@ -535,6 +537,16 @@ const gameServer = new Server({
 });
 gameServer.define('world', WorldRoom);
 
-gameServer.listen(port).then(() => {
+function getLanAddresses() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((address) => address && address.family === 'IPv4' && !address.internal)
+    .map((address) => address.address);
+}
+
+gameServer.listen(port, host).then(() => {
   console.log(`Colyseus MMO server listening on ws://localhost:${port}`);
+  getLanAddresses().forEach((address) => {
+    console.log(`LAN clients can use ws://${address}:${port}`);
+  });
 });
