@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { deleteCloudCharacter, loadCloudCharacters, saveCloudCharacter } from './characterCloud';
 import { auth, hasFirebaseConfig } from './firebaseClient';
-import { connectGameSocket, getSocketUrl } from './socketGameClient';
 import './styles.css';
 
 const OFFLINE_DEMO = false;
@@ -64,10 +63,6 @@ const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
-const REMOTE_PREDICTION_SECONDS = 0.1;
-const REMOTE_CORRECTION_RATE = 12;
-const REMOTE_SNAP_DISTANCE = 360;
-
 const BASE_STATS = {
   health: 100,
   mana: 60,
@@ -847,36 +842,6 @@ function drawLocalPlayerMarker(context, player, character) {
   context.restore();
 }
 
-function drawOnlinePlayer(context, onlinePlayer) {
-  if (!onlinePlayer) return;
-  const x = Number.isFinite(onlinePlayer.x) ? onlinePlayer.x : onlinePlayer.targetX;
-  const y = Number.isFinite(onlinePlayer.y) ? onlinePlayer.y : onlinePlayer.targetY;
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-
-  const classId = CLASSES[onlinePlayer.classId] ? onlinePlayer.classId : 'warrior';
-  const raceId = RACES[onlinePlayer.raceId] ? onlinePlayer.raceId : 'human';
-  const drawablePlayer = { ...onlinePlayer, x, y };
-
-  drawPlayer(context, drawablePlayer, classId, raceId);
-
-  context.save();
-  context.translate(x, y);
-  context.fillStyle = 'rgba(16, 24, 30, 0.78)';
-  context.strokeStyle = 'rgba(139, 233, 253, 0.42)';
-  context.lineWidth = 1;
-  context.fillRect(-70, -78, 140, 34);
-  context.strokeRect(-70, -78, 140, 34);
-
-  context.fillStyle = '#8be9fd';
-  context.font = '900 12px Inter, Arial';
-  context.textAlign = 'center';
-  context.fillText(onlinePlayer.name ?? 'Player', 0, -64);
-  context.fillStyle = 'rgba(246, 241, 223, 0.78)';
-  context.font = '800 10px Inter, Arial';
-  context.fillText(`Lv ${onlinePlayer.level ?? 1}`, 0, -51);
-  context.restore();
-}
-
 function drawEnemy(context, enemy, now) {
   const x = Number.isFinite(enemy?.x) ? enemy.x : enemy?.targetX;
   const y = Number.isFinite(enemy?.y) ? enemy.y : enemy?.targetY;
@@ -952,49 +917,6 @@ function drawEnemy(context, enemy, now) {
     context.fillText('idle', 0, isBoss ? -72 : -39);
   }
 
-  context.restore();
-}
-
-function drawEntityFallbackMarker(context, entity, label, color) {
-  const x = Number.isFinite(entity?.x) ? entity.x : entity?.targetX;
-  const y = Number.isFinite(entity?.y) ? entity.y : entity?.targetY;
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-
-  context.save();
-  context.translate(x, y);
-  context.fillStyle = color;
-  context.strokeStyle = '#0f172a';
-  context.lineWidth = 3;
-  context.beginPath();
-  context.arc(0, 0, 13, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
-  context.fillStyle = '#f8fafc';
-  context.font = '900 10px Inter, Arial';
-  context.textAlign = 'center';
-  context.fillText(label, 0, -21);
-  context.restore();
-}
-
-function drawEntityDebugMarker(context, entity, label, color) {
-  const x = Number.isFinite(entity?.targetX) ? entity.targetX : entity?.x;
-  const y = Number.isFinite(entity?.targetY) ? entity.targetY : entity?.y;
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-
-  context.save();
-  context.translate(x, y);
-  context.globalAlpha = 0.92;
-  context.strokeStyle = color;
-  context.fillStyle = 'rgba(15, 23, 42, 0.82)';
-  context.lineWidth = 4;
-  context.beginPath();
-  context.arc(0, 0, 24, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
-  context.fillStyle = color;
-  context.font = '900 14px Inter, Arial';
-  context.textAlign = 'center';
-  context.fillText(label, 0, 5);
   context.restore();
 }
 
@@ -1133,71 +1055,6 @@ function pickSpawn(spawns) {
   return spawns[Math.floor(Math.random() * spawns.length)];
 }
 
-function mergeRemoteEntities(previousEntities, nextEntities, idKey = 'id') {
-  const now = performance.now();
-  const previousById = new Map(previousEntities.map((entity) => [getRemoteEntityId(entity, idKey), entity]));
-
-  return nextEntities.map((entity) => {
-    const previous = previousById.get(getRemoteEntityId(entity, idKey));
-    const targetX = Number(entity.x);
-    const targetY = Number(entity.y);
-    const previousTargetX = Number(previous?.targetX ?? previous?.x ?? targetX);
-    const previousTargetY = Number(previous?.targetY ?? previous?.y ?? targetY);
-    const elapsed = Math.max((now - (previous?.snapshotAt ?? now)) / 1000, 0.016);
-    const vx = (targetX - previousTargetX) / elapsed;
-    const vy = (targetY - previousTargetY) / elapsed;
-    const renderX = Number(previous?.renderX ?? previous?.x ?? targetX);
-    const renderY = Number(previous?.renderY ?? previous?.y ?? targetY);
-
-    return {
-      ...entity,
-      x: renderX,
-      y: renderY,
-      renderX,
-      renderY,
-      targetX,
-      targetY,
-      vx: Number.isFinite(vx) ? vx : 0,
-      vy: Number.isFinite(vy) ? vy : 0,
-      snapshotAt: now,
-    };
-  });
-}
-
-function advanceRemoteEntities(entities, delta) {
-  const correction = 1 - Math.exp(-REMOTE_CORRECTION_RATE * delta);
-
-  return entities.map((entity) => {
-    if (!Number.isFinite(entity.targetX) || !Number.isFinite(entity.targetY)) return entity;
-
-    const predictedX = entity.targetX + (entity.vx ?? 0) * REMOTE_PREDICTION_SECONDS;
-    const predictedY = entity.targetY + (entity.vy ?? 0) * REMOTE_PREDICTION_SECONDS;
-    let renderX = (entity.renderX ?? entity.x) + (entity.vx ?? 0) * delta;
-    let renderY = (entity.renderY ?? entity.y) + (entity.vy ?? 0) * delta;
-    const error = Math.hypot(predictedX - renderX, predictedY - renderY);
-
-    if (error > REMOTE_SNAP_DISTANCE) {
-      renderX = predictedX;
-      renderY = predictedY;
-    } else {
-      renderX += (predictedX - renderX) * correction;
-      renderY += (predictedY - renderY) * correction;
-    }
-
-    return {
-      ...entity,
-      x: renderX,
-      y: renderY,
-      renderX,
-      renderY,
-    };
-  });
-}
-
-function getRemoteEntityId(entity, preferredKey = 'id') {
-  return entity?.[preferredKey] ?? entity?.socketId ?? entity?.uid ?? entity?.id;
-}
-
 function abilityHitsEnemyClient(ability, origin, facing, enemy) {
   const fx = Math.cos(facing);
   const fy = Math.sin(facing);
@@ -1226,28 +1083,6 @@ function abilityHitsEnemyClient(ability, origin, facing, enemy) {
   }
 
   return distance(enemy, origin) < 118 + hitRadius;
-}
-
-function getHitEnemyIdsForAbility(ability, origin, facing, enemyList) {
-  return enemyList
-    .filter((enemy) => abilityHitsEnemyClient(ability, origin, facing, enemy))
-    .map((enemy) => enemy.id)
-    .filter((id) => Number.isFinite(Number(id)));
-}
-
-function serializeSpawnsForSocket(tiledWorld) {
-  const toSocketSpawn = (spawn) => ({
-    name: spawn.name,
-    x: spawn.x,
-    y: spawn.y,
-    width: spawn.width ?? 1,
-    height: spawn.height ?? 1,
-  });
-
-  return {
-    enemySpawns: (tiledWorld?.enemySpawns ?? []).map(toSocketSpawn),
-    bossSpawns: (tiledWorld?.bossSpawns ?? []).map(toSocketSpawn),
-  };
 }
 
 function getShopkeeperFromMap(tiledWorld) {
@@ -1488,12 +1323,6 @@ function App() {
   const lastCombatAt = React.useRef(0);
   const authFlowRef = React.useRef(null);
   const authUserRef = React.useRef(null);
-  const socketRef = React.useRef(null);
-  const onlinePlayersRef = React.useRef([]);
-  const onlineWorldRef = React.useRef(false);
-  const localCastIds = React.useRef(new Set());
-  const lastSocketUpdateAt = React.useRef(0);
-  const lastPlayerSnapshotTotal = React.useRef(0);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
   const [position, setPosition] = React.useState(player.current);
@@ -1510,9 +1339,6 @@ function App() {
   const [authMode, setAuthMode] = React.useState('login');
   const [authReady, setAuthReady] = React.useState(OFFLINE_DEMO || !hasFirebaseConfig);
   const [renderStatus, setRenderStatus] = React.useState('Render starting...');
-  const [socketStatus, setSocketStatus] = React.useState(getSocketUrl() ? 'Socket idle' : 'Socket not configured');
-  const [socketDebug, setSocketDebug] = React.useState('');
-  const [onlinePlayers, setOnlinePlayers] = React.useState([]);
   const [authStatus, setAuthStatus] = React.useState(
     OFFLINE_DEMO ? 'Offline demo' : hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
   );
@@ -1874,169 +1700,6 @@ function App() {
   };
 
   React.useEffect(() => {
-    setOnlinePlayers([]);
-
-    if (!authUser || !character) {
-      setSocketStatus(getSocketUrl() ? 'Socket idle' : 'Socket not configured');
-      return undefined;
-    }
-
-    let cancelled = false;
-    const socketUrl = getSocketUrl();
-    setSocketStatus(socketUrl ? 'Socket connecting...' : 'Socket not configured');
-
-    if (!socketUrl) return undefined;
-
-    let heartbeatId = null;
-
-    authUser.getIdToken()
-      .then((token) => {
-        if (cancelled) return;
-
-        const socket = connectGameSocket({ token, uid: authUser.uid });
-        if (!socket) return;
-
-        socketRef.current = socket;
-
-        socket.on('connect', () => {
-          setSocketStatus('Socket online');
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p 0 | e ${enemies.current.length}`);
-          const joinPayload = {
-            name: character.name,
-            level: character.level ?? 1,
-            classId: character.classId,
-            raceId: character.raceId,
-            x: Math.round(player.current.x),
-            y: Math.round(player.current.y),
-            facing: player.current.facing,
-            world: serializeSpawnsForSocket(tiledWorld.current),
-          };
-          socket.emit('player:join', joinPayload);
-
-          if (heartbeatId) window.clearInterval(heartbeatId);
-          heartbeatId = window.setInterval(() => {
-            const activeCharacter = characterRef.current;
-            if (!activeCharacter || !socket.connected) return;
-            socket.emit('player:update', {
-              name: activeCharacter.name,
-              level: activeCharacter.level ?? 1,
-              classId: activeCharacter.classId,
-              raceId: activeCharacter.raceId,
-              x: Math.round(player.current.x),
-              y: Math.round(player.current.y),
-              facing: player.current.facing,
-            });
-          }, 1000);
-        });
-
-        socket.on('players:snapshot', (players) => {
-          const remotePlayers = Array.isArray(players)
-            ? players.filter((onlinePlayer) => (
-              onlinePlayer.socketId
-                ? onlinePlayer.socketId !== socket.id
-                : onlinePlayer.uid !== authUser.uid
-            ))
-            : [];
-          const mergedPlayers = mergeRemoteEntities(onlinePlayersRef.current, remotePlayers, 'socketId');
-          onlinePlayersRef.current = mergedPlayers;
-          lastPlayerSnapshotTotal.current = Array.isArray(players) ? players.length : 0;
-          setOnlinePlayers(mergedPlayers);
-          const firstRemote = mergedPlayers[0];
-          const remotePosition = firstRemote
-            ? ` | rp ${Math.round(firstRemote.targetX ?? firstRemote.x)},${Math.round(firstRemote.targetY ?? firstRemote.y)}`
-            : '';
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${remotePlayers.length}/${lastPlayerSnapshotTotal.current}${remotePosition} | e ${enemies.current.length}`);
-        });
-
-        socket.on('enemies:snapshot', (serverEnemies) => {
-          if (!Array.isArray(serverEnemies)) return;
-          onlineWorldRef.current = true;
-          enemies.current = mergeRemoteEntities(
-            enemies.current,
-            serverEnemies.map((enemy) => ({
-              ...enemy,
-              hitAt: enemy.hitAt ? performance.now() - Math.max(0, Date.now() - enemy.hitAt) : 0,
-            })),
-            'id',
-          );
-          setEnemyCount(enemies.current.length);
-          const nearestEnemy = enemies.current
-            .filter((enemy) => Number.isFinite(enemy.targetX ?? enemy.x) && Number.isFinite(enemy.targetY ?? enemy.y))
-            .sort((a, b) => distance(player.current, { x: a.targetX ?? a.x, y: a.targetY ?? a.y })
-              - distance(player.current, { x: b.targetX ?? b.x, y: b.targetY ?? b.y }))[0];
-          const enemyPosition = nearestEnemy
-            ? ` | ne ${Math.round(nearestEnemy.targetX ?? nearestEnemy.x)},${Math.round(nearestEnemy.targetY ?? nearestEnemy.y)}`
-            : '';
-          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${onlinePlayersRef.current.length}/${lastPlayerSnapshotTotal.current} | e ${enemies.current.length}${enemyPosition}`);
-        });
-
-        socket.on('ability:effect', (effect) => {
-          if (effect.clientCastId && localCastIds.current.has(effect.clientCastId)) {
-            localCastIds.current.delete(effect.clientCastId);
-            return;
-          }
-
-          effects.current.push({
-            ...effect,
-            start: performance.now() - Math.max(0, Date.now() - (effect.startedAt ?? Date.now())),
-            duration: effect.duration ?? (effect.type === 'shield' || effect.type === 'heal' ? 900 : 650),
-          });
-        });
-
-        socket.on('player:hit', ({ damage }) => {
-          if (deadRef.current) return;
-          const nextHp = Math.max(0, vitalsRef.current.hp - Number(damage ?? 0));
-          lastCombatAt.current = performance.now();
-          setVitalsValue({ ...vitalsRef.current, hp: nextHp });
-          setLastCast(`-${damage} HP`);
-          if (nextHp <= 0) {
-            killPlayer();
-          }
-        });
-
-        socket.on('player:reward', ({ xp, bossKills }) => {
-          if (xp > 0) awardExperience(xp);
-          if (xp > 0) setLastCast(`Online hit: +${xp} XP`);
-          for (let index = 0; index < (bossKills ?? 0); index += 1) {
-            addLoot(rollBossLoot());
-          }
-        });
-
-        socket.on('server:message', (message) => {
-          setLastCast(String(message));
-        });
-
-        socket.on('connect_error', (error) => {
-          onlineWorldRef.current = false;
-          setSocketStatus(`Socket error: ${error.message}`);
-        });
-
-        socket.on('disconnect', () => {
-          if (heartbeatId) window.clearInterval(heartbeatId);
-          heartbeatId = null;
-          onlineWorldRef.current = false;
-          setSocketStatus('Socket offline');
-          setSocketDebug('');
-          setOnlinePlayers([]);
-        });
-      })
-      .catch((error) => {
-        setSocketStatus(`Socket auth failed: ${error.message}`);
-      });
-
-    return () => {
-      cancelled = true;
-      if (heartbeatId) window.clearInterval(heartbeatId);
-      socketRef.current?.emit('player:leave');
-      socketRef.current?.disconnect();
-      socketRef.current = null;
-      onlineWorldRef.current = false;
-      setSocketDebug('');
-      setOnlinePlayers([]);
-    };
-  }, [authUser, character?.id]);
-
-  React.useEffect(() => {
     let cancelled = false;
 
     loadTiledMap()
@@ -2044,7 +1707,6 @@ function App() {
         if (cancelled) return;
         tiledWorld.current = loadedMap;
         setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
-        socketRef.current?.emit('world:init', serializeSpawnsForSocket(loadedMap));
       })
       .catch((error) => {
         console.error(error);
@@ -2095,47 +1757,6 @@ function App() {
       setVitalsValue({ ...vitalsRef.current, hp: nextHp });
     };
 
-    const emitAbilityCast = (ability, facing, now, extra = {}) => {
-      const socket = socketRef.current;
-      if (!socket?.connected) return null;
-
-      const activeCharacter = characterRef.current;
-      const stats = activeCharacter ? getTotalStats(activeCharacter) : BASE_STATS;
-      const statBonus = Math.floor(
-        ((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 8,
-      );
-      const clientCastId = `${authUserRef.current?.uid ?? 'local'}-${now}-${ability.key}-${Math.random().toString(16).slice(2)}`;
-      const origin = { x: player.current.x, y: player.current.y };
-      if (activeCharacter) {
-        socket.emit('player:update', {
-          name: activeCharacter.name,
-          level: activeCharacter.level ?? 1,
-          classId: activeCharacter.classId,
-          raceId: activeCharacter.raceId,
-          x: Math.round(origin.x),
-          y: Math.round(origin.y),
-          facing,
-        });
-      }
-      socket.emit('ability:cast', {
-        key: ability.key,
-        name: ability.name,
-        type: ability.type,
-        color: ability.color,
-        damage: ability.damage ? ability.damage + statBonus : 0,
-        hitEnemyIds: ability.damage ? getHitEnemyIdsForAbility(ability, origin, facing, enemies.current) : [],
-        duration: ability.type === 'shield' || ability.type === 'heal'
-          ? 900
-          : ability.duration ?? 650,
-        x: Math.round(origin.x),
-        y: Math.round(origin.y),
-        facing,
-        clientCastId,
-        ...extra,
-      });
-      return clientCastId;
-    };
-
     const fireAbility = (slot) => {
       const classId = selectedClassRef.current;
       if (!classId || deadRef.current) return;
@@ -2158,11 +1779,8 @@ function App() {
       if (ability.type === 'channel') {
         cooldowns.current[slot] = now + (ability.duration ?? 3000) + 800;
         effects.current = effects.current.filter((effect) => effect.type !== 'channel');
-        const clientCastId = emitAbilityCast(ability, facing, now);
-        if (clientCastId) localCastIds.current.add(clientCastId);
         effects.current.push({
           ...ability,
-          clientCastId,
           x: player.current.x,
           y: player.current.y,
           facing,
@@ -2177,25 +1795,6 @@ function App() {
 
       setVitalsValue({ ...vitalsRef.current, mana: vitalsRef.current.mana - manaCost });
       cooldowns.current[slot] = now + 650;
-
-      const clientCastId = emitAbilityCast(ability, facing, now);
-      if (clientCastId) {
-        localCastIds.current.add(clientCastId);
-        effects.current.push({
-          ...ability,
-          clientCastId,
-          x: player.current.x,
-          y: player.current.y,
-          facing,
-          start: now,
-          duration: ability.type === 'shield' || ability.type === 'heal' ? 900 : 650,
-        });
-        setLastCast(`${ability.key}: ${ability.name}`);
-        if (ability.healing) {
-          applyAbilityHealing(ability);
-        }
-        return;
-      }
 
       if (ability.damage) {
         applyAbilityDamage(ability, facing, now);
@@ -2485,25 +2084,14 @@ function App() {
         } catch (error) {
           console.error(error);
         }
-        onlinePlayersRef.current.forEach((remotePlayer) => {
-          try {
-            drawOnlinePlayer(context, remotePlayer);
-            drawEntityDebugMarker(context, remotePlayer, 'P', '#38bdf8');
-          } catch (error) {
-            console.error(error);
-            drawEntityFallbackMarker(context, remotePlayer, 'P', '#38bdf8');
-          }
-        });
         drawLocalPlayerMarker(context, player.current, activeCharacter);
       }
       drawShopkeeperAt(context, getShopkeeperFromMap(tiledWorld.current));
       enemies.current.forEach((enemy) => {
         try {
           drawEnemy(context, enemy, now);
-          drawEntityDebugMarker(context, enemy, 'E', enemy.type === 'boss' ? '#c084fc' : '#f87171');
         } catch (error) {
           console.error(error);
-          drawEntityFallbackMarker(context, enemy, 'E', '#f87171');
         }
       });
       effects.current.forEach((effect) => drawEffect(effect, now));
@@ -2522,15 +2110,7 @@ function App() {
         );
       }
 
-      if (onlinePlayersRef.current.length > 0) {
-        onlinePlayersRef.current = advanceRemoteEntities(onlinePlayersRef.current, delta);
-      }
-
-      if (onlineWorldRef.current && enemies.current.length > 0) {
-        enemies.current = advanceRemoteEntities(enemies.current, delta);
-      }
-
-      if (!onlineWorldRef.current && selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
+      if (selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
         enemies.current.push(createEnemy(nextEnemyId.current, pickSpawn(tiledWorld.current?.enemySpawns ?? []), player.current));
         nextEnemyId.current += 1;
         nextSpawnAt.current = now + ENEMY.spawnEvery;
@@ -2538,7 +2118,7 @@ function App() {
       }
 
       const bossAlive = enemies.current.some((enemy) => enemy.type === 'boss');
-      if (!onlineWorldRef.current && selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
+      if (selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
         enemies.current.push(createBoss(nextEnemyId.current, pickSpawn(tiledWorld.current?.bossSpawns ?? []), player.current));
         nextEnemyId.current += 1;
         nextBossSpawnAt.current = now + nextBossDelay();
@@ -2571,8 +2151,7 @@ function App() {
         }
       }
 
-      if (!onlineWorldRef.current) {
-        enemies.current = enemies.current.map((enemy) => {
+      enemies.current = enemies.current.map((enemy) => {
         if (enemy.state !== 'aggro') {
           const bounds = enemy.spawnBounds;
           let target = enemy.wanderTarget;
@@ -2642,8 +2221,7 @@ function App() {
             WORLD.height - (enemy.radius ?? ENEMY.radius),
           ),
         };
-        });
-      }
+      });
 
       effects.current = effects.current
         .map((effect) => {
@@ -2664,23 +2242,6 @@ function App() {
           const end = { x: effect.x + fx * 280, y: effect.y + fy * 280 };
           const stats = characterRef.current ? getTotalStats(characterRef.current) : BASE_STATS;
           const damage = effect.damage + Math.floor((stats.intellect ?? 0) / 5);
-
-          if (socketRef.current?.connected) {
-            socketRef.current.emit('ability:cast', {
-              key: effect.key,
-              name: effect.name,
-              type: effect.type,
-              color: effect.color,
-              damage,
-              hitEnemyIds: getHitEnemyIdsForAbility(effect, start, effect.facing, enemies.current),
-              duration: effect.duration,
-              x: Math.round(effect.x),
-              y: Math.round(effect.y),
-              facing: effect.facing,
-              damageOnly: true,
-            });
-            return { ...effect, nextTickAt: now + effect.tickRate };
-          }
 
           const damagedEnemies = enemies.current.map((enemy) => {
             const hitRadius = (enemy.radius ?? ENEMY.radius) + 10;
@@ -2704,26 +2265,6 @@ function App() {
         .filter((effect) => now - effect.start < effect.duration);
       draw(now);
       setPosition({ ...player.current });
-
-      const activeUser = authUserRef.current;
-      const activeCharacter = characterRef.current;
-      if (
-        activeUser
-        && activeCharacter
-        && socketRef.current?.connected
-        && now - lastSocketUpdateAt.current > 80
-      ) {
-        lastSocketUpdateAt.current = now;
-        socketRef.current.emit('player:update', {
-          name: activeCharacter.name,
-          level: activeCharacter.level ?? 1,
-          classId: activeCharacter.classId,
-          raceId: activeCharacter.raceId,
-          x: Math.round(player.current.x),
-          y: Math.round(player.current.y),
-          facing: player.current.facing,
-        });
-      }
 
       if (characterRef.current && !deadRef.current) {
         const stats = getTotalStats(characterRef.current);
@@ -2815,8 +2356,7 @@ function App() {
         <div className="hud top-left">
           <Gamepad2 size={18} />
           <span>
-            Cloud save | WASD / nyilak | {mapStatus} | {socketStatus}
-            {socketDebug ? ` | ${socketDebug}` : ''} | {renderStatus}
+            Cloud save | WASD / nyilak | {mapStatus} | Offline world | {renderStatus}
           </span>
         </div>
         {character && (

@@ -9,22 +9,15 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:server": "node server/index.js",
-    "start": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
     "firebase": "^12.13.0",
-    "firebase-admin": "^13.10.0",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
     "vite": "latest"
   }
 }
