@@ -1082,6 +1082,21 @@ function pickSpawn(spawns) {
   return spawns[Math.floor(Math.random() * spawns.length)];
 }
 
+function serializeSpawnsForSocket(tiledWorld) {
+  const toSocketSpawn = (spawn) => ({
+    name: spawn.name,
+    x: spawn.x,
+    y: spawn.y,
+    width: spawn.width ?? 1,
+    height: spawn.height ?? 1,
+  });
+
+  return {
+    enemySpawns: (tiledWorld?.enemySpawns ?? []).map(toSocketSpawn),
+    bossSpawns: (tiledWorld?.bossSpawns ?? []).map(toSocketSpawn),
+  };
+}
+
 function getShopkeeperFromMap(tiledWorld) {
   const npc = tiledWorld?.npcs?.find((candidate) => (
     candidate.props.npcType === 'shopkeeper'
@@ -1322,6 +1337,8 @@ function App() {
   const authUserRef = React.useRef(null);
   const socketRef = React.useRef(null);
   const onlinePlayersRef = React.useRef([]);
+  const onlineWorldRef = React.useRef(false);
+  const localCastIds = React.useRef(new Set());
   const lastSocketUpdateAt = React.useRef(0);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
@@ -1735,6 +1752,7 @@ function App() {
             x: Math.round(player.current.x),
             y: Math.round(player.current.y),
             facing: player.current.facing,
+            world: serializeSpawnsForSocket(tiledWorld.current),
           });
         });
 
@@ -1745,11 +1763,58 @@ function App() {
           setOnlinePlayers(remotePlayers);
         });
 
+        socket.on('enemies:snapshot', (serverEnemies) => {
+          if (!Array.isArray(serverEnemies)) return;
+          onlineWorldRef.current = true;
+          enemies.current = serverEnemies.map((enemy) => ({
+            ...enemy,
+            hitAt: enemy.hitAt ? performance.now() - Math.max(0, Date.now() - enemy.hitAt) : 0,
+          }));
+          setEnemyCount(enemies.current.length);
+        });
+
+        socket.on('ability:effect', (effect) => {
+          if (effect.clientCastId && localCastIds.current.has(effect.clientCastId)) {
+            localCastIds.current.delete(effect.clientCastId);
+            return;
+          }
+
+          effects.current.push({
+            ...effect,
+            start: performance.now() - Math.max(0, Date.now() - (effect.startedAt ?? Date.now())),
+            duration: effect.duration ?? (effect.type === 'shield' || effect.type === 'heal' ? 900 : 650),
+          });
+        });
+
+        socket.on('player:hit', ({ damage }) => {
+          if (deadRef.current) return;
+          const nextHp = Math.max(0, vitalsRef.current.hp - Number(damage ?? 0));
+          lastCombatAt.current = performance.now();
+          setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+          setLastCast(`-${damage} HP`);
+          if (nextHp <= 0) {
+            killPlayer();
+          }
+        });
+
+        socket.on('player:reward', ({ xp, bossKills }) => {
+          if (xp > 0) awardExperience(xp);
+          for (let index = 0; index < (bossKills ?? 0); index += 1) {
+            addLoot(rollBossLoot());
+          }
+        });
+
+        socket.on('server:message', (message) => {
+          setLastCast(String(message));
+        });
+
         socket.on('connect_error', (error) => {
+          onlineWorldRef.current = false;
           setSocketStatus(`Socket error: ${error.message}`);
         });
 
         socket.on('disconnect', () => {
+          onlineWorldRef.current = false;
           setSocketStatus('Socket offline');
           setOnlinePlayers([]);
         });
@@ -1763,6 +1828,7 @@ function App() {
       socketRef.current?.emit('player:leave');
       socketRef.current?.disconnect();
       socketRef.current = null;
+      onlineWorldRef.current = false;
       setOnlinePlayers([]);
     };
   }, [authUser, character?.id]);
@@ -1775,6 +1841,7 @@ function App() {
         if (cancelled) return;
         tiledWorld.current = loadedMap;
         setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
+        socketRef.current?.emit('world:init', serializeSpawnsForSocket(loadedMap));
       })
       .catch((error) => {
         console.error(error);
@@ -1847,6 +1914,34 @@ function App() {
       setVitalsValue({ ...vitalsRef.current, hp: nextHp });
     };
 
+    const emitAbilityCast = (ability, facing, now, extra = {}) => {
+      const socket = socketRef.current;
+      if (!socket?.connected) return null;
+
+      const activeCharacter = characterRef.current;
+      const stats = activeCharacter ? getTotalStats(activeCharacter) : BASE_STATS;
+      const statBonus = Math.floor(
+        ((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 8,
+      );
+      const clientCastId = `${authUserRef.current?.uid ?? 'local'}-${now}-${ability.key}-${Math.random().toString(16).slice(2)}`;
+      socket.emit('ability:cast', {
+        key: ability.key,
+        name: ability.name,
+        type: ability.type,
+        color: ability.color,
+        damage: ability.damage ? ability.damage + statBonus : 0,
+        duration: ability.type === 'shield' || ability.type === 'heal'
+          ? 900
+          : ability.duration ?? 650,
+        x: Math.round(player.current.x),
+        y: Math.round(player.current.y),
+        facing,
+        clientCastId,
+        ...extra,
+      });
+      return clientCastId;
+    };
+
     const fireAbility = (slot) => {
       const classId = selectedClassRef.current;
       if (!classId || deadRef.current) return;
@@ -1869,8 +1964,11 @@ function App() {
       if (ability.type === 'channel') {
         cooldowns.current[slot] = now + (ability.duration ?? 3000) + 800;
         effects.current = effects.current.filter((effect) => effect.type !== 'channel');
+        const clientCastId = emitAbilityCast(ability, facing, now);
+        if (clientCastId) localCastIds.current.add(clientCastId);
         effects.current.push({
           ...ability,
+          clientCastId,
           x: player.current.x,
           y: player.current.y,
           facing,
@@ -1885,6 +1983,16 @@ function App() {
 
       setVitalsValue({ ...vitalsRef.current, mana: vitalsRef.current.mana - manaCost });
       cooldowns.current[slot] = now + 650;
+
+      const clientCastId = emitAbilityCast(ability, facing, now);
+      if (clientCastId) {
+        setLastCast(`${ability.key}: ${ability.name}`);
+        if (ability.healing) {
+          applyAbilityHealing(ability);
+        }
+        return;
+      }
+
       if (ability.damage) {
         applyAbilityDamage(ability, facing, now);
       }
@@ -2194,7 +2302,7 @@ function App() {
         );
       }
 
-      if (selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
+      if (!onlineWorldRef.current && selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
         enemies.current.push(createEnemy(nextEnemyId.current, pickSpawn(tiledWorld.current?.enemySpawns ?? []), player.current));
         nextEnemyId.current += 1;
         nextSpawnAt.current = now + ENEMY.spawnEvery;
@@ -2202,7 +2310,7 @@ function App() {
       }
 
       const bossAlive = enemies.current.some((enemy) => enemy.type === 'boss');
-      if (selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
+      if (!onlineWorldRef.current && selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
         enemies.current.push(createBoss(nextEnemyId.current, pickSpawn(tiledWorld.current?.bossSpawns ?? []), player.current));
         nextEnemyId.current += 1;
         nextBossSpawnAt.current = now + nextBossDelay();
@@ -2235,7 +2343,8 @@ function App() {
         }
       }
 
-      enemies.current = enemies.current.map((enemy) => {
+      if (!onlineWorldRef.current) {
+        enemies.current = enemies.current.map((enemy) => {
         if (enemy.state !== 'aggro') {
           const bounds = enemy.spawnBounds;
           let target = enemy.wanderTarget;
@@ -2305,7 +2414,8 @@ function App() {
             WORLD.height - (enemy.radius ?? ENEMY.radius),
           ),
         };
-      });
+        });
+      }
 
       effects.current = effects.current
         .map((effect) => {
@@ -2326,6 +2436,23 @@ function App() {
           const end = { x: effect.x + fx * 280, y: effect.y + fy * 280 };
           const stats = characterRef.current ? getTotalStats(characterRef.current) : BASE_STATS;
           const damage = effect.damage + Math.floor((stats.intellect ?? 0) / 5);
+
+          if (socketRef.current?.connected) {
+            socketRef.current.emit('ability:cast', {
+              key: effect.key,
+              name: effect.name,
+              type: effect.type,
+              color: effect.color,
+              damage,
+              duration: effect.duration,
+              x: Math.round(effect.x),
+              y: Math.round(effect.y),
+              facing: effect.facing,
+              damageOnly: true,
+            });
+            return { ...effect, nextTickAt: now + effect.tickRate };
+          }
+
           const damagedEnemies = enemies.current.map((enemy) => {
             const hitRadius = (enemy.radius ?? ENEMY.radius) + 10;
             if (distanceToSegment(enemy, start, end) >= hitRadius) return enemy;
