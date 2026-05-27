@@ -1,12 +1,11 @@
 import { Client } from '@colyseus/sdk';
 
-const DEFAULT_LOCAL_PORT = 2567;
+const COLYSEUS_PROXY_PATH = '/colyseus';
 
 function getAutoColyseusUrl() {
-  if (typeof window === 'undefined') return `ws://localhost:${DEFAULT_LOCAL_PORT}`;
+  if (typeof window === 'undefined') return `ws://localhost:2567`;
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const hostname = window.location.hostname || 'localhost';
-  return `${protocol}//${hostname}:${DEFAULT_LOCAL_PORT}`;
+  return `${protocol}//${window.location.host}${COLYSEUS_PROXY_PATH}`;
 }
 
 export function getColyseusUrl() {
