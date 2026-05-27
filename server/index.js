@@ -13,6 +13,7 @@ const ENEMY_SPAWN_EVERY = 1800;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
 const WORLD_SIZE = 6400;
+const PROTOCOL_VERSION = 'socket-session-v2';
 
 const players = new Map();
 const enemies = new Map();
@@ -61,6 +62,7 @@ app.get('/', (_request, response) => {
   response.json({
     ok: true,
     service: 'mmo-project socket server',
+    protocol: PROTOCOL_VERSION,
     health: '/health',
     players: players.size,
     enemies: enemies.size,
@@ -68,7 +70,7 @@ app.get('/', (_request, response) => {
 });
 
 app.get('/health', (_request, response) => {
-  response.json({ ok: true, players: players.size, enemies: enemies.size });
+  response.json({ ok: true, protocol: PROTOCOL_VERSION, players: players.size, enemies: enemies.size });
 });
 
 async function verifySocket(socket, next) {

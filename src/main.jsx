@@ -1087,10 +1087,10 @@ function pickSpawn(spawns) {
 
 function mergeRemoteEntities(previousEntities, nextEntities, idKey = 'id') {
   const now = performance.now();
-  const previousById = new Map(previousEntities.map((entity) => [entity[idKey], entity]));
+  const previousById = new Map(previousEntities.map((entity) => [getRemoteEntityId(entity, idKey), entity]));
 
   return nextEntities.map((entity) => {
-    const previous = previousById.get(entity[idKey]);
+    const previous = previousById.get(getRemoteEntityId(entity, idKey));
     const targetX = Number(entity.x);
     const targetY = Number(entity.y);
     const previousTargetX = Number(previous?.targetX ?? previous?.x ?? targetX);
@@ -1144,6 +1144,10 @@ function advanceRemoteEntities(entities, delta) {
       renderY,
     };
   });
+}
+
+function getRemoteEntityId(entity, preferredKey = 'id') {
+  return entity?.[preferredKey] ?? entity?.socketId ?? entity?.uid ?? entity?.id;
 }
 
 function serializeSpawnsForSocket(tiledWorld) {
@@ -1421,6 +1425,7 @@ function App() {
   const [authReady, setAuthReady] = React.useState(OFFLINE_DEMO || !hasFirebaseConfig);
   const [renderStatus, setRenderStatus] = React.useState('Render starting...');
   const [socketStatus, setSocketStatus] = React.useState(getSocketUrl() ? 'Socket idle' : 'Socket not configured');
+  const [socketDebug, setSocketDebug] = React.useState('');
   const [onlinePlayers, setOnlinePlayers] = React.useState([]);
   const [authStatus, setAuthStatus] = React.useState(
     OFFLINE_DEMO ? 'Offline demo' : hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
@@ -1807,6 +1812,7 @@ function App() {
 
         socket.on('connect', () => {
           setSocketStatus('Socket online');
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p 0 | e ${enemies.current.length}`);
           socket.emit('player:join', {
             name: character.name,
             level: character.level ?? 1,
@@ -1821,11 +1827,16 @@ function App() {
 
         socket.on('players:snapshot', (players) => {
           const remotePlayers = Array.isArray(players)
-            ? players.filter((onlinePlayer) => onlinePlayer.socketId !== socket.id)
+            ? players.filter((onlinePlayer) => (
+              onlinePlayer.socketId
+                ? onlinePlayer.socketId !== socket.id
+                : onlinePlayer.uid !== authUser.uid
+            ))
             : [];
           const mergedPlayers = mergeRemoteEntities(onlinePlayersRef.current, remotePlayers, 'socketId');
           onlinePlayersRef.current = mergedPlayers;
           setOnlinePlayers(mergedPlayers);
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${remotePlayers.length} | e ${enemies.current.length}`);
         });
 
         socket.on('enemies:snapshot', (serverEnemies) => {
@@ -1840,6 +1851,7 @@ function App() {
             'id',
           );
           setEnemyCount(enemies.current.length);
+          setSocketDebug(`id ${socket.id?.slice(0, 5) ?? '?'} | p ${onlinePlayersRef.current.length} | e ${enemies.current.length}`);
         });
 
         socket.on('ability:effect', (effect) => {
@@ -1868,6 +1880,7 @@ function App() {
 
         socket.on('player:reward', ({ xp, bossKills }) => {
           if (xp > 0) awardExperience(xp);
+          if (xp > 0) setLastCast(`Online hit: +${xp} XP`);
           for (let index = 0; index < (bossKills ?? 0); index += 1) {
             addLoot(rollBossLoot());
           }
@@ -1885,6 +1898,7 @@ function App() {
         socket.on('disconnect', () => {
           onlineWorldRef.current = false;
           setSocketStatus('Socket offline');
+          setSocketDebug('');
           setOnlinePlayers([]);
         });
       })
@@ -1898,6 +1912,7 @@ function App() {
       socketRef.current?.disconnect();
       socketRef.current = null;
       onlineWorldRef.current = false;
+      setSocketDebug('');
       setOnlinePlayers([]);
     };
   }, [authUser, character?.id]);
@@ -2672,7 +2687,10 @@ function App() {
         )}
         <div className="hud top-left">
           <Gamepad2 size={18} />
-          <span>Cloud save | WASD / nyilak | {mapStatus} | {socketStatus} | {renderStatus}</span>
+          <span>
+            Cloud save | WASD / nyilak | {mapStatus} | {socketStatus}
+            {socketDebug ? ` | ${socketDebug}` : ''} | {renderStatus}
+          </span>
         </div>
         {character && (
           <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
