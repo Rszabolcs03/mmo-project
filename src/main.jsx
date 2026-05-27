@@ -64,6 +64,9 @@ const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
+const REMOTE_PREDICTION_SECONDS = 0.1;
+const REMOTE_CORRECTION_RATE = 12;
+const REMOTE_SNAP_DISTANCE = 360;
 
 const BASE_STATS = {
   health: 100,
@@ -1082,6 +1085,67 @@ function pickSpawn(spawns) {
   return spawns[Math.floor(Math.random() * spawns.length)];
 }
 
+function mergeRemoteEntities(previousEntities, nextEntities, idKey = 'id') {
+  const now = performance.now();
+  const previousById = new Map(previousEntities.map((entity) => [entity[idKey], entity]));
+
+  return nextEntities.map((entity) => {
+    const previous = previousById.get(entity[idKey]);
+    const targetX = Number(entity.x);
+    const targetY = Number(entity.y);
+    const previousTargetX = Number(previous?.targetX ?? previous?.x ?? targetX);
+    const previousTargetY = Number(previous?.targetY ?? previous?.y ?? targetY);
+    const elapsed = Math.max((now - (previous?.snapshotAt ?? now)) / 1000, 0.016);
+    const vx = (targetX - previousTargetX) / elapsed;
+    const vy = (targetY - previousTargetY) / elapsed;
+    const renderX = Number(previous?.renderX ?? previous?.x ?? targetX);
+    const renderY = Number(previous?.renderY ?? previous?.y ?? targetY);
+
+    return {
+      ...entity,
+      x: renderX,
+      y: renderY,
+      renderX,
+      renderY,
+      targetX,
+      targetY,
+      vx: Number.isFinite(vx) ? vx : 0,
+      vy: Number.isFinite(vy) ? vy : 0,
+      snapshotAt: now,
+    };
+  });
+}
+
+function advanceRemoteEntities(entities, delta) {
+  const correction = 1 - Math.exp(-REMOTE_CORRECTION_RATE * delta);
+
+  return entities.map((entity) => {
+    if (!Number.isFinite(entity.targetX) || !Number.isFinite(entity.targetY)) return entity;
+
+    const predictedX = entity.targetX + (entity.vx ?? 0) * REMOTE_PREDICTION_SECONDS;
+    const predictedY = entity.targetY + (entity.vy ?? 0) * REMOTE_PREDICTION_SECONDS;
+    let renderX = (entity.renderX ?? entity.x) + (entity.vx ?? 0) * delta;
+    let renderY = (entity.renderY ?? entity.y) + (entity.vy ?? 0) * delta;
+    const error = Math.hypot(predictedX - renderX, predictedY - renderY);
+
+    if (error > REMOTE_SNAP_DISTANCE) {
+      renderX = predictedX;
+      renderY = predictedY;
+    } else {
+      renderX += (predictedX - renderX) * correction;
+      renderY += (predictedY - renderY) * correction;
+    }
+
+    return {
+      ...entity,
+      x: renderX,
+      y: renderY,
+      renderX,
+      renderY,
+    };
+  });
+}
+
 function serializeSpawnsForSocket(tiledWorld) {
   const toSocketSpawn = (spawn) => ({
     name: spawn.name,
@@ -1367,7 +1431,6 @@ function App() {
   characterRef.current = character;
   charactersRef.current = characters;
   authUserRef.current = authUser;
-  onlinePlayersRef.current = onlinePlayers;
   deadRef.current = isDead;
   shopOpenRef.current = shopOpen;
 
@@ -1760,16 +1823,22 @@ function App() {
           const remotePlayers = Array.isArray(players)
             ? players.filter((onlinePlayer) => onlinePlayer.uid !== authUser.uid)
             : [];
-          setOnlinePlayers(remotePlayers);
+          const mergedPlayers = mergeRemoteEntities(onlinePlayersRef.current, remotePlayers, 'uid');
+          onlinePlayersRef.current = mergedPlayers;
+          setOnlinePlayers(mergedPlayers);
         });
 
         socket.on('enemies:snapshot', (serverEnemies) => {
           if (!Array.isArray(serverEnemies)) return;
           onlineWorldRef.current = true;
-          enemies.current = serverEnemies.map((enemy) => ({
-            ...enemy,
-            hitAt: enemy.hitAt ? performance.now() - Math.max(0, Date.now() - enemy.hitAt) : 0,
-          }));
+          enemies.current = mergeRemoteEntities(
+            enemies.current,
+            serverEnemies.map((enemy) => ({
+              ...enemy,
+              hitAt: enemy.hitAt ? performance.now() - Math.max(0, Date.now() - enemy.hitAt) : 0,
+            })),
+            'id',
+          );
           setEnemyCount(enemies.current.length);
         });
 
@@ -1986,6 +2055,16 @@ function App() {
 
       const clientCastId = emitAbilityCast(ability, facing, now);
       if (clientCastId) {
+        localCastIds.current.add(clientCastId);
+        effects.current.push({
+          ...ability,
+          clientCastId,
+          x: player.current.x,
+          y: player.current.y,
+          facing,
+          start: now,
+          duration: ability.type === 'shield' || ability.type === 'heal' ? 900 : 650,
+        });
         setLastCast(`${ability.key}: ${ability.name}`);
         if (ability.healing) {
           applyAbilityHealing(ability);
@@ -2300,6 +2379,14 @@ function App() {
         setRenderStatus(
           `Render live ${canvas.clientWidth}x${canvas.clientHeight} | cam ${Math.round(camera.current.x)}, ${Math.round(camera.current.y)}`,
         );
+      }
+
+      if (onlinePlayersRef.current.length > 0) {
+        onlinePlayersRef.current = advanceRemoteEntities(onlinePlayersRef.current, delta);
+      }
+
+      if (onlineWorldRef.current && enemies.current.length > 0) {
+        enemies.current = advanceRemoteEntities(enemies.current, delta);
       }
 
       if (!onlineWorldRef.current && selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
