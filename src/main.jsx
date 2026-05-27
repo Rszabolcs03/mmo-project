@@ -1821,9 +1821,9 @@ function App() {
 
         socket.on('players:snapshot', (players) => {
           const remotePlayers = Array.isArray(players)
-            ? players.filter((onlinePlayer) => onlinePlayer.uid !== authUser.uid)
+            ? players.filter((onlinePlayer) => onlinePlayer.socketId !== socket.id)
             : [];
-          const mergedPlayers = mergeRemoteEntities(onlinePlayersRef.current, remotePlayers, 'uid');
+          const mergedPlayers = mergeRemoteEntities(onlinePlayersRef.current, remotePlayers, 'socketId');
           onlinePlayersRef.current = mergedPlayers;
           setOnlinePlayers(mergedPlayers);
         });

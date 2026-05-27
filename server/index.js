@@ -199,7 +199,7 @@ function createEnemy(id, spawnObject, fallbackPosition) {
     id,
     type: 'enemy',
     state: 'idle',
-    targetUid: null,
+    targetSocketId: null,
     spawnName: spawnObject?.name,
     spawnBounds,
     wanderTarget: randomPointInBounds(spawnBounds),
@@ -225,7 +225,7 @@ function createBoss(id, spawnObject, fallbackPosition) {
     type: 'boss',
     name: 'Rift Brute',
     state: 'idle',
-    targetUid: null,
+    targetSocketId: null,
     spawnName: spawnObject?.name,
     spawnBounds,
     wanderTarget: randomPointInBounds(spawnBounds),
@@ -309,7 +309,7 @@ function abilityHitsEnemy(ability, origin, facing, enemy) {
 }
 
 function handleAbilityCast(socket, payload = {}) {
-  const caster = players.get(socket.data.uid);
+  const caster = players.get(socket.id);
   if (!caster) return;
 
   const ability = {
@@ -349,7 +349,7 @@ function handleAbilityCast(socket, payload = {}) {
 
     enemy.hp -= ability.damage;
     enemy.state = 'aggro';
-    enemy.targetUid = socket.data.uid;
+    enemy.targetSocketId = socket.id;
     enemy.hitAt = now;
     changed = true;
 
@@ -405,10 +405,10 @@ function tickEnemies() {
       return;
     }
 
-    const target = players.get(enemy.targetUid) ?? [...players.values()][0];
+    const target = players.get(enemy.targetSocketId) ?? [...players.values()][0];
     if (!target) {
       enemy.state = 'idle';
-      enemy.targetUid = null;
+      enemy.targetSocketId = null;
       return;
     }
 
@@ -448,17 +448,17 @@ io.on('connection', (socket) => {
 
   socket.on('player:join', (payload) => {
     updateWorldSpawns(payload?.world);
-    players.set(socket.data.uid, sanitizePlayer(socket, payload));
+    players.set(socket.id, sanitizePlayer(socket, payload));
     broadcastPlayers();
     socket.emit('enemies:snapshot', serializeEnemies());
   });
 
   socket.on('player:update', (payload) => {
-    if (!players.has(socket.data.uid)) {
-      players.set(socket.data.uid, sanitizePlayer(socket, payload));
+    if (!players.has(socket.id)) {
+      players.set(socket.id, sanitizePlayer(socket, payload));
     } else {
-      players.set(socket.data.uid, {
-        ...players.get(socket.data.uid),
+      players.set(socket.id, {
+        ...players.get(socket.id),
         ...sanitizePlayer(socket, payload),
       });
     }
@@ -470,12 +470,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('player:leave', () => {
-    players.delete(socket.data.uid);
+    players.delete(socket.id);
     broadcastPlayers();
   });
 
   socket.on('disconnect', () => {
-    players.delete(socket.data.uid);
+    players.delete(socket.id);
     broadcastPlayers();
   });
 });
@@ -483,9 +483,9 @@ io.on('connection', (socket) => {
 setInterval(() => {
   const now = Date.now();
   let changed = false;
-  players.forEach((player, uid) => {
+  players.forEach((player, socketId) => {
     if (now - player.updatedAt > PLAYER_TIMEOUT_MS) {
-      players.delete(uid);
+      players.delete(socketId);
       changed = true;
     }
   });
