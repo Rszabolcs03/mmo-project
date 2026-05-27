@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { deleteCloudCharacter, loadCloudCharacters, saveCloudCharacter } from './characterCloud';
 import { auth, hasFirebaseConfig } from './firebaseClient';
+import { connectGameSocket, getSocketUrl } from './socketGameClient';
 import './styles.css';
 
 const OFFLINE_DEMO = false;
@@ -843,6 +844,37 @@ function drawLocalPlayerMarker(context, player, character) {
   context.restore();
 }
 
+function drawOnlinePlayer(context, onlinePlayer) {
+  if (
+    !onlinePlayer
+    || !CLASSES[onlinePlayer.classId]
+    || !RACES[onlinePlayer.raceId]
+    || !Number.isFinite(onlinePlayer.x)
+    || !Number.isFinite(onlinePlayer.y)
+  ) {
+    return;
+  }
+
+  drawPlayer(context, onlinePlayer, onlinePlayer.classId, onlinePlayer.raceId);
+
+  context.save();
+  context.translate(onlinePlayer.x, onlinePlayer.y);
+  context.fillStyle = 'rgba(16, 24, 30, 0.78)';
+  context.strokeStyle = 'rgba(139, 233, 253, 0.42)';
+  context.lineWidth = 1;
+  context.fillRect(-70, -78, 140, 34);
+  context.strokeRect(-70, -78, 140, 34);
+
+  context.fillStyle = '#8be9fd';
+  context.font = '900 12px Inter, Arial';
+  context.textAlign = 'center';
+  context.fillText(onlinePlayer.name ?? 'Player', 0, -64);
+  context.fillStyle = 'rgba(246, 241, 223, 0.78)';
+  context.font = '800 10px Inter, Arial';
+  context.fillText(`Lv ${onlinePlayer.level ?? 1}`, 0, -51);
+  context.restore();
+}
+
 function drawEnemy(context, enemy, now) {
   const pulse = Math.sin(now / 180 + enemy.wobble) * 2;
   const recentlyHit = now - enemy.hitAt < 140;
@@ -1287,6 +1319,10 @@ function App() {
   const shopOpenRef = React.useRef(false);
   const lastCombatAt = React.useRef(0);
   const authFlowRef = React.useRef(null);
+  const authUserRef = React.useRef(null);
+  const socketRef = React.useRef(null);
+  const onlinePlayersRef = React.useRef([]);
+  const lastSocketUpdateAt = React.useRef(0);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
   const [position, setPosition] = React.useState(player.current);
@@ -1303,6 +1339,8 @@ function App() {
   const [authMode, setAuthMode] = React.useState('login');
   const [authReady, setAuthReady] = React.useState(OFFLINE_DEMO || !hasFirebaseConfig);
   const [renderStatus, setRenderStatus] = React.useState('Render starting...');
+  const [socketStatus, setSocketStatus] = React.useState(getSocketUrl() ? 'Socket idle' : 'Socket not configured');
+  const [onlinePlayers, setOnlinePlayers] = React.useState([]);
   const [authStatus, setAuthStatus] = React.useState(
     OFFLINE_DEMO ? 'Offline demo' : hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
   );
@@ -1311,6 +1349,8 @@ function App() {
   selectedRaceRef.current = character?.raceId ?? null;
   characterRef.current = character;
   charactersRef.current = characters;
+  authUserRef.current = authUser;
+  onlinePlayersRef.current = onlinePlayers;
   deadRef.current = isDead;
   shopOpenRef.current = shopOpen;
 
@@ -1661,6 +1701,71 @@ function App() {
     setShopOpen(false);
     setTalentsOpen(false);
   };
+
+  React.useEffect(() => {
+    setOnlinePlayers([]);
+
+    if (!authUser || !character) {
+      setSocketStatus(getSocketUrl() ? 'Socket idle' : 'Socket not configured');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const socketUrl = getSocketUrl();
+    setSocketStatus(socketUrl ? 'Socket connecting...' : 'Socket not configured');
+
+    if (!socketUrl) return undefined;
+
+    authUser.getIdToken()
+      .then((token) => {
+        if (cancelled) return;
+
+        const socket = connectGameSocket({ token, uid: authUser.uid });
+        if (!socket) return;
+
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+          setSocketStatus('Socket online');
+          socket.emit('player:join', {
+            name: character.name,
+            level: character.level ?? 1,
+            classId: character.classId,
+            raceId: character.raceId,
+            x: Math.round(player.current.x),
+            y: Math.round(player.current.y),
+            facing: player.current.facing,
+          });
+        });
+
+        socket.on('players:snapshot', (players) => {
+          const remotePlayers = Array.isArray(players)
+            ? players.filter((onlinePlayer) => onlinePlayer.uid !== authUser.uid)
+            : [];
+          setOnlinePlayers(remotePlayers);
+        });
+
+        socket.on('connect_error', (error) => {
+          setSocketStatus(`Socket error: ${error.message}`);
+        });
+
+        socket.on('disconnect', () => {
+          setSocketStatus('Socket offline');
+          setOnlinePlayers([]);
+        });
+      })
+      .catch((error) => {
+        setSocketStatus(`Socket auth failed: ${error.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+      socketRef.current?.emit('player:leave');
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setOnlinePlayers([]);
+    };
+  }, [authUser, character?.id]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -2068,6 +2173,7 @@ function App() {
         } catch (error) {
           console.error(error);
         }
+        onlinePlayersRef.current.forEach((remotePlayer) => drawOnlinePlayer(context, remotePlayer));
         drawLocalPlayerMarker(context, player.current, activeCharacter);
       }
       drawShopkeeperAt(context, getShopkeeperFromMap(tiledWorld.current));
@@ -2242,6 +2348,27 @@ function App() {
         .filter((effect) => now - effect.start < effect.duration);
       draw(now);
       setPosition({ ...player.current });
+
+      const activeUser = authUserRef.current;
+      const activeCharacter = characterRef.current;
+      if (
+        activeUser
+        && activeCharacter
+        && socketRef.current?.connected
+        && now - lastSocketUpdateAt.current > 80
+      ) {
+        lastSocketUpdateAt.current = now;
+        socketRef.current.emit('player:update', {
+          name: activeCharacter.name,
+          level: activeCharacter.level ?? 1,
+          classId: activeCharacter.classId,
+          raceId: activeCharacter.raceId,
+          x: Math.round(player.current.x),
+          y: Math.round(player.current.y),
+          facing: player.current.facing,
+        });
+      }
+
       if (characterRef.current && !deadRef.current) {
         const stats = getTotalStats(characterRef.current);
         const hasNearbyAggro = enemies.current.some((enemy) => (
@@ -2331,7 +2458,7 @@ function App() {
         )}
         <div className="hud top-left">
           <Gamepad2 size={18} />
-          <span>Cloud save | WASD / nyilak | {mapStatus} | {renderStatus}</span>
+          <span>Cloud save | WASD / nyilak | {mapStatus} | {socketStatus} | {renderStatus}</span>
         </div>
         {character && (
           <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
