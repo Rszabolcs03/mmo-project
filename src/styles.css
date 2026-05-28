@@ -147,7 +147,7 @@ body {
 
 .hud-actions {
   position: absolute;
-  bottom: 76px;
+  bottom: 16px;
   left: 16px;
   display: grid;
   gap: 10px;
@@ -789,12 +789,47 @@ kbd {
   gap: 8px;
   width: min(240px, calc(100vw - 32px));
   z-index: 6;
-  pointer-events: none;
+}
+
+.party-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid rgba(246, 241, 223, 0.14);
+  border-radius: 8px;
+  background: rgba(16, 24, 30, 0.66);
+  color: rgba(246, 241, 223, 0.72);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+.party-list-heading button,
+.party-kick-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(246, 241, 223, 0.16);
+  border-radius: 7px;
+  background: rgba(16, 24, 30, 0.56);
+  color: rgba(246, 241, 223, 0.78);
+  cursor: pointer;
+}
+
+.party-list-heading button:hover,
+.party-kick-button:hover {
+  border-color: rgba(139, 233, 253, 0.5);
+  color: #8be9fd;
+  background: rgba(139, 233, 253, 0.14);
 }
 
 .party-member {
   display: grid;
-  grid-template-columns: 34px 1fr;
+  grid-template-columns: 34px 1fr auto;
   gap: 8px 10px;
   align-items: center;
   padding: 8px 10px;
@@ -806,11 +841,22 @@ kbd {
   backdrop-filter: blur(10px);
 }
 
+.party-member[role="button"] {
+  cursor: pointer;
+}
+
+.party-member[role="button"]:hover,
+.party-member.selected {
+  border-color: rgba(139, 233, 253, 0.5);
+  background: rgba(16, 24, 30, 0.84);
+}
+
 .party-member.self {
   border-color: rgba(139, 233, 253, 0.38);
 }
 
 .party-icon {
+  position: relative;
   display: grid;
   width: 34px;
   height: 34px;
@@ -843,6 +889,21 @@ kbd {
 .party-icon.priest {
   background: #dfe7ff;
   color: #383491;
+}
+
+.party-leader-badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid rgba(16, 24, 30, 0.96);
+  border-radius: 999px;
+  background: #facc15;
+  color: #1f2937;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
 .party-member-copy {

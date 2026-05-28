@@ -11,16 +11,19 @@ import {
   Backpack,
   Cloud,
   Crosshair,
+  Crown,
   DoorOpen,
   Hammer,
   HeartPulse,
   Leaf,
+  LogOut,
   Map,
   Shield,
   Skull,
   Sparkles,
   Sword,
   User,
+  UserMinus,
   Wand2,
 } from 'lucide-react';
 import { deleteCloudCharacter, loadCloudCharacters, saveCloudCharacter } from './characterCloud';
@@ -338,6 +341,7 @@ function samePartyMembers(current, next) {
       && member.hp === candidate.hp
       && member.maxHp === candidate.maxHp
       && member.isSelf === candidate.isSelf
+      && member.isLeader === candidate.isLeader
     );
   });
 }
@@ -1719,6 +1723,25 @@ function App() {
     setLastCast('Party invite accepted');
   };
 
+  const leaveParty = () => {
+    if (!colyseusRoomRef.current) return;
+    colyseusRoomRef.current.send('partyLeave');
+    setSelectedPlayerId(null);
+    setLastCast('Left party');
+  };
+
+  const kickPartyMember = (memberId) => {
+    if (!memberId || !colyseusRoomRef.current) return;
+    colyseusRoomRef.current.send('partyKick', { targetId: memberId });
+    if (selectedPlayerIdRef.current === memberId) setSelectedPlayerId(null);
+    setLastCast('Party member removed');
+  };
+
+  const targetPartyMember = (member) => {
+    if (!member || member.isSelf) return;
+    setSelectedPlayerId(member.id);
+  };
+
   const chooseTalentSpec = (specId) => {
     const activeCharacter = characterRef.current;
     const talentTree = activeCharacter ? TALENTS[activeCharacter.classId] : null;
@@ -1888,6 +1911,7 @@ function App() {
                 hp: Math.ceil(clamp(worldPlayer.hp ?? worldPlayer.maxHp ?? 1, 0, worldPlayer.maxHp ?? 1)),
                 maxHp: Math.max(1, Math.ceil(worldPlayer.maxHp ?? 1)),
                 isSelf: worldPlayer.id === room.sessionId,
+                isLeader: worldPlayer.partyLeaderId === worldPlayer.id,
               }))
             : [];
 
@@ -2712,7 +2736,6 @@ function App() {
   }, [keys]);
 
   const currentClass = character ? CLASSES[character.classId] : null;
-  const currentRace = character ? RACES[character.raceId] : null;
   const currentLevel = character?.level ?? 1;
   const currentXp = character?.xp ?? 0;
   const nextLevelXp = xpForLevel(currentLevel);
@@ -2729,6 +2752,7 @@ function App() {
   const talentTree = character ? TALENTS[character.classId] : null;
   const selectedTalentSpec = character?.talents?.spec ?? null;
   const selectedPlayer = displayedRemotePlayersRef.current.find((remotePlayer) => remotePlayer.id === selectedPlayerId) ?? null;
+  const isLocalPartyLeader = partyMembers.some((member) => member.isSelf && member.isLeader);
 
   return (
     <main className="app-shell">
@@ -2802,14 +2826,6 @@ function App() {
         {nearShopkeeper && !shopOpen && (
           <div className="interact-prompt">E - Shop</div>
         )}
-        <div className="hud bottom-left">
-          <Sparkles size={18} />
-          <span>
-            {character
-              ? `${character.name} | Lv ${currentLevel} ${currentRace.name} ${currentClass.name} | Enemies: ${enemyCount}`
-              : 'Create a character'}
-          </span>
-        </div>
         {character && (
           <div className="level-panel">
             <strong>Level {currentLevel}</strong>
@@ -2829,20 +2845,56 @@ function App() {
         )}
         {partyMembers.length > 1 && (
           <div className="party-list">
+            <div className="party-list-heading">
+              <span>Party</span>
+              <button type="button" title="Leave party" onClick={leaveParty}>
+                <LogOut size={15} />
+              </button>
+            </div>
             {partyMembers.map((member) => {
               const memberClass = CLASSES[member.classId] ?? CLASSES.warrior;
               const MemberIcon = memberClass.icon;
               const hpPercent = (clamp(member.hp, 0, member.maxHp) / Math.max(1, member.maxHp)) * 100;
+              const canKick = isLocalPartyLeader && !member.isSelf;
 
               return (
-                <div className={`party-member ${member.isSelf ? 'self' : ''}`} key={member.id}>
+                <div
+                  className={`party-member ${member.isSelf ? 'self' : ''} ${selectedPlayerId === member.id ? 'selected' : ''}`}
+                  key={member.id}
+                  onClick={() => targetPartyMember(member)}
+                  role={member.isSelf ? undefined : 'button'}
+                  tabIndex={member.isSelf ? undefined : 0}
+                  onKeyDown={(event) => {
+                    if (member.isSelf || (event.key !== 'Enter' && event.key !== ' ')) return;
+                    event.preventDefault();
+                    targetPartyMember(member);
+                  }}
+                >
                   <span className={`party-icon ${member.classId}`}>
                     <MemberIcon size={16} />
+                    {member.isLeader && (
+                      <span className="party-leader-badge" title="Party leader">
+                        <Crown size={11} />
+                      </span>
+                    )}
                   </span>
                   <div className="party-member-copy">
                     <strong>{member.name}</strong>
                     <span>Lv {member.level}{member.isSelf ? ' | You' : ''}</span>
                   </div>
+                  {canKick && (
+                    <button
+                      className="party-kick-button"
+                      type="button"
+                      title="Kick from party"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        kickPartyMember(member.id);
+                      }}
+                    >
+                      <UserMinus size={14} />
+                    </button>
+                  )}
                   <div className="party-member-hp">
                     <span style={{ width: `${hpPercent}%` }} />
                   </div>

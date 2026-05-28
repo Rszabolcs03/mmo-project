@@ -247,6 +247,7 @@ class WorldRoom extends Room {
         hp: Number(message?.hp ?? message?.maxHp ?? 100),
         maxHp: Number(message?.maxHp ?? 100),
         partyId: null,
+        partyLeaderId: null,
         updatedAt: Date.now(),
       });
     });
@@ -297,14 +298,53 @@ class WorldRoom extends Room {
 
       this.pendingInvites.delete(inviteKey);
       const partyId = inviter.partyId ?? accepter.partyId ?? `party-${this.nextPartyId++}`;
+      const partyLeaderId = inviter.partyLeaderId ?? accepter.partyLeaderId ?? inviter.id;
       inviter.partyId = partyId;
       accepter.partyId = partyId;
+      this.getPartyMembers(partyId).forEach((partyMember) => {
+        partyMember.partyLeaderId = partyLeaderId;
+        partyMember.updatedAt = Date.now();
+      });
       inviter.updatedAt = Date.now();
       accepter.updatedAt = Date.now();
 
       this.clients
         .filter((candidate) => candidate.sessionId === fromId || candidate.sessionId === client.sessionId)
         .forEach((candidate) => candidate.send('notice', { text: `${inviter.name} and ${accepter.name} joined a party` }));
+    });
+
+    this.onMessage('partyLeave', (client) => {
+      const player = this.players.get(client.sessionId);
+      if (!player?.partyId) return;
+      const oldPartyId = player.partyId;
+      player.partyId = null;
+      player.partyLeaderId = null;
+      player.updatedAt = Date.now();
+      client.send('notice', { text: 'You left the party' });
+      this.normalizeParty(oldPartyId);
+    });
+
+    this.onMessage('partyKick', (client, message) => {
+      const leader = this.players.get(client.sessionId);
+      const target = this.players.get(message?.targetId);
+      if (
+        !leader?.partyId
+        || !target?.partyId
+        || leader.partyId !== target.partyId
+        || leader.partyLeaderId !== leader.id
+        || target.id === leader.id
+      ) {
+        return;
+      }
+
+      const oldPartyId = target.partyId;
+      target.partyId = null;
+      target.partyLeaderId = null;
+      target.updatedAt = Date.now();
+      const targetClient = this.clients.find((candidate) => candidate.sessionId === target.id);
+      targetClient?.send('notice', { text: 'You were removed from the party' });
+      client.send('notice', { text: `${target.name} was removed from the party` });
+      this.normalizeParty(oldPartyId);
     });
 
     this.onMessage('ability', (client, message) => {
@@ -398,6 +438,8 @@ class WorldRoom extends Room {
   }
 
   onLeave(client) {
+    const leavingPlayer = this.players.get(client.sessionId);
+    const oldPartyId = leavingPlayer?.partyId ?? null;
     this.players.delete(client.sessionId);
     this.pendingInvites.forEach((_, key) => {
       if (key.startsWith(`${client.sessionId}:`) || key.endsWith(`:${client.sessionId}`)) {
@@ -407,6 +449,31 @@ class WorldRoom extends Room {
     this.enemies = this.enemies.map((enemy) => (
       enemy.targetPlayerId === client.sessionId ? { ...enemy, state: 'idle', targetPlayerId: null } : enemy
     ));
+    if (oldPartyId) this.normalizeParty(oldPartyId);
+  }
+
+  getPartyMembers(partyId) {
+    if (!partyId) return [];
+    return [...this.players.values()].filter((player) => player.partyId === partyId);
+  }
+
+  normalizeParty(partyId) {
+    const members = this.getPartyMembers(partyId);
+    if (members.length <= 1) {
+      members.forEach((member) => {
+        member.partyId = null;
+        member.partyLeaderId = null;
+        member.updatedAt = Date.now();
+      });
+      return;
+    }
+
+    const existingLeader = members.find((member) => member.id === member.partyLeaderId);
+    const leaderId = existingLeader?.id ?? members[Math.floor(Math.random() * members.length)].id;
+    members.forEach((member) => {
+      member.partyLeaderId = leaderId;
+      member.updatedAt = Date.now();
+    });
   }
 
   update(deltaTime) {
