@@ -302,6 +302,21 @@ const CLASSES = {
   },
 };
 
+const CLASS_NAME_POOLS = {
+  mage: ['Aetherion', 'Lyra Spellwind', 'Vaelis', 'Mira Starfall', 'Eldrin'],
+  hunter: ['Rowan Swiftshot', 'Kael Thorn', 'Ashen Vale', 'Nira Wildmark', 'Bryn'],
+  paladin: ['Aurel Dawnshield', 'Ser Caldus', 'Tirion Vale', 'Maren Lightward', 'Garran'],
+  warrior: ['Brakka Ironhand', 'Duran Steelborn', 'Rokar', 'Hilda Axebreaker', 'Torvik'],
+  priest: ['Elowen Lightcall', 'Seren Dawn', 'Iria Solace', 'Neris', 'Calen Vow'],
+};
+
+const CUSTOMIZATION = {
+  skin: ['#f2c7a4', '#d6a06f', '#f0d6ad', '#74a85a', '#cbd5c0'],
+  hair: ['#8b5e34', '#f6d365', '#2f221d', '#d8b4fe', '#d8dee9'],
+  robe: ['#4263eb', '#2f9e44', '#e6c55c', '#b42318', '#f8fafc'],
+  trim: ['#8be9fd', '#f8fafc', '#facc15', '#64748b', '#c084fc'],
+};
+
 const TREES = [
   [260, 240], [430, 380], [620, 250], [940, 440], [1180, 280], [1450, 520],
   [1760, 330], [2040, 570], [2380, 410], [2710, 650], [3090, 360],
@@ -544,17 +559,69 @@ function normalizeCharacter(character) {
     gold: 0,
     stats: getInitialStats(character.classId ?? 'warrior'),
     talents: { spec: null },
+    appearance: {},
     ...character,
     inventory: normalizeInventory(character.inventory),
     talents: character.talents ?? { spec: null },
+    appearance: character.appearance ?? {},
   };
+}
+
+function normalizeName(name) {
+  return String(name ?? '').trim().toLowerCase();
+}
+
+function isNameTaken(name, characters, excludedId = null) {
+  const normalized = normalizeName(name);
+  if (!normalized) return false;
+  return characters.some((character) => character.id !== excludedId && normalizeName(character.name) === normalized);
+}
+
+function randomClassName(classId, usedNames) {
+  const names = CLASS_NAME_POOLS[classId] ?? CLASS_NAME_POOLS.warrior;
+  const shuffled = [...names].sort(() => Math.random() - 0.5);
+  const pickedName = shuffled.find((candidate) => !usedNames.has(normalizeName(candidate)));
+  if (pickedName) return pickedName;
+
+  let index = 2;
+  let fallback = `${names[0]} ${index}`;
+  while (usedNames.has(normalizeName(fallback))) {
+    index += 1;
+    fallback = `${names[0]} ${index}`;
+  }
+  return fallback;
+}
+
+function ensureUniqueCharacterNames(characters) {
+  const usedNames = new Set();
+  let changed = false;
+  const nextCharacters = characters.map((character) => {
+    const normalized = normalizeName(character.name);
+    if (normalized && !usedNames.has(normalized)) {
+      usedNames.add(normalized);
+      return character;
+    }
+
+    const newName = randomClassName(character.classId, usedNames);
+    usedNames.add(normalizeName(newName));
+    changed = true;
+    return {
+      ...character,
+      name: newName,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  return { characters: nextCharacters, changed };
 }
 
 function loadCharacters() {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || '[]');
     if (!Array.isArray(saved)) return [];
-    return saved.map(normalizeCharacter);
+    const unique = ensureUniqueCharacterNames(saved.map(normalizeCharacter));
+    if (unique.changed) saveCharacters(unique.characters);
+    return unique.characters;
   } catch {
     return [];
   }
@@ -698,12 +765,12 @@ function usePressedKeys() {
   return keys;
 }
 
-function drawPlayer(context, player, selectedClass, selectedRace) {
+function drawPlayer(context, player, selectedClass, selectedRace, appearance = {}) {
   const classConfig = CLASSES[selectedClass];
   const raceConfig = RACES[selectedRace];
   if (!classConfig || !raceConfig || !Number.isFinite(player?.x) || !Number.isFinite(player?.y)) return;
 
-  const colors = classConfig.colors;
+  const colors = { ...classConfig.colors, ...appearance };
   const x = player.x;
   const y = player.y;
   const facing = Number.isFinite(player.facing) ? player.facing : 0;
@@ -748,7 +815,7 @@ function drawPlayer(context, player, selectedClass, selectedRace) {
   context.lineTo(0, 17);
   context.stroke();
 
-  context.fillStyle = raceConfig.skin;
+  context.fillStyle = appearance.skin ?? raceConfig.skin;
   context.strokeStyle = '#14212a';
   context.lineWidth = 3;
   context.beginPath();
@@ -757,7 +824,7 @@ function drawPlayer(context, player, selectedClass, selectedRace) {
   context.stroke();
 
   if (selectedRace === 'elf') {
-    context.fillStyle = raceConfig.skin;
+    context.fillStyle = appearance.skin ?? raceConfig.skin;
     context.beginPath();
     context.moveTo(-10, -25);
     context.lineTo(-22, -30);
@@ -772,7 +839,7 @@ function drawPlayer(context, player, selectedClass, selectedRace) {
     context.fill();
   }
 
-  context.fillStyle = selectedRace === 'human' ? colors.hair : raceConfig.hair;
+  context.fillStyle = appearance.hair ?? (selectedRace === 'human' ? colors.hair : raceConfig.hair);
   context.beginPath();
   context.arc(-2, -29, 11, Math.PI, Math.PI * 2);
   context.fill();
@@ -846,6 +913,72 @@ function drawPlayer(context, player, selectedClass, selectedRace) {
   }
 
   context.restore();
+}
+
+function CharacterPreview({ character }) {
+  const previewRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const canvas = previewRef.current;
+    if (!canvas || !character) return;
+    const context = canvas.getContext('2d');
+    const pixelRatio = window.devicePixelRatio || 1;
+    const width = 280;
+    const height = 320;
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    const gradient = context.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, 'rgba(139, 233, 253, 0.12)');
+    gradient.addColorStop(1, 'rgba(246, 241, 223, 0.06)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+
+    context.save();
+    context.translate(width / 2, 190);
+    context.scale(2.65, 2.65);
+    drawPlayer(
+      context,
+      { x: 0, y: 0, facing: -Math.PI / 2 },
+      character.classId,
+      character.raceId,
+      character.appearance,
+    );
+    context.restore();
+  }, [character]);
+
+  if (!character) {
+    return (
+      <div className="character-preview empty">
+        <span>Select a character</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="character-preview">
+      <canvas ref={previewRef} width="280" height="320" />
+      <div className="preview-copy">
+        <strong>{character.name || 'Unnamed'}</strong>
+        <span>
+          Level {character.level ?? 1} {RACES[character.raceId]?.name} {CLASSES[character.classId]?.name}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function getDefaultAppearance(raceId, classId) {
+  const race = RACES[raceId] ?? RACES.human;
+  const classConfig = CLASSES[classId] ?? CLASSES.warrior;
+  return {
+    skin: race.skin,
+    hair: raceId === 'human' ? classConfig.colors.hair : race.hair,
+    robe: classConfig.colors.robe,
+    trim: classConfig.colors.trim,
+  };
 }
 
 function drawLocalPlayerMarker(context, player, character) {
@@ -1244,127 +1377,299 @@ function CharacterMenu({
   onEnter,
   onLogout,
 }) {
-  const [name, setName] = React.useState('Adventurer');
+  const [mode, setMode] = React.useState(characters.length > 0 ? 'list' : 'create');
+  const [creationStep, setCreationStep] = React.useState('identity');
+  const [selectedCharacterId, setSelectedCharacterId] = React.useState(characters[0]?.id ?? null);
+  const [name, setName] = React.useState('');
   const [raceId, setRaceId] = React.useState('human');
   const [classId, setClassId] = React.useState('warrior');
+  const [appearance, setAppearance] = React.useState(() => getDefaultAppearance('human', 'warrior'));
   const selectedRace = RACES[raceId];
-  const canCreate = name.trim().length >= 2 && selectedRace.allowedClasses.includes(classId);
+  const selectedCharacter = characters.find((savedCharacter) => savedCharacter.id === selectedCharacterId) ?? characters[0] ?? null;
+  const trimmedName = name.trim();
+  const nameTaken = isNameTaken(trimmedName, characters);
+  const canCreate = trimmedName.length >= 2 && !nameTaken && selectedRace.allowedClasses.includes(classId);
+  const draftCharacter = {
+    name: trimmedName || 'Unnamed',
+    raceId,
+    classId,
+    appearance,
+    level: 1,
+  };
 
   React.useEffect(() => {
     if (!selectedRace.allowedClasses.includes(classId)) {
-      setClassId(selectedRace.allowedClasses[0]);
+      const nextClassId = selectedRace.allowedClasses[0];
+      setClassId(nextClassId);
+      setAppearance(getDefaultAppearance(raceId, nextClassId));
     }
-  }, [classId, selectedRace]);
+  }, [classId, raceId, selectedRace]);
+
+  React.useEffect(() => {
+    if (selectedCharacterId && characters.some((savedCharacter) => savedCharacter.id === selectedCharacterId)) return;
+    setSelectedCharacterId(characters[0]?.id ?? null);
+    if (characters.length === 0) setMode('create');
+  }, [characters, selectedCharacterId]);
+
+  const selectRace = (id) => {
+    const race = RACES[id];
+    const nextClassId = race.allowedClasses.includes(classId) ? classId : race.allowedClasses[0];
+    setRaceId(id);
+    setClassId(nextClassId);
+    setAppearance(getDefaultAppearance(id, nextClassId));
+  };
+
+  const selectClass = (id) => {
+    setClassId(id);
+    setAppearance(getDefaultAppearance(raceId, id));
+  };
+
+  const updateAppearance = (key, value) => {
+    setAppearance((current) => ({ ...current, [key]: value }));
+  };
+
+  const startCreate = () => {
+    setMode('create');
+    setCreationStep('identity');
+    setName('');
+    setRaceId('human');
+    setClassId('warrior');
+    setAppearance(getDefaultAppearance('human', 'warrior'));
+  };
+
+  const createAndReturn = () => {
+    if (!canCreate) return;
+    onCreate({ name: trimmedName, raceId, classId, appearance });
+  };
 
   return (
     <div className="selection-screen">
       <div className="selection-panel">
-        <div>
-          <p className="eyebrow">Character menu</p>
-          <h1>Choose Your Hero</h1>
-        </div>
+        <header className="character-menu-header">
+          <div>
+            <p className="eyebrow">Character menu</p>
+            <h1>{mode === 'create' ? 'Create Your Hero' : 'Choose Your Hero'}</h1>
+          </div>
+          <button className="auth-button secondary" type="button" onClick={onLogout}>
+            Logout
+          </button>
+        </header>
+
         <div className="account-panel">
           <div className="auth-status">
             <Cloud size={18} />
             <span>{authUser?.email}</span>
           </div>
-          <button className="auth-button secondary" type="button" onClick={onLogout}>
-            Logout
-          </button>
         </div>
-        {characters.length > 0 && (
-          <>
+
+        <div className="character-menu-layout">
+          <aside className="character-list">
             <p className="section-label">Saved characters</p>
-            <div className="saved-grid">
+            <div className="saved-list">
+              {characters.length === 0 && (
+                <div className="empty-slot">No characters yet</div>
+              )}
               {characters.map((savedCharacter) => {
-                const race = RACES[savedCharacter.raceId];
-                const classConfig = CLASSES[savedCharacter.classId];
+                const race = RACES[savedCharacter.raceId] ?? RACES.human;
+                const classConfig = CLASSES[savedCharacter.classId] ?? CLASSES.warrior;
                 const Icon = classConfig.icon;
                 return (
-                  <div className="saved-card" key={savedCharacter.id}>
-                    <button className="saved-enter" type="button" onClick={() => onEnter(savedCharacter)}>
-                      <span className={`class-portrait ${savedCharacter.classId}`}>
-                        <Icon size={28} />
-                      </span>
-                      <span>
-                        <strong>{savedCharacter.name}</strong>
-                        <small>
-                          Level {savedCharacter.level ?? 1} {race.name} {classConfig.name}
-                        </small>
-                      </span>
-                    </button>
-                    <button className="delete-character" type="button" onClick={() => onDelete(savedCharacter.id)}>
+                  <div
+                    className={`saved-card ${selectedCharacter?.id === savedCharacter.id && mode === 'list' ? 'selected' : ''}`}
+                    key={savedCharacter.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setMode('list');
+                      setSelectedCharacterId(savedCharacter.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
+                      setMode('list');
+                      setSelectedCharacterId(savedCharacter.id);
+                    }}
+                  >
+                    <span className={`class-portrait ${savedCharacter.classId}`}>
+                      <Icon size={26} />
+                    </span>
+                    <span>
+                      <strong>{savedCharacter.name}</strong>
+                      <small>
+                        Level {savedCharacter.level ?? 1} {race.name} {classConfig.name}
+                      </small>
+                    </span>
+                    <button
+                      className="delete-character"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete(savedCharacter.id);
+                      }}
+                    >
                       Delete
                     </button>
                   </div>
                 );
               })}
             </div>
-          </>
-        )}
-        <p className="section-label">New character</p>
-        <label className="name-field">
-          <span>Character name</span>
-          <input
-            maxLength={18}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Name"
-          />
-        </label>
-        <p className="section-label">Race</p>
-        <div className="race-grid">
-          {Object.entries(RACES).map(([id, race]) => {
-            const Icon = race.icon;
-            return (
-              <button
-                className={`race-card ${raceId === id ? 'selected' : ''}`}
-                key={id}
-                type="button"
-                onClick={() => setRaceId(id)}
-              >
-                <span className="race-icon" style={{ backgroundColor: race.skin }}>
-                  <Icon size={24} />
-                </span>
-                <strong>{race.name}</strong>
-              </button>
-            );
-          })}
+            <button className="create-new-character" type="button" onClick={startCreate}>
+              Create New Character
+            </button>
+          </aside>
+
+          {mode === 'list' && (
+            <section className="character-preview-panel">
+              <CharacterPreview character={selectedCharacter} />
+              <div className="preview-actions">
+                <button
+                  className="create-button"
+                  disabled={!selectedCharacter}
+                  type="button"
+                  onClick={() => selectedCharacter && onEnter(selectedCharacter)}
+                >
+                  Enter World
+                </button>
+              </div>
+            </section>
+          )}
+
+          {mode === 'create' && (
+            <section className="character-builder">
+              <div className="builder-preview">
+                <CharacterPreview character={draftCharacter} />
+              </div>
+
+              <div className="builder-fields">
+                {creationStep === 'identity' && (
+                  <>
+                    <p className="section-label">Race</p>
+                    <div className="race-grid">
+                      {Object.entries(RACES).map(([id, race]) => {
+                        const Icon = race.icon;
+                        return (
+                          <button
+                            className={`race-card ${raceId === id ? 'selected' : ''}`}
+                            key={id}
+                            type="button"
+                            onClick={() => selectRace(id)}
+                          >
+                            <span className="race-icon" style={{ backgroundColor: race.skin }}>
+                              <Icon size={24} />
+                            </span>
+                            <strong>{race.name}</strong>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="section-label">Class</p>
+                    <div className="class-grid">
+                      {Object.entries(CLASSES).map(([id, classConfig]) => {
+                        const Icon = classConfig.icon;
+                        const isAllowed = selectedRace.allowedClasses.includes(id);
+                        return (
+                          <button
+                            className={`class-card ${classId === id ? 'selected' : ''}`}
+                            disabled={!isAllowed}
+                            key={id}
+                            type="button"
+                            onClick={() => selectClass(id)}
+                          >
+                            <span className={`class-portrait ${id}`}>
+                              <Icon size={32} />
+                            </span>
+                            <strong>{classConfig.name}</strong>
+                            <span>
+                              {isAllowed
+                                ? classConfig.abilities.map((ability) => ability.name).join(' / ')
+                                : `${selectedRace.name} cannot be ${classConfig.name}`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {creationStep === 'customize' && (
+                  <>
+                    <p className="section-label">Customize</p>
+                    <div className="customization-grid">
+                      {Object.entries(CUSTOMIZATION).map(([key, values]) => (
+                        <div className="customization-row" key={key}>
+                          <strong>{key}</strong>
+                          <div>
+                            {values.map((value) => (
+                              <button
+                                className={appearance[key] === value ? 'selected' : ''}
+                                key={value}
+                                style={{ backgroundColor: value }}
+                                type="button"
+                                onClick={() => updateAppearance(key, value)}
+                                title={value}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {creationStep === 'name' && (
+                  <>
+                    <p className="section-label">Name</p>
+                    <label className="name-field">
+                      <span>Character name</span>
+                      <input
+                        maxLength={18}
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        placeholder="Name"
+                      />
+                      {nameTaken && <em>Name taken</em>}
+                    </label>
+                  </>
+                )}
+
+                <div className="builder-actions">
+                  <button
+                    className="auth-button secondary"
+                    type="button"
+                    onClick={() => {
+                      if (creationStep === 'identity') {
+                        setMode(characters.length > 0 ? 'list' : 'create');
+                        return;
+                      }
+                      setCreationStep(creationStep === 'name' ? 'customize' : 'identity');
+                    }}
+                  >
+                    Back
+                  </button>
+                  {creationStep !== 'name' ? (
+                  <button
+                    className="create-button"
+                    type="button"
+                    onClick={() => setCreationStep(creationStep === 'identity' ? 'customize' : 'name')}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    className="create-button"
+                    disabled={!canCreate}
+                    type="button"
+                    onClick={createAndReturn}
+                  >
+                    Create
+                  </button>
+                )}
+                </div>
+              </div>
+            </section>
+          )}
         </div>
-        <p className="section-label">Class</p>
-        <div className="class-grid">
-          {Object.entries(CLASSES).map(([id, classConfig]) => {
-            const Icon = classConfig.icon;
-            const isAllowed = selectedRace.allowedClasses.includes(id);
-            return (
-              <button
-                className={`class-card ${classId === id ? 'selected' : ''}`}
-                disabled={!isAllowed}
-                key={id}
-                type="button"
-                onClick={() => setClassId(id)}
-              >
-                <span className={`class-portrait ${id}`}>
-                  <Icon size={32} />
-                </span>
-                <strong>{classConfig.name}</strong>
-                <span>
-                  {isAllowed
-                    ? classConfig.abilities.map((ability) => ability.name).join(' / ')
-                    : `${selectedRace.name} cannot be ${classConfig.name}`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <button
-          className="create-button"
-          disabled={!canCreate}
-          type="button"
-          onClick={() => onCreate({ name: name.trim(), raceId, classId })}
-        >
-          Create and Enter
-        </button>
       </div>
     </div>
   );
@@ -1477,8 +1782,16 @@ function App() {
       setAuthUser(user);
       setAuthStatus('Loading cloud characters...');
       try {
-        const cloudCharacters = (await loadCloudCharacters(user.uid)).map(normalizeCharacter);
-        setCharacters(cloudCharacters);
+        const unique = ensureUniqueCharacterNames((await loadCloudCharacters(user.uid)).map(normalizeCharacter));
+        setCharacters(unique.characters);
+        saveCharacters(unique.characters);
+        if (unique.changed) {
+          unique.characters.forEach((savedCharacter) => {
+            saveCloudCharacter(user.uid, savedCharacter).catch((error) => {
+              setAuthStatus(`Cloud rename failed: ${error.message}`);
+            });
+          });
+        }
         setAuthStatus(`Cloud save active: ${user.email}`);
       } catch (error) {
         setAuthStatus(`Cloud load failed: ${error.message}`);
@@ -1567,6 +1880,11 @@ function App() {
   };
 
   const createCharacter = (newCharacter) => {
+    if (isNameTaken(newCharacter.name, charactersRef.current)) {
+      setAuthStatus('Name taken');
+      return;
+    }
+
     const characterToSave = {
       ...newCharacter,
       id: crypto.randomUUID(),
@@ -1882,6 +2200,7 @@ function App() {
             name: characterRef.current?.name ?? activeCharacter.name,
             classId: characterRef.current?.classId ?? activeCharacter.classId,
             raceId: characterRef.current?.raceId ?? activeCharacter.raceId,
+            appearance: characterRef.current?.appearance ?? activeCharacter.appearance ?? {},
             level: characterRef.current?.level ?? activeCharacter.level ?? 1,
           },
           x: player.current.x,
@@ -2455,7 +2774,7 @@ function App() {
       const activeCharacter = characterRef.current;
       if (activeCharacter) {
         try {
-          drawPlayer(context, player.current, activeCharacter.classId, activeCharacter.raceId);
+          drawPlayer(context, player.current, activeCharacter.classId, activeCharacter.raceId, activeCharacter.appearance);
         } catch (error) {
           console.error(error);
         }
@@ -2467,7 +2786,7 @@ function App() {
           if (remotePlayer.id === selectedPlayerIdRef.current) {
             drawSelectedPlayerRing(context, remotePlayer);
           }
-          drawPlayer(context, remotePlayer, remotePlayer.classId, remotePlayer.raceId);
+          drawPlayer(context, remotePlayer, remotePlayer.classId, remotePlayer.raceId, remotePlayer.appearance);
           drawRemotePlayerMarker(context, remotePlayer);
         } catch (error) {
           console.error(error);
@@ -2550,6 +2869,7 @@ function App() {
           name: characterRef.current.name,
           classId: characterRef.current.classId,
           raceId: characterRef.current.raceId,
+          appearance: characterRef.current.appearance ?? {},
           level: characterRef.current.level ?? 1,
           hp: vitalsRef.current.hp,
           maxHp: stats.health,

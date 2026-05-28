@@ -240,6 +240,7 @@ class WorldRoom extends Room {
         name: character.name ?? 'Adventurer',
         classId: character.classId ?? 'warrior',
         raceId: character.raceId ?? 'human',
+        appearance: character.appearance ?? {},
         level: character.level ?? 1,
         x: Number(message?.x ?? 420),
         y: Number(message?.y ?? 420),
@@ -267,6 +268,7 @@ class WorldRoom extends Room {
       player.name = message?.name ?? player.name;
       player.classId = message?.classId ?? player.classId;
       player.raceId = message?.raceId ?? player.raceId;
+      player.appearance = message?.appearance ?? player.appearance ?? {};
       player.level = message?.level ?? player.level;
       player.maxHp = Math.max(1, Number(message?.maxHp ?? player.maxHp ?? 100));
       player.hp = clamp(Number(message?.hp ?? player.hp ?? player.maxHp), 0, player.maxHp);
