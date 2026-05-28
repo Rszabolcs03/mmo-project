@@ -326,6 +326,22 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function samePartyMembers(current, next) {
+  if (current.length !== next.length) return false;
+  return current.every((member, index) => {
+    const candidate = next[index];
+    return (
+      member.id === candidate.id
+      && member.name === candidate.name
+      && member.classId === candidate.classId
+      && member.level === candidate.level
+      && member.hp === candidate.hp
+      && member.maxHp === candidate.maxHp
+      && member.isSelf === candidate.isSelf
+    );
+  });
+}
+
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -1399,6 +1415,7 @@ function App() {
   const [colyseusStatus, setColyseusStatus] = React.useState('Colyseus offline');
   const [selectedPlayerId, setSelectedPlayerId] = React.useState(null);
   const [partyInvite, setPartyInvite] = React.useState(null);
+  const [partyMembers, setPartyMembers] = React.useState([]);
   const [authStatus, setAuthStatus] = React.useState(
     OFFLINE_DEMO ? 'Offline demo' : hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
   );
@@ -1846,9 +1863,32 @@ function App() {
         });
 
         room.onMessage('world', (worldState) => {
-          remotePlayersRef.current = (worldState.players ?? [])
+          const worldPlayers = worldState.players ?? [];
+          const localOnlinePlayer = worldPlayers.find((worldPlayer) => worldPlayer.id === room.sessionId) ?? null;
+          const currentPartyId = localOnlinePlayer?.partyId ?? null;
+
+          remotePlayersRef.current = worldPlayers
             .filter((remotePlayer) => remotePlayer.id !== room.sessionId)
             .map((remotePlayer) => ({ ...remotePlayer, receivedAt: performance.now() }));
+
+          const nextPartyMembers = currentPartyId
+            ? worldPlayers
+              .filter((worldPlayer) => worldPlayer.partyId === currentPartyId)
+              .map((worldPlayer) => ({
+                id: worldPlayer.id,
+                name: worldPlayer.name ?? 'Adventurer',
+                classId: worldPlayer.classId ?? 'warrior',
+                level: worldPlayer.level ?? 1,
+                hp: Math.ceil(clamp(worldPlayer.hp ?? worldPlayer.maxHp ?? 1, 0, worldPlayer.maxHp ?? 1)),
+                maxHp: Math.max(1, Math.ceil(worldPlayer.maxHp ?? 1)),
+                isSelf: worldPlayer.id === room.sessionId,
+              }))
+            : [];
+
+          setPartyMembers((currentMembers) => (
+            samePartyMembers(currentMembers, nextPartyMembers) ? currentMembers : nextPartyMembers
+          ));
+
           if (
             selectedPlayerIdRef.current
             && !remotePlayersRef.current.some((remotePlayer) => remotePlayer.id === selectedPlayerIdRef.current)
@@ -1913,6 +1953,7 @@ function App() {
           colyseusSessionIdRef.current = null;
           remotePlayersRef.current = [];
           displayedRemotePlayersRef.current = [];
+          setPartyMembers([]);
           reconnectAttempt += 1;
           setColyseusStatus(`Colyseus reconnecting... (${reconnectAttempt})`);
           reconnectTimer = window.setTimeout(connect, COLYSEUS_RECONNECT_MS);
@@ -1924,6 +1965,7 @@ function App() {
         colyseusSessionIdRef.current = null;
         remotePlayersRef.current = [];
         displayedRemotePlayersRef.current = [];
+        setPartyMembers([]);
         reconnectAttempt += 1;
         setColyseusStatus(`Colyseus retry ${reconnectAttempt}: ${error.message}`);
         reconnectTimer = window.setTimeout(connect, Math.min(6000, COLYSEUS_RECONNECT_MS * reconnectAttempt));
@@ -1937,6 +1979,7 @@ function App() {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       remotePlayersRef.current = [];
       displayedRemotePlayersRef.current = [];
+      setPartyMembers([]);
       colyseusRoomRef.current?.leave();
       colyseusRoomRef.current = null;
       colyseusSessionIdRef.current = null;
@@ -2776,6 +2819,30 @@ function App() {
             <div className="mana-track">
               <span style={{ width: `${(displayMana / currentStats.mana) * 100}%` }} />
             </div>
+          </div>
+        )}
+        {partyMembers.length > 1 && (
+          <div className="party-list">
+            {partyMembers.map((member) => {
+              const memberClass = CLASSES[member.classId] ?? CLASSES.warrior;
+              const MemberIcon = memberClass.icon;
+              const hpPercent = (clamp(member.hp, 0, member.maxHp) / Math.max(1, member.maxHp)) * 100;
+
+              return (
+                <div className={`party-member ${member.isSelf ? 'self' : ''}`} key={member.id}>
+                  <span className={`party-icon ${member.classId}`}>
+                    <MemberIcon size={16} />
+                  </span>
+                  <div className="party-member-copy">
+                    <strong>{member.name}</strong>
+                    <span>Lv {member.level}{member.isSelf ? ' | You' : ''}</span>
+                  </div>
+                  <div className="party-member-hp">
+                    <span style={{ width: `${hpPercent}%` }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
         {character && isDead && (

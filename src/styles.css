@@ -760,7 +760,7 @@ kbd {
 .level-panel {
   position: absolute;
   top: 16px;
-  left: 50%;
+  left: 16px;
   display: grid;
   gap: 5px;
   width: min(260px, calc(100vw - 32px));
@@ -772,9 +772,111 @@ kbd {
   color: #f6f1df;
   font-size: 12px;
   font-weight: 800;
-  transform: translateX(-50%);
   backdrop-filter: blur(10px);
   pointer-events: none;
+}
+
+.party-list {
+  position: absolute;
+  top: 152px;
+  left: 16px;
+  display: grid;
+  gap: 8px;
+  width: min(240px, calc(100vw - 32px));
+  z-index: 6;
+  pointer-events: none;
+}
+
+.party-member {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 8px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(246, 241, 223, 0.16);
+  border-radius: 8px;
+  background: rgba(16, 24, 30, 0.74);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+  color: #f6f1df;
+  backdrop-filter: blur(10px);
+}
+
+.party-member.self {
+  border-color: rgba(139, 233, 253, 0.38);
+}
+
+.party-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(139, 233, 253, 0.16);
+  color: #8be9fd;
+}
+
+.party-icon.mage {
+  background: #4263eb;
+  color: #f8fafc;
+}
+
+.party-icon.hunter {
+  background: #2f9e44;
+  color: #f8fafc;
+}
+
+.party-icon.paladin {
+  background: #c4a12e;
+  color: #f8fafc;
+}
+
+.party-icon.warrior {
+  background: #b42318;
+  color: #f8fafc;
+}
+
+.party-icon.priest {
+  background: #dfe7ff;
+  color: #383491;
+}
+
+.party-member-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.party-member-copy strong,
+.party-member-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-member-copy strong {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.party-member-copy span {
+  color: rgba(246, 241, 223, 0.68);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.party-member-hp {
+  grid-column: 1 / -1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(246, 241, 223, 0.14);
+}
+
+.party-member-hp span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #22c55e;
 }
 
 .inventory-panel,
