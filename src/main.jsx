@@ -1535,6 +1535,12 @@ function App() {
     await signOut(auth);
   };
 
+  React.useEffect(() => {
+    if (!lastCast) return undefined;
+    const timer = window.setTimeout(() => setLastCast(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [lastCast]);
+
   const enterCharacter = (nextCharacter) => {
     enemies.current = [];
     effects.current = [];

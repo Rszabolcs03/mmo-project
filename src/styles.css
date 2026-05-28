@@ -745,7 +745,12 @@ kbd {
 }
 
 .cast-toast {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
   min-width: 132px;
+  max-width: min(420px, calc(100vw - 32px));
   padding: 12px;
   border: 1px solid rgba(139, 233, 253, 0.28);
   border-radius: 8px;
@@ -778,7 +783,7 @@ kbd {
 
 .party-list {
   position: absolute;
-  top: 152px;
+  top: 168px;
   left: 16px;
   display: grid;
   gap: 8px;
@@ -1246,6 +1251,10 @@ kbd {
   }
 
   .cast-toast {
-    display: none;
+    bottom: calc(100% + 8px);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 10px;
+    font-size: 12px;
   }
 }
