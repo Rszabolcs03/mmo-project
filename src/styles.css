@@ -145,62 +145,18 @@ body {
   border-color: rgba(139, 233, 253, 0.38);
 }
 
-.menu-button {
+.hud-actions {
   position: absolute;
-  top: 66px;
+  bottom: 76px;
   left: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid rgba(246, 241, 223, 0.18);
-  border-radius: 8px;
-  background: rgba(16, 24, 30, 0.74);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
-  color: #f6f1df;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  backdrop-filter: blur(10px);
+  display: grid;
+  gap: 10px;
+  z-index: 5;
 }
 
-.menu-button:hover {
-  border-color: rgba(139, 233, 253, 0.58);
-  color: #8be9fd;
-}
-
-.inventory-button {
-  position: absolute;
-  top: 116px;
-  left: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid rgba(246, 241, 223, 0.18);
-  border-radius: 8px;
-  background: rgba(16, 24, 30, 0.74);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
-  color: #f6f1df;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  backdrop-filter: blur(10px);
-}
-
-.inventory-button:hover {
-  border-color: rgba(139, 233, 253, 0.58);
-  color: #8be9fd;
-}
-
+.menu-button,
+.inventory-button,
 .talents-button {
-  position: absolute;
-  top: 166px;
-  left: 16px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -218,33 +174,9 @@ body {
   backdrop-filter: blur(10px);
 }
 
+.menu-button:hover,
+.inventory-button:hover,
 .talents-button:hover {
-  border-color: rgba(139, 233, 253, 0.58);
-  color: #8be9fd;
-}
-
-.reset-position-button {
-  position: absolute;
-  top: 216px;
-  left: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid rgba(246, 241, 223, 0.18);
-  border-radius: 8px;
-  background: rgba(16, 24, 30, 0.74);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
-  color: #f6f1df;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  backdrop-filter: blur(10px);
-}
-
-.reset-position-button:hover {
   border-color: rgba(139, 233, 253, 0.58);
   color: #8be9fd;
 }

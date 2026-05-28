@@ -12,12 +12,10 @@ import {
   Cloud,
   Crosshair,
   DoorOpen,
-  Gamepad2,
   Hammer,
   HeartPulse,
   Leaf,
   Map,
-  MapPin,
   Shield,
   Skull,
   Sparkles,
@@ -2708,35 +2706,21 @@ function App() {
             onLogout={logoutAuth}
           />
         )}
-        <div className="hud top-left">
-          <Gamepad2 size={18} />
-          <span>
-            Cloud save | WASD / nyilak | {mapStatus} | {colyseusStatus} | {renderStatus}
-          </span>
-        </div>
         {character && (
-          <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
-            <DoorOpen size={18} />
-            <span>Menu</span>
-          </button>
-        )}
-        {character && (
-          <button className="inventory-button" type="button" onClick={() => setInventoryOpen((open) => !open)}>
-            <Backpack size={18} />
-            <span>Inventory</span>
-          </button>
-        )}
-        {character && (
-          <button className="talents-button" type="button" onClick={() => setTalentsOpen((open) => !open)}>
-            <Sparkles size={18} />
-            <span>Talents</span>
-          </button>
-        )}
-        {character && (
-          <button className="reset-position-button" type="button" onClick={resetToMapStart}>
-            <MapPin size={18} />
-            <span>Map Start</span>
-          </button>
+          <div className="hud-actions">
+            <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
+              <DoorOpen size={18} />
+              <span>Menu</span>
+            </button>
+            <button className="inventory-button" type="button" onClick={() => setInventoryOpen((open) => !open)}>
+              <Backpack size={18} />
+              <span>Inventory</span>
+            </button>
+            <button className="talents-button" type="button" onClick={() => setTalentsOpen((open) => !open)}>
+              <Sparkles size={18} />
+              <span>Talents</span>
+            </button>
+          </div>
         )}
         <div className="hud top-right">
           <Map size={18} />
