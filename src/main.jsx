@@ -43,6 +43,11 @@ const WORLD = {
   tile: 32,
 };
 
+const MAP_FILES = {
+  world: 'world.tmj',
+  dungeon_01: 'dungeon_01.tmj',
+};
+
 const PLAYER = {
   radius: 18,
   speed: 260,
@@ -70,6 +75,7 @@ const COLYSEUS_RECONNECT_MS = 1800;
 const REMOTE_PLAYER_LEAD_MS = 90;
 const REMOTE_PLAYER_SMOOTHING = 15;
 const REMOTE_PLAYER_SNAP_DISTANCE = 360;
+const AUTO_ATTACK_COOLDOWN_MS = 720;
 const BASE_STATS = {
   health: 100,
   mana: 60,
@@ -107,6 +113,124 @@ const ABILITY_MANA_COST = {
 };
 
 const TALENTS = {
+  paladin: {
+    unlockLevel: 10,
+    specs: {
+      verdict: {
+        name: 'Oath of the Verdict',
+        role: 'Damage',
+        description: 'Holy strikes become sharper and faster.',
+        bonuses: { strength: 5, intellect: 2, mana: 15 },
+        abilities: [
+          { key: '1', level: 10, name: 'Templar Strike', type: 'strike', color: '#fde68a', damage: 96, manaCost: 34 },
+          { key: '2', level: 10, name: 'Blazing Verdict', type: 'bolt', color: '#facc15', damage: 82, manaCost: 30 },
+          { key: '3', level: 12, name: 'Radiant Cleave', type: 'cleave', color: '#fef3c7', damage: 74, manaCost: 42 },
+          { key: '4', level: 16, name: 'Final Judgement', type: 'shot', color: '#fff7ad', damage: 132, manaCost: 62 },
+        ],
+      },
+      aegis: {
+        name: 'Aegis of Dawn',
+        role: 'Tank',
+        description: 'You constantly draw enemy focus while fighting.',
+        bonuses: { health: 55, strength: 2, intellect: 2, mana: 20 },
+        passive: 'Radiant Taunt',
+        abilities: [
+          { key: '1', level: 10, name: 'Shield Bash', type: 'strike', color: '#bfdbfe', damage: 62, manaCost: 24 },
+          { key: '2', level: 10, name: 'Dawn Guard', type: 'shield', color: '#fef08a', damage: 28, manaCost: 28 },
+          { key: '3', level: 12, name: 'Consecrated Ground', type: 'nova', color: '#fde68a', damage: 52, manaCost: 42 },
+          { key: '4', level: 16, name: 'Bulwark Slam', type: 'cleave', color: '#e0f2fe', damage: 88, manaCost: 54 },
+        ],
+      },
+    },
+  },
+  warrior: {
+    unlockLevel: 10,
+    specs: {
+      berserker: {
+        name: 'Berserker Rage',
+        role: 'Damage',
+        description: 'Warrior attacks become more savage and fury-fueled.',
+        bonuses: { strength: 6, agility: 2, fury: 20 },
+        abilities: [
+          { key: '1', level: 10, name: 'Raging Cleave', type: 'cleave', color: '#fdba74', damage: 112, furyCost: 24 },
+          { key: '2', level: 10, name: 'Blood Howl', type: 'shout', color: '#fb7185', damage: 42, furyCost: 16 },
+          { key: '3', level: 12, name: 'Mortal Frenzy', type: 'strike', color: '#fda4af', damage: 96, furyCost: 28 },
+          { key: '4', level: 16, name: 'Rage Execution', type: 'shot', color: '#fecdd3', damage: 148, furyCost: 42 },
+        ],
+      },
+      ironward: {
+        name: 'Iron Ward',
+        role: 'Tank',
+        description: 'A defensive path that stores fury into heavy guard.',
+        bonuses: { health: 60, strength: 3, agility: 1, fury: 15 },
+        passive: 'Unbreakable Guard',
+        abilities: [
+          { key: '1', level: 10, name: 'Shield Slam', type: 'strike', color: '#d1d5db', damage: 90, furyCost: 20 },
+          { key: '2', level: 10, name: 'Guarded Roar', type: 'shield', color: '#e5e7eb', damage: 30, furyCost: 14 },
+          { key: '3', level: 12, name: 'Bulwark Charge', type: 'cleave', color: '#f1f5f9', damage: 78, furyCost: 24 },
+          { key: '4', level: 16, name: 'Immovable Front', type: 'trap', color: '#cbd5e1', damage: 118, furyCost: 38 },
+        ],
+      },
+    },
+  },
+  hunter: {
+    unlockLevel: 10,
+    specs: {
+      beastmaster: {
+        name: 'Beast Master',
+        role: 'Damage',
+        description: 'Your companions focus the enemy and sharpen ranged attacks.',
+        bonuses: { agility: 6, strength: 2, health: 20 },
+        abilities: [
+          { key: '1', level: 10, name: 'Raptor Shot', type: 'shot', color: '#fde68a', damage: 96, manaCost: 34 },
+          { key: '2', level: 10, name: 'Pack Howl', type: 'shout', color: '#bef264', damage: 46, manaCost: 24 },
+          { key: '3', level: 12, name: 'Mammoth Rake', type: 'strike', color: '#86efac', damage: 86, manaCost: 42 },
+          { key: '4', level: 16, name: 'Stampede', type: 'trap', color: '#fde047', damage: 128, manaCost: 60 },
+        ],
+      },
+      survival: {
+        name: 'Survivalist',
+        role: 'Utility',
+        description: 'You weave traps, sustain, and precise shots into a steady rhythm.',
+        bonuses: { agility: 4, health: 30, mana: 12 },
+        abilities: [
+          { key: '1', level: 10, name: 'Viper Shot', type: 'bolt', color: '#fdba74', damage: 88, manaCost: 30 },
+          { key: '2', level: 10, name: 'Hardened Trap', type: 'trap', color: '#fdba74', damage: 54, manaCost: 26 },
+          { key: '3', level: 12, name: 'Volley Mark', type: 'shout', color: '#fef08a', damage: 68, manaCost: 40 },
+          { key: '4', level: 16, name: 'Snare Burst', type: 'trap', color: '#fb923c', damage: 122, manaCost: 56 },
+        ],
+      },
+    },
+  },
+  mage: {
+    unlockLevel: 10,
+    specs: {
+      arcane: {
+        name: 'Arcane Weaving',
+        role: 'Damage',
+        description: 'Arcane spells become volatile and powerful.',
+        bonuses: { intellect: 7, mana: 18 },
+        abilities: [
+          { key: '1', level: 10, name: 'Arcane Bolt', type: 'bolt', color: '#67e8f9', damage: 104, manaCost: 34 },
+          { key: '2', level: 10, name: 'Mana Pulse', type: 'nova', color: '#22d3ee', damage: 58, manaCost: 28 },
+          { key: '3', level: 12, name: 'Spellweave', type: 'shot', color: '#a5f3fc', damage: 88, manaCost: 42 },
+          { key: '4', level: 16, name: 'Astral Storm', type: 'shout', color: '#67e8f9', damage: 138, manaCost: 62 },
+        ],
+      },
+      frost: {
+        name: 'Frostguard',
+        role: 'Control',
+        description: 'Ice magic slows enemies and reinforces your defense.',
+        bonuses: { intellect: 5, agility: 2, mana: 15 },
+        abilities: [
+          { key: '1', level: 10, name: 'Frost Spike', type: 'shot', color: '#7dd3fc', damage: 84, manaCost: 30 },
+          { key: '2', level: 10, name: 'Ice Ward', type: 'shield', color: '#bae6fd', damage: 26, manaCost: 26 },
+          { key: '3', level: 12, name: 'Winter Ring', type: 'nova', color: '#e0f2fe', damage: 70, manaCost: 38 },
+          { key: '4', level: 16, name: 'Glacial Prison', type: 'trap', color: '#e0f2fe', damage: 118, manaCost: 56 },
+        ],
+      },
+    },
+  },
   priest: {
     unlockLevel: 10,
     specs: {
@@ -403,8 +527,85 @@ function getCharacterAbilities(character) {
   return getUnlockedAbilities(character.classId, level);
 }
 
-function getAbilityManaCost(ability) {
-  return ability.manaCost ?? ABILITY_MANA_COST[ability.key] ?? 15;
+const WARRIOR_FURY_PER_ATTACK = 12;
+
+const WARRIOR_ABILITY_COSTS = {
+  1: 12,
+  2: 16,
+  3: 20,
+  4: 28,
+  5: 34,
+  6: 42,
+};
+
+function getAbilityManaCost(ability, character = null) {
+  if (character?.classId === 'warrior') {
+    const furyCost = ability.furyCost ?? WARRIOR_ABILITY_COSTS[ability.key];
+    if (typeof furyCost === 'number') return furyCost;
+  }
+
+  return ability.manaCost ?? ability.resourceCost ?? ABILITY_MANA_COST[ability.key] ?? 15;
+}
+
+function getResourceConfig(character) {
+  if (character?.classId === 'warrior') {
+    return {
+      key: 'fury',
+      label: 'Fury',
+      max: 100,
+    };
+  }
+
+  return {
+    key: 'mana',
+    label: 'Mana',
+    max: getTotalStats(character).mana,
+  };
+}
+
+function getCurrentResource(character, vitals = vitalsRef.current) {
+  const resourceConfig = getResourceConfig(character);
+  return Math.floor(vitals?.[resourceConfig.key] ?? 0);
+}
+
+function getResourceMax(character, stats = getTotalStats(character)) {
+  return getResourceConfig({ ...character, ...stats }).max;
+}
+
+function getAutoAttackAbility(classId) {
+  if (classId === 'warrior' || classId === 'paladin') {
+    return {
+      key: 'M1',
+      name: 'Swing',
+      type: 'strike',
+      color: classId === 'paladin' ? '#fde68a' : '#d1d5db',
+      damage: classId === 'paladin' ? 28 : 30,
+      duration: 420,
+      autoAttack: true,
+    };
+  }
+
+  if (classId === 'hunter') {
+    return {
+      key: 'M1',
+      name: 'Auto Shot',
+      type: 'shot',
+      color: '#facc15',
+      damage: 26,
+      duration: 520,
+      autoAttack: true,
+    };
+  }
+
+  return {
+    key: 'M1',
+    name: classId === 'priest' ? 'Wand Smite' : 'Wand Bolt',
+    type: 'bolt',
+    color: classId === 'priest' ? '#fef3c7' : '#8be9fd',
+    damage: 24,
+    duration: 520,
+    autoAttack: true,
+  };
 }
 
 function getInitialStats(classId) {
@@ -511,16 +712,23 @@ async function loadImage(src) {
   return image;
 }
 
-async function loadTiledMap() {
+function resolveAssetUrl(relativePath, baseUrl = null) {
+  const appBaseUrl = new URL(import.meta.env.BASE_URL || './', window.location.href);
+  return new URL(relativePath, baseUrl ?? appBaseUrl).href;
+}
+
+async function loadTiledMap(mapId = 'world') {
   const cacheBust = `v=${Date.now()}`;
-  const map = await fetch(`/maps/world.tmj?${cacheBust}`, { cache: 'no-store' }).then((response) => response.json());
+  const fileName = MAP_FILES[mapId] ?? MAP_FILES.world;
+  const mapUrl = resolveAssetUrl(`maps/${fileName}`);
+  const map = await fetch(`${mapUrl}?${cacheBust}`, { cache: 'no-store' }).then((response) => response.json());
   const tilesets = await Promise.all(
     map.tilesets.map(async (tileset) => {
-      const tilesetUrl = `/maps/${tileset.source}`.replace('/maps/../', '/');
+      const tilesetUrl = resolveAssetUrl(tileset.source, mapUrl);
       const tilesetText = await fetch(`${tilesetUrl}?${cacheBust}`, { cache: 'no-store' }).then((response) => response.text());
       const parsedTileset = parseTsxTileset(tilesetText);
-      const basePath = tilesetUrl.slice(0, tilesetUrl.lastIndexOf('/') + 1);
-      const image = await loadImage(`${basePath}${parsedTileset.imageSource}?${cacheBust}`);
+      const imageUrl = resolveAssetUrl(parsedTileset.imageSource, tilesetUrl);
+      const image = await loadImage(`${imageUrl}?${cacheBust}`);
 
       return {
         firstgid: tileset.firstgid,
@@ -534,12 +742,14 @@ async function loadTiledMap() {
   const bossSpawnsLayer = map.layers.find((layer) => layer.name === 'BossSpawns');
   const npcsLayer = map.layers.find((layer) => layer.name === 'NPCs');
   const raceStartsLayer = map.layers.find((layer) => layer.name === 'raceStart');
+  const transitionsLayer = map.layers.find((layer) => layer.name === 'Transitions');
   const spawns = [
     ...(spawnsLayer?.objects ?? []),
     ...(bossSpawnsLayer?.objects ?? []),
   ].map((spawn) => ({ ...spawn, props: getProperties(spawn) }));
 
   return {
+    mapId,
     map,
     tilesets,
     zones: (zonesLayer?.objects ?? []).map((zone) => ({ ...zone, props: getProperties(zone) })),
@@ -548,6 +758,7 @@ async function loadTiledMap() {
     bossSpawns: spawns.filter((spawn) => spawn.props.bossType || spawn.name.toLowerCase().includes('boss')),
     npcs: (npcsLayer?.objects ?? []).map((npc) => ({ ...npc, props: getProperties(npc) })),
     raceStarts: (raceStartsLayer?.objects ?? []).map((start) => ({ ...start, props: getProperties(start) })),
+    transitions: (transitionsLayer?.objects ?? []).map((transition) => ({ ...transition, props: getProperties(transition) })),
   };
 }
 
@@ -1053,7 +1264,7 @@ function drawEnemy(context, enemy, now) {
 
   const pulse = Math.sin(now / 180 + (enemy.wobble ?? 0)) * 2;
   const recentlyHit = now - (enemy.hitAt ?? 0) < 140;
-  const isBoss = enemy.type === 'boss';
+  const isBoss = enemy.type === 'boss' || enemy.type === 'dungeon_miniboss' || enemy.type === 'dungeon_final_boss';
   const isAggro = enemy.state === 'aggro';
   const radius = enemy.radius ?? ENEMY.radius;
   const maxHp = enemy.maxHp || (isBoss ? 620 : 100);
@@ -1296,7 +1507,7 @@ function getShopkeeperFromMap(tiledWorld) {
     || candidate.name.toLowerCase().includes('shop')
   ));
 
-  if (!npc) return SHOPKEEPER;
+  if (!npc) return tiledWorld?.mapId === 'world' ? SHOPKEEPER : null;
 
   return {
     ...SHOPKEEPER,
@@ -1305,6 +1516,32 @@ function getShopkeeperFromMap(tiledWorld) {
     name: npc.props.displayName ?? npc.name ?? SHOPKEEPER.name,
     interactRange: Number(npc.props.interactRange ?? SHOPKEEPER.interactRange),
   };
+}
+
+function getObjectCenter(object) {
+  return {
+    x: Number(object?.x ?? 0) + Number(object?.width ?? 0) / 2,
+    y: Number(object?.y ?? 0) + Number(object?.height ?? 0) / 2,
+  };
+}
+
+function pointInObject(point, object) {
+  if (!object || !point) return false;
+  if (object.point) return distance(point, object) < 42;
+  return (
+    point.x >= Number(object.x ?? 0)
+    && point.x <= Number(object.x ?? 0) + Number(object.width ?? 0)
+    && point.y >= Number(object.y ?? 0)
+    && point.y <= Number(object.y ?? 0) + Number(object.height ?? 0)
+  );
+}
+
+function getTransition(tiledWorld, name) {
+  return tiledWorld?.transitions?.find((transition) => transition.name === name) ?? null;
+}
+
+function hasFinalBossAlive(enemiesList) {
+  return enemiesList.some((enemy) => enemy.type === 'dungeon_final_boss');
 }
 
 function AuthGate({
@@ -1682,6 +1919,7 @@ function App() {
   const camera = React.useRef({ x: 0, y: 0 });
   const mouse = React.useRef({ x: 420, y: 420, screenX: 0, screenY: 0 });
   const tiledWorld = React.useRef(null);
+  const currentMapIdRef = React.useRef('world');
   const effects = React.useRef([]);
   const enemies = React.useRef([]);
   const nextEnemyId = React.useRef(1);
@@ -1693,7 +1931,7 @@ function App() {
   const characterRef = React.useRef(null);
   const charactersRef = React.useRef([]);
   const lastRenderStatusAt = React.useRef(0);
-  const vitalsRef = React.useRef({ hp: BASE_STATS.health, mana: BASE_STATS.mana });
+  const vitalsRef = React.useRef({ hp: BASE_STATS.health, mana: BASE_STATS.mana, fury: 0 });
   const deadRef = React.useRef(false);
   const shopOpenRef = React.useRef(false);
   const lastCombatAt = React.useRef(0);
@@ -1705,6 +1943,8 @@ function App() {
   const displayedRemotePlayersRef = React.useRef([]);
   const selectedPlayerIdRef = React.useRef(null);
   const lastColyseusInputAt = React.useRef(0);
+  const mapTransitioningRef = React.useRef(false);
+  const nextAutoAttackAt = React.useRef(0);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
   const [position, setPosition] = React.useState(player.current);
@@ -1716,6 +1956,7 @@ function App() {
   const [shopOpen, setShopOpen] = React.useState(false);
   const [talentsOpen, setTalentsOpen] = React.useState(false);
   const [mapStatus, setMapStatus] = React.useState('Loading map...');
+  const [currentMapId, setCurrentMapId] = React.useState('world');
   const [authUser, setAuthUser] = React.useState(OFFLINE_DEMO ? OFFLINE_USER : null);
   const [authForm, setAuthForm] = React.useState({ email: '', password: '' });
   const [authMode, setAuthMode] = React.useState('login');
@@ -1739,8 +1980,11 @@ function App() {
   selectedPlayerIdRef.current = selectedPlayerId;
 
   const setVitalsValue = (nextVitals) => {
-    vitalsRef.current = nextVitals;
-    setVitals(nextVitals);
+    vitalsRef.current = {
+      ...vitalsRef.current,
+      ...nextVitals,
+    };
+    setVitals(vitalsRef.current);
   };
 
   const syncCloudCharacter = React.useCallback((updatedCharacter) => {
@@ -1867,7 +2111,7 @@ function App() {
     cooldowns.current = { 1: 0, 2: 0 };
     player.current = getCharacterStartPosition(tiledWorld.current, nextCharacter);
     const stats = getTotalStats(nextCharacter);
-    setVitalsValue({ hp: stats.health, mana: stats.mana });
+    setVitalsValue({ hp: stats.health, mana: stats.mana, fury: nextCharacter.classId === 'warrior' ? 0 : 0 });
     setIsDead(false);
     deadRef.current = false;
     lastCombatAt.current = 0;
@@ -2075,6 +2319,7 @@ function App() {
     setVitalsValue({
       hp: Math.min(vitalsRef.current.hp, stats.health),
       mana: Math.min(vitalsRef.current.mana, stats.mana),
+      fury: activeCharacter.classId === 'warrior' ? Math.min(vitalsRef.current.fury ?? 0, 100) : 0,
     });
     setLastCast(`Spec: ${talentTree.specs[specId].name}`);
   };
@@ -2100,7 +2345,7 @@ function App() {
     effects.current = [];
     nextSpawnAt.current = performance.now() + 900;
     nextBossSpawnAt.current = performance.now() + nextBossDelay();
-    setVitalsValue({ hp: stats.health, mana: stats.mana });
+    setVitalsValue({ hp: stats.health, mana: stats.mana, fury: activeCharacter.classId === 'warrior' ? 0 : 0 });
     setEnemyCount(0);
     setIsDead(false);
     deadRef.current = false;
@@ -2121,6 +2366,34 @@ function App() {
     });
     setLastCast('Moved to map start');
   };
+
+  const switchMap = React.useCallback(async (nextMapId, spawnName, message) => {
+    const loadedMap = await loadTiledMap(nextMapId);
+    tiledWorld.current = loadedMap;
+    currentMapIdRef.current = nextMapId;
+    setCurrentMapId(nextMapId);
+    enemies.current = [];
+    effects.current = [];
+    remotePlayersRef.current = [];
+    displayedRemotePlayersRef.current = [];
+    setSelectedPlayerId(null);
+    setEnemyCount(0);
+    setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
+
+    const spawn = getTransition(loadedMap, spawnName);
+    const nextPosition = spawn
+      ? (spawn.point ? { x: spawn.x, y: spawn.y } : getObjectCenter(spawn))
+      : { x: PLAYER.radius + 80, y: PLAYER.radius + 80 };
+    const safePosition = {
+      x: clamp(nextPosition.x, PLAYER.radius, loadedMap.map.width * loadedMap.map.tilewidth - PLAYER.radius),
+      y: clamp(nextPosition.y, PLAYER.radius, loadedMap.map.height * loadedMap.map.tileheight - PLAYER.radius),
+      facing: player.current.facing,
+    };
+
+    player.current = safePosition;
+    setPosition({ ...safePosition });
+    if (message) setLastCast(message);
+  }, []);
 
   const saveCurrentCharacter = () => {
     if (!character) return;
@@ -2146,10 +2419,12 @@ function App() {
   React.useEffect(() => {
     let cancelled = false;
 
-    loadTiledMap()
+    loadTiledMap('world')
       .then((loadedMap) => {
         if (cancelled) return;
         tiledWorld.current = loadedMap;
+        currentMapIdRef.current = loadedMap.mapId;
+        setCurrentMapId(loadedMap.mapId);
         setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
       })
       .catch((error) => {
@@ -2202,10 +2477,12 @@ function App() {
             raceId: characterRef.current?.raceId ?? activeCharacter.raceId,
             appearance: characterRef.current?.appearance ?? activeCharacter.appearance ?? {},
             level: characterRef.current?.level ?? activeCharacter.level ?? 1,
+            talents: characterRef.current?.talents ?? activeCharacter.talents ?? { spec: null },
           },
           x: player.current.x,
           y: player.current.y,
           facing: player.current.facing,
+          mapId: currentMapIdRef.current,
           hp: vitalsRef.current.hp,
           maxHp: joinStats.health,
         });
@@ -2385,9 +2662,10 @@ function App() {
       const unlockedAbilities = getCharacterAbilities(activeCharacter);
       const ability = unlockedAbilities[slot - 1];
       if (!ability) return;
-      const manaCost = getAbilityManaCost(ability);
-      if (vitalsRef.current.mana < manaCost) {
-        setLastCast('Not enough mana');
+      const resourceConfig = getResourceConfig(activeCharacter);
+      const resourceCost = getAbilityManaCost(ability, activeCharacter);
+      if (getCurrentResource(activeCharacter) < resourceCost) {
+        setLastCast(`Not enough ${resourceConfig.label.toLowerCase()}`);
         return;
       }
       const facing = Math.atan2(mouse.current.y - player.current.y, mouse.current.x - player.current.x);
@@ -2428,7 +2706,11 @@ function App() {
         return;
       }
 
-      setVitalsValue({ ...vitalsRef.current, mana: vitalsRef.current.mana - manaCost });
+      const nextVitals = {
+        ...vitalsRef.current,
+        [resourceConfig.key]: Math.max(0, getCurrentResource(activeCharacter) - resourceCost),
+      };
+      setVitalsValue(nextVitals);
       cooldowns.current[slot] = now + 650;
 
       if (ability.damage) {
@@ -2486,7 +2768,7 @@ function App() {
       }
       if (event.key.toLowerCase() === 'e' && characterRef.current) {
         const shopkeeper = getShopkeeperFromMap(tiledWorld.current);
-        if (!deadRef.current && distance(player.current, shopkeeper) <= shopkeeper.interactRange) {
+        if (shopkeeper && !deadRef.current && distance(player.current, shopkeeper) <= shopkeeper.interactRange) {
           setShopOpen((open) => !open);
           setInventoryOpen(false);
           setLastCast('Shopkeeper: Show me what you found.');
@@ -2534,7 +2816,66 @@ function App() {
       const clickedPlayer = [...displayedRemotePlayersRef.current]
         .sort((a, b) => distance(a, mouse.current) - distance(b, mouse.current))
         .find((remotePlayer) => distance(remotePlayer, mouse.current) <= 54);
-      setSelectedPlayerId(clickedPlayer?.id ?? null);
+      if (clickedPlayer) {
+        setSelectedPlayerId(clickedPlayer.id);
+        return;
+      }
+
+      setSelectedPlayerId(null);
+      if (!characterRef.current || deadRef.current) return;
+
+      const now = performance.now();
+      if (now < nextAutoAttackAt.current) return;
+      nextAutoAttackAt.current = now + AUTO_ATTACK_COOLDOWN_MS;
+
+      const activeCharacter = characterRef.current;
+      const ability = getAutoAttackAbility(activeCharacter.classId);
+      const facing = Math.atan2(mouse.current.y - player.current.y, mouse.current.x - player.current.x);
+      player.current.facing = facing;
+      const stats = getTotalStats(activeCharacter);
+      const damage = ability.damage + Math.floor(((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 12);
+      const resourceConfig = getResourceConfig(activeCharacter);
+      if (resourceConfig.key === 'fury') {
+        setVitalsValue({
+          ...vitalsRef.current,
+          fury: Math.min(resourceConfig.max, (vitalsRef.current.fury ?? 0) + WARRIOR_FURY_PER_ATTACK),
+        });
+      }
+      const room = colyseusRoomRef.current;
+
+      if (room) {
+        room.send('ability', {
+          ability,
+          origin: { x: player.current.x, y: player.current.y },
+          facing,
+          damage,
+        });
+      } else {
+        const damagedEnemies = enemies.current.map((enemy) => {
+          if (!abilityHitsEnemyClient(ability, player.current, facing, enemy)) return enemy;
+          lastCombatAt.current = now;
+          return { ...enemy, state: 'aggro', hp: enemy.hp - damage, hitAt: now };
+        });
+        const defeatedEnemies = damagedEnemies.filter((enemy) => enemy.hp <= 0);
+        enemies.current = damagedEnemies.filter((enemy) => enemy.hp > 0);
+
+        if (defeatedEnemies.length > 0) {
+          awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
+          defeatedEnemies
+            .filter((enemy) => enemy.type === 'boss')
+            .forEach(() => addLoot(rollBossLoot()));
+          setEnemyCount(enemies.current.length);
+        }
+
+        effects.current.push({
+          ...ability,
+          x: player.current.x,
+          y: player.current.y,
+          facing,
+          start: now,
+          duration: ability.duration,
+        });
+      }
     };
 
     const drawTree = (x, y) => {
@@ -2664,6 +3005,39 @@ function App() {
         context.stroke();
       }
 
+      if (effect.type === 'dungeon_aoe') {
+        const radius = effect.radius ?? 90;
+        context.globalAlpha = 0.2 + alpha * 0.28;
+        context.fillStyle = effect.color ?? '#ef4444';
+        context.beginPath();
+        context.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+        context.fill();
+        context.globalAlpha = Math.max(alpha, 0.25);
+        context.lineWidth = 5;
+        context.strokeStyle = '#fecaca';
+        context.beginPath();
+        context.arc(effect.x, effect.y, radius * (0.72 + progress * 0.28), 0, Math.PI * 2);
+        context.stroke();
+      }
+
+      if (effect.type === 'dungeon_laser') {
+        const length = effect.length ?? 520;
+        context.globalAlpha = 0.18 + alpha * 0.42;
+        context.lineWidth = effect.width ?? 42;
+        context.strokeStyle = effect.color ?? '#f43f5e';
+        context.beginPath();
+        context.moveTo(effect.x + fx * 20, effect.y + fy * 20);
+        context.lineTo(effect.x + fx * length, effect.y + fy * length);
+        context.stroke();
+        context.globalAlpha = Math.max(alpha, 0.35);
+        context.lineWidth = 6;
+        context.strokeStyle = '#ffe4e6';
+        context.beginPath();
+        context.moveTo(effect.x + fx * 28, effect.y + fy * 28);
+        context.lineTo(effect.x + fx * length, effect.y + fy * length);
+        context.stroke();
+      }
+
       context.restore();
     };
 
@@ -2780,7 +3154,8 @@ function App() {
         }
         drawLocalPlayerMarker(context, player.current, activeCharacter);
       }
-      drawShopkeeperAt(context, getShopkeeperFromMap(tiledWorld.current));
+      const activeShopkeeper = getShopkeeperFromMap(tiledWorld.current);
+      if (activeShopkeeper) drawShopkeeperAt(context, activeShopkeeper);
       displayedRemotePlayersRef.current.forEach((remotePlayer) => {
         try {
           if (remotePlayer.id === selectedPlayerIdRef.current) {
@@ -2848,14 +3223,42 @@ function App() {
         dx /= length;
         dy /= length;
         player.current.facing = Math.atan2(dy, dx);
-        const nextX = clamp(player.current.x + dx * PLAYER.speed * delta, PLAYER.radius, WORLD.width - PLAYER.radius);
-        const nextY = clamp(player.current.y + dy * PLAYER.speed * delta, PLAYER.radius, WORLD.height - PLAYER.radius);
+        const activeMap = tiledWorld.current?.map;
+        const activeWorldWidth = activeMap ? activeMap.width * activeMap.tilewidth : WORLD.width;
+        const activeWorldHeight = activeMap ? activeMap.height * activeMap.tileheight : WORLD.height;
+        const nextX = clamp(player.current.x + dx * PLAYER.speed * delta, PLAYER.radius, activeWorldWidth - PLAYER.radius);
+        const nextY = clamp(player.current.y + dy * PLAYER.speed * delta, PLAYER.radius, activeWorldHeight - PLAYER.radius);
 
         if (canMoveTo(tiledWorld.current, nextX, player.current.y, PLAYER.radius)) {
           player.current.x = nextX;
         }
         if (canMoveTo(tiledWorld.current, player.current.x, nextY, PLAYER.radius)) {
           player.current.y = nextY;
+        }
+      }
+
+      if (!mapTransitioningRef.current && characterRef.current && !deadRef.current && tiledWorld.current) {
+        const currentMap = currentMapIdRef.current;
+        if (currentMap === 'world' && pointInObject(player.current, getTransition(tiledWorld.current, 'dungeon_01_entrance'))) {
+          mapTransitioningRef.current = true;
+          switchMap('dungeon_01', 'dungeon_01_start', 'Entered dungeon')
+            .finally(() => {
+              mapTransitioningRef.current = false;
+            });
+        } else if (currentMap === 'dungeon_01' && pointInObject(player.current, getTransition(tiledWorld.current, 'dungeon_01_exit'))) {
+          if (hasFinalBossAlive(enemies.current)) {
+            setLastCast('Defeat the final boss first');
+          } else {
+            mapTransitioningRef.current = true;
+            switchMap('world', 'dungeon_01_entrance', 'Dungeon cleared')
+              .then(() => {
+                player.current.y += 130;
+                setPosition({ ...player.current });
+              })
+              .finally(() => {
+                mapTransitioningRef.current = false;
+              });
+          }
         }
       }
 
@@ -2871,6 +3274,8 @@ function App() {
           raceId: characterRef.current.raceId,
           appearance: characterRef.current.appearance ?? {},
           level: characterRef.current.level ?? 1,
+          talents: characterRef.current.talents ?? { spec: null },
+          mapId: currentMapIdRef.current,
           hp: vitalsRef.current.hp,
           maxHp: stats.health,
         });
@@ -2956,13 +3361,17 @@ function App() {
           if (effect.casterId && effect.casterId !== colyseusSessionIdRef.current) return effect;
           if (now < effect.nextTickAt) return effect;
 
-          const manaCost = getAbilityManaCost(effect);
-          if (vitalsRef.current.mana < manaCost) {
-            setLastCast('Channel interrupted: no mana');
+          const resourceConfig = getResourceConfig(characterRef.current);
+          const resourceCost = getAbilityManaCost(effect, characterRef.current);
+          if (getCurrentResource(characterRef.current) < resourceCost) {
+            setLastCast(`Channel interrupted: no ${resourceConfig.label.toLowerCase()}`);
             return { ...effect, start: 0, duration: 0 };
           }
 
-          setVitalsValue({ ...vitalsRef.current, mana: vitalsRef.current.mana - manaCost });
+          setVitalsValue({
+            ...vitalsRef.current,
+            [resourceConfig.key]: Math.max(0, getCurrentResource(characterRef.current) - resourceCost),
+          });
 
           const fx = Math.cos(effect.facing);
           const fy = Math.sin(effect.facing);
@@ -3005,17 +3414,25 @@ function App() {
       setPosition({ ...player.current });
 
       if (characterRef.current && !deadRef.current) {
-        const stats = getTotalStats(characterRef.current);
+        const activeCharacter = characterRef.current;
+        const stats = getTotalStats(activeCharacter);
+        const resourceConfig = getResourceConfig(activeCharacter);
         const hasNearbyAggro = enemies.current.some((enemy) => (
           enemy.state === 'aggro' && distance(enemy, player.current) < 220
         ));
         const outOfCombat = !hasNearbyAggro && now - lastCombatAt.current > PLAYER.outOfCombatDelay;
         let nextVitals = vitalsRef.current;
 
-        if (nextVitals.mana < stats.mana) {
+        if (resourceConfig.key === 'mana' && nextVitals.mana < stats.mana) {
           nextVitals = {
             ...nextVitals,
             mana: Math.min(stats.mana, nextVitals.mana + PLAYER.manaRegen * delta),
+          };
+        }
+        if (resourceConfig.key === 'fury' && nextVitals.fury > resourceConfig.max) {
+          nextVitals = {
+            ...nextVitals,
+            fury: resourceConfig.max,
           };
         }
         if (outOfCombat && nextVitals.hp < stats.health) {
@@ -3030,7 +3447,7 @@ function App() {
         }
       }
       const shopkeeper = getShopkeeperFromMap(tiledWorld.current);
-      if (shopOpenRef.current && distance(player.current, shopkeeper) > shopkeeper.interactRange + 45) {
+      if (shopOpenRef.current && (!shopkeeper || distance(player.current, shopkeeper) > shopkeeper.interactRange + 45)) {
         setShopOpen(false);
       }
         animationFrame = requestAnimationFrame(tick);
@@ -3066,9 +3483,11 @@ function App() {
   const bagItems = inventory.filter((item) => !item.equippedSlot);
   const gold = character?.gold ?? 0;
   const displayHp = Math.ceil(vitals.hp);
-  const displayMana = Math.floor(vitals.mana);
+  const resourceConfig = character ? getResourceConfig(character) : { key: 'mana', label: 'Mana', max: BASE_STATS.mana };
+  const displayResource = Math.floor(getCurrentResource(character, vitals));
+  const resourceMax = Math.max(1, getResourceMax(character, currentStats));
   const activeShopkeeper = getShopkeeperFromMap(tiledWorld.current);
-  const nearShopkeeper = character && distance(position, activeShopkeeper) <= activeShopkeeper.interactRange;
+  const nearShopkeeper = character && activeShopkeeper && distance(position, activeShopkeeper) <= activeShopkeeper.interactRange;
   const talentTree = character ? TALENTS[character.classId] : null;
   const selectedTalentSpec = character?.talents?.spec ?? null;
   const selectedPlayer = displayedRemotePlayersRef.current.find((remotePlayer) => remotePlayer.id === selectedPlayerId) ?? null;
@@ -3157,9 +3576,9 @@ function App() {
             <div className="hp-track">
               <span style={{ width: `${(displayHp / currentStats.health) * 100}%` }} />
             </div>
-            <span>Mana {displayMana} / {currentStats.mana}</span>
+            <span>{resourceConfig.label} {displayResource} / {resourceMax}</span>
             <div className="mana-track">
-              <span style={{ width: `${(displayMana / currentStats.mana) * 100}%` }} />
+              <span style={{ width: `${(displayResource / resourceMax) * 100}%` }} />
             </div>
           </div>
         )}
@@ -3237,7 +3656,7 @@ function App() {
             </div>
             <div className="stat-grid">
               <span>Health <strong>{currentStats.health}</strong></span>
-              <span>Mana <strong>{currentStats.mana}</strong></span>
+              <span>{resourceConfig.label} <strong>{resourceMax}</strong></span>
               <span>Strength <strong>{currentStats.strength}</strong></span>
               <span>Agility <strong>{currentStats.agility}</strong></span>
               <span>Intellect <strong>{currentStats.intellect}</strong></span>
@@ -3286,7 +3705,7 @@ function App() {
         {character && shopOpen && (
           <aside className="shop-panel">
             <div className="panel-heading">
-              <strong>{activeShopkeeper.name}'s Shop</strong>
+              <strong>{activeShopkeeper?.name ?? 'Shop'}'s Shop</strong>
               <span>{gold}g</span>
             </div>
             <p className="shop-copy">Sell unwanted loot.</p>
@@ -3353,7 +3772,7 @@ function App() {
               <div className="ability-slot" key={ability.key}>
                 <kbd>{ability.key}</kbd>
                 <span>{ability.name}</span>
-                <small>{getAbilityManaCost(ability)} mana</small>
+                <small>{getAbilityManaCost(ability, character)} {resourceConfig.label.toLowerCase()}</small>
               </div>
             ))}
             {lastCast && <div className="cast-toast">{lastCast}</div>}

@@ -1,0 +1,148 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: #f5f0df;
+  background:
+    linear-gradient(rgba(16, 28, 31, 0.58), rgba(16, 28, 31, 0.72)),
+    url('../public/tilesets/TileSet.png');
+  background-color: #101c1f;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.launcher-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.hero-panel {
+  width: min(680px, 100%);
+  display: grid;
+  gap: 22px;
+  padding: 34px;
+  border: 1px solid rgba(127, 224, 242, 0.24);
+  background: rgba(16, 28, 31, 0.92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #7fe0f2;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 54px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.subtitle,
+.hint {
+  margin: 12px 0 0;
+  color: rgba(245, 240, 223, 0.76);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.status-grid div,
+.server-field {
+  border: 1px solid rgba(245, 240, 223, 0.18);
+  background: rgba(245, 240, 223, 0.06);
+  padding: 14px;
+}
+
+.status-grid span,
+.server-field span {
+  display: block;
+  color: rgba(245, 240, 223, 0.6);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.status-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.server-field input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px 12px;
+  color: #f5f0df;
+  border: 1px solid rgba(127, 224, 242, 0.34);
+  background: rgba(0, 0, 0, 0.24);
+  outline: none;
+}
+
+.server-field input:focus {
+  border-color: #7fe0f2;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.quick-actions button,
+.play-button {
+  border: 1px solid rgba(127, 224, 242, 0.3);
+  color: #f5f0df;
+  background: rgba(127, 224, 242, 0.12);
+  cursor: pointer;
+}
+
+.quick-actions button {
+  padding: 10px 14px;
+}
+
+.play-button {
+  min-height: 58px;
+  font-size: 21px;
+  font-weight: 900;
+  background: #31a24c;
+  border-color: #55d275;
+}
+
+.update-button {
+  background: #d19a23;
+  border-color: #f3c35a;
+}
+
+.play-button:disabled,
+.quick-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.update-status {
+  min-height: 20px;
+  margin: -8px 0 0;
+  color: rgba(127, 224, 242, 0.9);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.play-button:hover,
+.quick-actions button:hover {
+  filter: brightness(1.12);
+}

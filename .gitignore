@@ -1,5 +1,7 @@
 node_modules/
 dist/
+release/
+updates/
 .env
 .env.local
 .env.*.local
@@ -7,3 +9,4 @@ vite-server*.log
 socket-server*.log
 firebase-debug.log
 .firebase/
+.cache/
