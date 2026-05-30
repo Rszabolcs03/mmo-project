@@ -89,7 +89,8 @@ function parseSimpleYml(text) {
   let inFilesArray = false;
   let currentFile = null;
 
-  text
+  String(text)
+    .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .forEach((line) => {
       const trimmedLine = line.trim();
