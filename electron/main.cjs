@@ -8,6 +8,10 @@ const { pathToFileURL } = require('node:url');
 const isDev = !app.isPackaged;
 const settingsPath = path.join(app.getPath('userData'), 'launcher-settings.json');
 
+function getPlatformManifestName() {
+  return process.platform === 'darwin' ? 'latest-mac.yml' : 'latest.yml';
+}
+
 function readLauncherConfig() {
   try {
     return {
@@ -151,7 +155,7 @@ function parseSimpleYml(text) {
   return manifest;
 }
 
-function normalizeManifestUrl(manifestUrl) {
+function normalizeManifestUrl(manifestUrl, manifestName = getPlatformManifestName()) {
   const trimmedManifestUrl = String(manifestUrl ?? '').trim();
   if (!trimmedManifestUrl) return trimmedManifestUrl;
 
@@ -159,7 +163,7 @@ function normalizeManifestUrl(manifestUrl) {
     const parsedUrl = new URL(trimmedManifestUrl);
     if (/\.(ya?ml|json)$/i.test(parsedUrl.pathname)) return parsedUrl.href;
     const trimmedPath = parsedUrl.pathname.replace(/\/+$/, '');
-    parsedUrl.pathname = `${trimmedPath}/latest.yml`;
+    parsedUrl.pathname = `${trimmedPath}/${manifestName}`;
     return parsedUrl.href;
   } catch {
     return trimmedManifestUrl;
@@ -222,12 +226,21 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape' && mainWindow.isFullScreen()) {
+      event.preventDefault();
+      mainWindow.webContents.send('game:escape');
+    }
+  });
+
   return mainWindow;
 }
 
 ipcMain.handle('launcher:get-config', () => ({
   ...launcherConfig,
   appVersion: app.getVersion(),
+  appPlatform: process.platform,
+  platformManifestName: getPlatformManifestName(),
   isDev,
 }));
 

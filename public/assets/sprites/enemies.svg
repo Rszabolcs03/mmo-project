@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="128" viewBox="0 0 384 128" shape-rendering="crispEdges">
+  <rect width="384" height="128" fill="none"/>
+  <g id="forest-wolf-idle" transform="translate(8 14)">
+    <rect x="4" y="62" width="56" height="8" fill="#000" opacity=".22"/>
+    <rect x="8" y="32" width="46" height="24" fill="#221722"/>
+    <rect x="12" y="36" width="38" height="16" fill="#4b5563"/>
+    <rect x="48" y="24" width="22" height="22" fill="#221722"/>
+    <rect x="52" y="28" width="15" height="15" fill="#475569"/>
+    <rect x="51" y="16" width="6" height="11" fill="#221722"/>
+    <rect x="62" y="16" width="6" height="11" fill="#221722"/>
+    <rect x="55" y="33" width="4" height="4" fill="#e0e7ff"/>
+    <rect x="64" y="33" width="4" height="4" fill="#e0e7ff"/>
+    <rect x="57" y="43" width="10" height="3" fill="#111827"/>
+    <rect x="2" y="36" width="13" height="5" fill="#221722"/>
+    <rect x="-12" y="29" width="16" height="5" fill="#4b5563"/>
+    <rect x="17" y="52" width="6" height="15" fill="#221722"/>
+    <rect x="40" y="52" width="6" height="15" fill="#221722"/>
+  </g>
+  <g id="forest-wolf-run" transform="translate(88 14)">
+    <rect x="4" y="62" width="56" height="8" fill="#000" opacity=".22"/>
+    <rect x="8" y="30" width="46" height="24" fill="#221722"/>
+    <rect x="12" y="34" width="38" height="16" fill="#7f1d1d"/>
+    <rect x="48" y="22" width="22" height="22" fill="#221722"/>
+    <rect x="52" y="26" width="15" height="15" fill="#713f3f"/>
+    <rect x="51" y="14" width="6" height="11" fill="#221722"/>
+    <rect x="62" y="14" width="6" height="11" fill="#221722"/>
+    <rect x="55" y="31" width="4" height="4" fill="#e0e7ff"/>
+    <rect x="64" y="31" width="4" height="4" fill="#e0e7ff"/>
+    <rect x="-12" y="25" width="16" height="5" fill="#7f1d1d"/>
+    <rect x="18" y="50" width="6" height="20" fill="#221722"/>
+    <rect x="42" y="47" width="6" height="13" fill="#221722"/>
+  </g>
+  <g id="desert-scarab" transform="translate(168 17)">
+    <rect x="8" y="58" width="58" height="8" fill="#000" opacity=".2"/>
+    <rect x="10" y="24" width="54" height="36" fill="#3f2a13"/>
+    <rect x="15" y="28" width="44" height="28" fill="#b45309"/>
+    <rect x="33" y="27" width="9" height="30" fill="#facc15"/>
+    <rect x="18" y="38" width="38" height="5" fill="#facc15"/>
+    <rect x="-4" y="31" width="18" height="5" fill="#3f2a13"/>
+    <rect x="60" y="31" width="18" height="5" fill="#3f2a13"/>
+    <rect x="-4" y="48" width="18" height="5" fill="#3f2a13"/>
+    <rect x="60" y="48" width="18" height="5" fill="#3f2a13"/>
+    <rect x="30" y="16" width="5" height="5" fill="#fff7ed"/>
+    <rect x="40" y="16" width="5" height="5" fill="#fff7ed"/>
+  </g>
+  <g id="cave-stalker" transform="translate(248 12)">
+    <rect x="8" y="65" width="58" height="8" fill="#000" opacity=".24"/>
+    <rect x="10" y="18" width="54" height="54" fill="#221722"/>
+    <rect x="16" y="24" width="42" height="42" fill="#475569"/>
+    <rect x="10" y="14" width="8" height="8" fill="#64748b"/>
+    <rect x="56" y="14" width="8" height="8" fill="#64748b"/>
+    <rect x="27" y="39" width="7" height="7" fill="#f8fafc"/>
+    <rect x="42" y="39" width="7" height="7" fill="#f8fafc"/>
+    <rect x="29" y="57" width="18" height="4" fill="#94a3b8"/>
+    <rect x="19" y="66" width="7" height="17" fill="#221722"/>
+    <rect x="50" y="66" width="7" height="17" fill="#221722"/>
+  </g>
+  <g id="rift-brute" transform="translate(320 4)">
+    <rect x="-2" y="95" width="70" height="12" fill="#000" opacity=".28"/>
+    <rect x="1" y="19" width="66" height="70" fill="#160520"/>
+    <rect x="8" y="26" width="52" height="56" fill="#5b21b6"/>
+    <rect x="9" y="5" width="12" height="21" fill="#facc15"/>
+    <rect x="29" y="0" width="12" height="26" fill="#facc15"/>
+    <rect x="48" y="5" width="12" height="21" fill="#facc15"/>
+    <rect x="18" y="47" width="9" height="9" fill="#f8fafc"/>
+    <rect x="42" y="47" width="9" height="9" fill="#f8fafc"/>
+    <rect x="22" y="70" width="28" height="6" fill="#111827"/>
+  </g>
+</svg>

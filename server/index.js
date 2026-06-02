@@ -30,11 +30,13 @@ const ENEMY = {
 };
 
 const WORLD_BROADCAST_MS = 50;
+const PARTY_INVITE_COOLDOWN_MS = 8000;
 
 const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
+const BOSS_RESPAWN_DELAY = 60000;
 const DUNGEON_PACK_SIZE = 5;
 
 function clamp(value, min, max) {
@@ -76,6 +78,20 @@ function readObjects(objectLayers, layerName) {
     ?.map((object) => ({ ...object, props: getProperties(object) })) ?? [];
 }
 
+function objectSearchText(object) {
+  return [
+    object?.name,
+    object?.type,
+    object?.class,
+    ...Object.entries(object?.props ?? {}).flat(),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function objectHasAnyTag(object, tags) {
+  const text = objectSearchText(object);
+  return tags.some((tag) => text.includes(tag));
+}
+
 function loadTiledSpawns() {
   try {
     const worldLayers = loadMapObjectLayers('world.tmj');
@@ -87,13 +103,36 @@ function loadTiledSpawns() {
       ...(worldBossSpawnsLayer?.objects ?? []),
     ].map((spawn) => ({ ...spawn, props: getProperties(spawn) }));
     const dungeonSpawns = readObjects(dungeonLayers, 'Spawns');
+    const worldBossSpawns = spawns.filter((spawn) => (
+      spawn.props.bossType || objectHasAnyTag(spawn, ['boss'])
+    ));
+    const worldEnemySpawns = spawns.filter((spawn) => (
+      !worldBossSpawns.includes(spawn)
+      && (spawn.props.enemyType || objectHasAnyTag(spawn, ['spawn', 'mob', 'mobs', 'enemy']))
+    ));
+    const dungeonFinalBosses = dungeonSpawns.filter((spawn) => (
+      objectHasAnyTag(spawn, ['finalboss', 'final_boss', 'final boss', 'endboss'])
+      || String(spawn.props.bossType ?? '').toLowerCase() === 'final'
+    ));
+    const dungeonMinibosses = dungeonSpawns.filter((spawn) => (
+      !dungeonFinalBosses.includes(spawn)
+      && (
+        objectHasAnyTag(spawn, ['miniboss', 'mini_boss', 'mini boss'])
+        || String(spawn.props.bossType ?? '').toLowerCase() === 'mini'
+      )
+    ));
+    const dungeonPacks = dungeonSpawns.filter((spawn) => (
+      !dungeonFinalBosses.includes(spawn)
+      && !dungeonMinibosses.includes(spawn)
+      && objectHasAnyTag(spawn, ['enemy_pack', 'mob_pack', 'pack', 'spawn', 'enemy', 'trash'])
+    ));
 
     return {
-      enemySpawns: spawns.filter((spawn) => spawn.props.enemyType || spawn.name?.toLowerCase().includes('spawn')),
-      bossSpawns: spawns.filter((spawn) => spawn.props.bossType || spawn.name?.toLowerCase().includes('boss')),
-      dungeonPacks: dungeonSpawns.filter((spawn) => spawn.name?.toLowerCase().includes('enemy_pack')),
-      dungeonMinibosses: dungeonSpawns.filter((spawn) => spawn.name?.toLowerCase().includes('miniboss')),
-      dungeonFinalBosses: dungeonSpawns.filter((spawn) => spawn.name?.toLowerCase().includes('finalboss')),
+      enemySpawns: worldEnemySpawns,
+      bossSpawns: worldBossSpawns,
+      dungeonPacks,
+      dungeonMinibosses,
+      dungeonFinalBosses,
     };
   } catch (error) {
     console.warn('Map spawns could not be loaded, using fallback spawns:', error.message);
@@ -141,24 +180,244 @@ function pickSpawn(spawns) {
   return spawns[Math.floor(Math.random() * spawns.length)];
 }
 
+function numberProp(object, name, fallback) {
+  const value = Number(object?.props?.[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function getSpawnPackId(spawnObject, fallbackId = 'fallback_spawn') {
+  return String(spawnObject?.props?.spawnId ?? spawnObject?.name ?? spawnObject?.id ?? fallbackId);
+}
+
+function getSpawnEnemyType(spawnObject) {
+  const spawnName = String(spawnObject?.name ?? '').toLowerCase();
+  return String(spawnObject?.props?.enemyType ?? (spawnName.includes('desert') ? 'scarab' : 'wolf')).toLowerCase();
+}
+
+function getSpawnMaxAlive(spawnObject) {
+  return Math.max(1, Math.floor(numberProp(spawnObject, 'maxAlive', ENEMY.maxCount)));
+}
+
+function getSpawnRespawnMin(spawnObject) {
+  return Math.max(1000, numberProp(spawnObject, 'respawnMin', ENEMY.spawnEvery));
+}
+
+function getSpawnRespawnMax(spawnObject) {
+  return Math.max(getSpawnRespawnMin(spawnObject), numberProp(spawnObject, 'respawnMax', getSpawnRespawnMin(spawnObject)));
+}
+
+function getSpawnRespawnDelay(spawnObject) {
+  const min = getSpawnRespawnMin(spawnObject);
+  const max = getSpawnRespawnMax(spawnObject);
+  return min + Math.random() * (max - min);
+}
+
+function hashNumber(value) {
+  const text = String(value ?? '0');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededUnit(seed, salt = 0) {
+  const value = Math.sin(hashNumber(`${seed}:${salt}`) * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function pointForSpawnSlot(bounds, slotIndex, maxAlive) {
+  const aspect = Math.max(0.35, bounds.width / Math.max(1, bounds.height));
+  const columns = Math.max(1, Math.ceil(Math.sqrt(maxAlive * aspect)));
+  const rows = Math.max(1, Math.ceil(maxAlive / columns));
+  const column = slotIndex % columns;
+  const row = Math.floor(slotIndex / columns) % rows;
+  const cellWidth = bounds.width / columns;
+  const cellHeight = bounds.height / rows;
+  const seed = `${bounds.x}:${bounds.y}:${slotIndex}`;
+  return {
+    x: bounds.x + cellWidth * (column + 0.5) + (seededUnit(seed, 1) - 0.5) * Math.max(10, cellWidth * 0.36),
+    y: bounds.y + cellHeight * (row + 0.5) + (seededUnit(seed, 2) - 0.5) * Math.max(10, cellHeight * 0.36),
+  };
+}
+
+function getSpawnMovementMode(spawnObject, slotIndex = 0) {
+  const configured = String(
+    spawnObject?.props?.movement
+    ?? spawnObject?.props?.movementMode
+    ?? spawnObject?.props?.patrol
+    ?? '',
+  ).toLowerCase();
+
+  if (['still', 'stationary', 'guard', 'sentinel'].includes(configured)) return 'sentinel';
+  if (['pause', 'wander_pause', 'roam_pause', 'stop'].includes(configured)) return 'roam-pause';
+  if (['patrol', 'path', 'loop'].includes(configured)) return 'patrol';
+
+  if (slotIndex % 5 === 0) return 'sentinel';
+  if (slotIndex % 3 === 0) return 'roam-pause';
+  return 'patrol';
+}
+
+function clampPointToBounds(point, bounds, radius = ENEMY.radius) {
+  return {
+    x: clamp(point.x, bounds.x + radius, bounds.x + bounds.width - radius),
+    y: clamp(point.y, bounds.y + radius, bounds.y + bounds.height - radius),
+  };
+}
+
+function buildPatrolPoints(home, bounds, slotIndex, radius = ENEMY.radius) {
+  const seed = `${bounds.x}:${bounds.y}:${slotIndex}:patrol`;
+  const spreadX = Math.min(Math.max(bounds.width * 0.12, 36), 170);
+  const spreadY = Math.min(Math.max(bounds.height * 0.12, 36), 140);
+  const direction = seededUnit(seed, 7) > 0.5 ? 1 : -1;
+  const offsets = [
+    { x: -spreadX, y: -spreadY * 0.25 },
+    { x: spreadX * 0.7, y: -spreadY * 0.9 },
+    { x: spreadX, y: spreadY * 0.45 },
+    { x: -spreadX * 0.55, y: spreadY },
+  ];
+  return offsets.map((offset, index) => clampPointToBounds({
+    x: home.x + offset.x * direction + (seededUnit(seed, index) - 0.5) * 18,
+    y: home.y + offset.y + (seededUnit(seed, index + 10) - 0.5) * 18,
+  }, bounds, radius));
+}
+
+function makeEnemyMovementState(spawnObject, bounds, slotIndex, maxAlive, radius = ENEMY.radius) {
+  const home = clampPointToBounds(pointForSpawnSlot(bounds, slotIndex, maxAlive), bounds, radius);
+  const movementMode = getSpawnMovementMode(spawnObject, slotIndex);
+  const patrolPoints = movementMode === 'sentinel'
+    ? [home]
+    : buildPatrolPoints(home, bounds, slotIndex, radius);
+  return {
+    home,
+    movementMode,
+    patrolPoints,
+    patrolIndex: Math.floor(seededUnit(`${slotIndex}:patrol`, 3) * patrolPoints.length),
+    pauseUntil: 0,
+    wanderTarget: patrolPoints[0] ?? home,
+    nextWanderAt: 0,
+  };
+}
+
+function getReadyRespawnSlots(pack, now, occupiedSlots) {
+  const readySlots = [];
+  const waitingRespawns = [];
+  pack.pendingRespawns.forEach((respawn) => {
+    const normalizedRespawn = typeof respawn === 'number'
+      ? { at: respawn, slotIndex: null }
+      : respawn;
+    if (normalizedRespawn.at > now) {
+      waitingRespawns.push(normalizedRespawn);
+      return;
+    }
+    if (normalizedRespawn.slotIndex != null && !occupiedSlots.has(normalizedRespawn.slotIndex)) {
+      readySlots.push(normalizedRespawn.slotIndex);
+      occupiedSlots.add(normalizedRespawn.slotIndex);
+    } else {
+      const openSlot = Array.from({ length: pack.maxAlive }).findIndex((_, index) => !occupiedSlots.has(index));
+      if (openSlot >= 0) {
+        readySlots.push(openSlot);
+        occupiedSlots.add(openSlot);
+      }
+    }
+  });
+  pack.pendingRespawns = waitingRespawns;
+  return readySlots;
+}
+
+function updateIdleEnemyMovement(enemy, now, delta, isBoss = false) {
+  const bounds = enemy.spawnBounds;
+  if (!bounds) return enemy;
+
+  const radius = enemy.radius ?? ENEMY.radius;
+  const mode = enemy.movementMode ?? 'patrol';
+  let target = enemy.wanderTarget;
+  let patrolIndex = enemy.patrolIndex ?? 0;
+  let pauseUntil = enemy.pauseUntil ?? 0;
+  let nextWanderAt = enemy.nextWanderAt ?? 0;
+  const patrolPoints = enemy.patrolPoints?.length ? enemy.patrolPoints : [enemy.home ?? randomPointInBounds(bounds)];
+
+  if (mode === 'sentinel') {
+    if (!target || now >= nextWanderAt || distance(enemy, target) < 5) {
+      const home = enemy.home ?? patrolPoints[0];
+      target = clampPointToBounds({
+        x: home.x + (seededUnit(`${enemy.id}:${now}`, 1) - 0.5) * 34,
+        y: home.y + (seededUnit(`${enemy.id}:${now}`, 2) - 0.5) * 34,
+      }, bounds, radius);
+      nextWanderAt = now + 3000 + Math.random() * 4000;
+    }
+  } else if (mode === 'roam-pause') {
+    if (pauseUntil > now && target && distance(enemy, target) < 10) {
+      return { ...enemy, pauseUntil };
+    }
+    if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
+      patrolIndex = (patrolIndex + 1) % patrolPoints.length;
+      target = patrolPoints[patrolIndex];
+      pauseUntil = now + 900 + Math.random() * 1900;
+      nextWanderAt = now + 6500 + Math.random() * 2500;
+    }
+  } else if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
+    patrolIndex = (patrolIndex + 1) % patrolPoints.length;
+    target = patrolPoints[patrolIndex];
+    nextWanderAt = now + 9000 + Math.random() * 3000;
+  }
+
+  const toTargetX = target.x - enemy.x;
+  const toTargetY = target.y - enemy.y;
+  const length = Math.hypot(toTargetX, toTargetY) || 1;
+  const speedMultiplier = mode === 'sentinel' ? 0.24 : mode === 'roam-pause' ? 0.52 : 0.78;
+  const wanderSpeed = (isBoss ? ENEMY.wanderSpeed * 0.65 : ENEMY.wanderSpeed) * speedMultiplier;
+
+  return {
+    ...enemy,
+    wanderTarget: target,
+    patrolIndex,
+    pauseUntil,
+    nextWanderAt,
+    x: clamp(enemy.x + (toTargetX / length) * wanderSpeed * delta, bounds.x + radius, bounds.x + bounds.width - radius),
+    y: clamp(enemy.y + (toTargetY / length) * wanderSpeed * delta, bounds.y + radius, bounds.y + bounds.height - radius),
+  };
+}
+
+function createWorldSpawnPacks(spawns) {
+  const sourceSpawns = spawns.length
+    ? spawns
+    : [{ x: 720, y: 520, width: 420, height: 320, name: 'fallback_spawn' }];
+
+  return new Map(sourceSpawns.map((spawn, index) => {
+    const id = getSpawnPackId(spawn, `fallback_spawn_${index}`);
+    return [id, {
+      id,
+      spawn,
+      maxAlive: getSpawnMaxAlive(spawn),
+      pendingRespawns: [],
+    }];
+  }));
+}
+
 function nextBossDelay() {
   return BOSS_SPAWN_MIN + Math.random() * (BOSS_SPAWN_MAX - BOSS_SPAWN_MIN);
 }
 
-function createEnemy(id, spawnObject, fallbackPosition) {
-  const spawnPoint = randomPointInObject(spawnObject, fallbackPosition);
+function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive = getSpawnMaxAlive(spawnObject)) {
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition);
+  const enemyKind = getSpawnEnemyType(spawnObject);
+  const movement = makeEnemyMovementState(spawnObject, spawnBounds, spawnSlot, maxAlive, ENEMY.radius);
+  const spawnPoint = movement.home;
 
   return {
     id: String(id),
     type: 'enemy',
+    enemyKind,
     mapId: MAP_IDS.WORLD,
     instanceId: null,
-    name: 'Wolf',
+    name: enemyKind === 'scarab' ? 'Glass Scarab' : 'Wolf',
     spawnName: spawnObject?.name,
+    spawnId: getSpawnPackId(spawnObject),
+    spawnSlot,
     spawnBounds,
-    wanderTarget: randomPointInBounds(spawnBounds),
-    nextWanderAt: 0,
+    ...movement,
     x: clamp(spawnPoint.x, ENEMY.radius, WORLD.width - ENEMY.radius),
     y: clamp(spawnPoint.y, ENEMY.radius, WORLD.height - ENEMY.radius),
     radius: ENEMY.radius,
@@ -181,7 +440,7 @@ function createBoss(id, spawnObject, fallbackPosition) {
     type: 'boss',
     mapId: MAP_IDS.WORLD,
     instanceId: null,
-    name: 'Rift Brute',
+    name: 'Elder Briarheart',
     spawnName: spawnObject?.name,
     spawnBounds,
     wanderTarget: randomPointInBounds(spawnBounds),
@@ -349,6 +608,7 @@ class WorldRoom extends Room {
     this.patchRate = null;
     this.players = new Map();
     this.pendingInvites = new Map();
+    this.partyInviteCooldowns = new Map();
     this.nextPartyId = 1;
     this.enemies = [];
     this.hazards = [];
@@ -357,6 +617,7 @@ class WorldRoom extends Room {
     this.nextSpawnAt = Date.now() + 800;
     this.nextBossSpawnAt = Date.now() + nextBossDelay();
     this.spawnData = loadTiledSpawns();
+    this.worldSpawnPacks = createWorldSpawnPacks(this.spawnData.enemySpawns);
 
     this.onMessage('joinGame', (client, message) => {
       const character = message?.character ?? {};
@@ -405,6 +666,7 @@ class WorldRoom extends Room {
       player.mapId = message?.mapId === MAP_IDS.DUNGEON_01 ? MAP_IDS.DUNGEON_01 : MAP_IDS.WORLD;
       this.updatePlayerInstance(player);
       player.updatedAt = now;
+      this.resetEmptyDungeonInstances();
     });
 
     this.onMessage('partyInvite', (client, message) => {
@@ -413,8 +675,20 @@ class WorldRoom extends Room {
       const targetPlayer = this.players.get(targetId);
       const targetClient = this.clients.find((candidate) => candidate.sessionId === targetId);
       if (!fromPlayer || !targetPlayer || !targetClient || targetId === client.sessionId) return;
+      if (fromPlayer.partyId && fromPlayer.partyId === targetPlayer.partyId) {
+        client.send('notice', { text: `${targetPlayer.name} is already in your party` });
+        return;
+      }
 
-      this.pendingInvites.set(`${client.sessionId}:${targetId}`, Date.now() + 30000);
+      const now = Date.now();
+      const inviteKey = `${client.sessionId}:${targetId}`;
+      if ((this.pendingInvites.get(inviteKey) ?? 0) > now || (this.partyInviteCooldowns.get(inviteKey) ?? 0) > now) {
+        client.send('notice', { text: 'Party invite already pending' });
+        return;
+      }
+
+      this.partyInviteCooldowns.set(inviteKey, now + PARTY_INVITE_COOLDOWN_MS);
+      this.pendingInvites.set(inviteKey, now + 30000);
       targetClient.send('partyInvite', {
         fromId: client.sessionId,
         fromName: fromPlayer.name,
@@ -484,6 +758,28 @@ class WorldRoom extends Room {
       this.normalizeParty(oldPartyId);
     });
 
+    this.onMessage('resurrect', (client, message) => {
+      const healer = this.players.get(client.sessionId);
+      const target = this.players.get(message?.targetId);
+      if (!healer || !target || target.hp > 0) return;
+      if (!sameParty(healer, target) && healer.id !== target.id) return;
+      if (!this.canShareSpace(healer, target)) return;
+      if (distance(healer, target) > 140) return;
+
+      target.hp = Math.max(1, Math.ceil((target.maxHp ?? 100) * 0.45));
+      target.x = clamp(healer.x + 34, PLAYER.radius, WORLD.width - PLAYER.radius);
+      target.y = clamp(healer.y + 18, PLAYER.radius, WORLD.height - PLAYER.radius);
+      target.updatedAt = Date.now();
+      const targetClient = this.clients.find((candidate) => candidate.sessionId === target.id);
+      targetClient?.send('resurrected', {
+        hp: target.hp,
+        x: target.x,
+        y: target.y,
+        sourceId: healer.id,
+      });
+      client.send('notice', { text: `${target.name} resurrected` });
+    });
+
     this.onMessage('ability', (client, message) => {
       const player = this.players.get(client.sessionId);
       const ability = message?.ability;
@@ -500,6 +796,8 @@ class WorldRoom extends Room {
       const now = Date.now();
 
       if (!message?.effectOnly && damage > 0) {
+        let defeatedWorldBoss = false;
+              const defeatedSpawnRefs = [];
         this.enemies = this.enemies
           .map((enemy) => {
             if (!this.canShareSpace(player, enemy)) return enemy;
@@ -508,6 +806,12 @@ class WorldRoom extends Room {
             const focusTargetId = this.findTankTauntTarget(enemy, player)?.id ?? enemy.targetPlayerId ?? client.sessionId;
             if (enemy.hp - damage <= 0) {
               const previousAward = xpAwards.get(firstHitPlayerId) ?? { amount: 0, bossKills: 0 };
+              if (enemy.type === 'boss' && (enemy.mapId ?? MAP_IDS.WORLD) === MAP_IDS.WORLD) {
+                defeatedWorldBoss = true;
+              }
+              if (enemy.type === 'enemy' && (enemy.mapId ?? MAP_IDS.WORLD) === MAP_IDS.WORLD && enemy.spawnId) {
+                defeatedSpawnRefs.push({ spawnId: enemy.spawnId, spawnSlot: enemy.spawnSlot });
+              }
               xpAwards.set(firstHitPlayerId, {
                 amount: previousAward.amount + (enemy.xp ?? ENEMY_XP),
                 bossKills: previousAward.bossKills + (this.isBossEnemy(enemy) ? 1 : 0),
@@ -523,6 +827,11 @@ class WorldRoom extends Room {
             };
           })
           .filter((enemy) => enemy.hp > 0);
+
+        if (defeatedWorldBoss) {
+          this.nextBossSpawnAt = now + BOSS_RESPAWN_DELAY;
+        }
+        defeatedSpawnRefs.forEach(({ spawnId, spawnSlot }) => this.scheduleWorldSpawnRespawn(spawnId, now, spawnSlot));
       }
 
       if (healing > 0) {
@@ -586,10 +895,16 @@ class WorldRoom extends Room {
         this.pendingInvites.delete(key);
       }
     });
+    this.partyInviteCooldowns.forEach((_, key) => {
+      if (key.startsWith(`${client.sessionId}:`) || key.endsWith(`:${client.sessionId}`)) {
+        this.partyInviteCooldowns.delete(key);
+      }
+    });
     this.enemies = this.enemies.map((enemy) => (
       enemy.targetPlayerId === client.sessionId ? { ...enemy, state: 'idle', targetPlayerId: null } : enemy
     ));
     if (oldPartyId) this.normalizeParty(oldPartyId);
+    this.resetEmptyDungeonInstances();
   }
 
   getPartyMembers(partyId) {
@@ -616,6 +931,7 @@ class WorldRoom extends Room {
       this.updatePlayerInstance(member);
       member.updatedAt = Date.now();
     });
+    this.resetEmptyDungeonInstances();
   }
 
   updatePlayerInstance(player) {
@@ -651,6 +967,21 @@ class WorldRoom extends Room {
     });
   }
 
+  resetEmptyDungeonInstances() {
+    const activeInstances = new Set(
+      [...this.players.values()]
+        .filter((player) => player.mapId === MAP_IDS.DUNGEON_01 && player.instanceId)
+        .map((player) => player.instanceId),
+    );
+
+    this.dungeonInstances.forEach((instanceId) => {
+      if (activeInstances.has(instanceId)) return;
+      this.dungeonInstances.delete(instanceId);
+      this.enemies = this.enemies.filter((enemy) => enemy.instanceId !== instanceId);
+      this.hazards = this.hazards.filter((hazard) => hazard.instanceId !== instanceId);
+    });
+  }
+
   canShareSpace(a, b) {
     if (!a || !b) return false;
     const mapId = a.mapId ?? MAP_IDS.WORLD;
@@ -675,24 +1006,56 @@ class WorldRoom extends Room {
     });
   }
 
+  scheduleWorldSpawnRespawn(spawnId, now, spawnSlot = null) {
+    const pack = this.worldSpawnPacks.get(spawnId);
+    if (!pack) return;
+    pack.pendingRespawns.push({ at: now + getSpawnRespawnDelay(pack.spawn), slotIndex: spawnSlot });
+  }
+
+  updateWorldSpawnPacks(now, fallbackPlayer) {
+    this.worldSpawnPacks.forEach((pack) => {
+      const aliveEnemies = this.enemies.filter((enemy) => (
+        enemy.type === 'enemy'
+        && (enemy.mapId ?? MAP_IDS.WORLD) === MAP_IDS.WORLD
+        && enemy.spawnId === pack.id
+      ));
+      let aliveCount = aliveEnemies.length;
+      const occupiedSlots = new Set(aliveEnemies.map((enemy) => enemy.spawnSlot).filter((slot) => Number.isFinite(slot)));
+
+      const readySlots = getReadyRespawnSlots(pack, now, occupiedSlots);
+      readySlots.forEach((slotIndex) => {
+        if (aliveCount >= pack.maxAlive) return;
+        this.enemies.push(createEnemy(this.nextEnemyId, pack.spawn, fallbackPlayer, slotIndex, pack.maxAlive));
+        this.nextEnemyId += 1;
+        aliveCount += 1;
+      });
+
+      while (aliveCount + pack.pendingRespawns.length < pack.maxAlive) {
+        const openSlot = Array.from({ length: pack.maxAlive }).find((_, index) => !occupiedSlots.has(index));
+        if (openSlot == null) break;
+        occupiedSlots.add(openSlot);
+        this.enemies.push(createEnemy(this.nextEnemyId, pack.spawn, fallbackPlayer, openSlot, pack.maxAlive));
+        this.nextEnemyId += 1;
+        aliveCount += 1;
+      }
+    });
+  }
+
   update(deltaTime) {
     const now = Date.now();
     const delta = Math.min(deltaTime / 1000, 0.05);
     const fallbackPlayer = [...this.players.values()].find((player) => player.mapId !== MAP_IDS.DUNGEON_01) ?? { x: 600, y: 480 };
-    const worldEnemies = this.enemies.filter((enemy) => (enemy.mapId ?? MAP_IDS.WORLD) === MAP_IDS.WORLD);
 
-    if (this.players.size > 0 && now >= this.nextSpawnAt && worldEnemies.length < ENEMY.maxCount) {
-      this.enemies.push(createEnemy(this.nextEnemyId, pickSpawn(this.spawnData.enemySpawns), fallbackPlayer));
-      this.nextEnemyId += 1;
-      this.nextSpawnAt = now + ENEMY.spawnEvery;
+    if (this.players.size > 0) {
+      this.updateWorldSpawnPacks(now, fallbackPlayer);
     }
 
     const bossAlive = this.enemies.some((enemy) => enemy.type === 'boss' && (enemy.mapId ?? MAP_IDS.WORLD) === MAP_IDS.WORLD);
     if (this.players.size > 0 && !bossAlive && now >= this.nextBossSpawnAt) {
       this.enemies.push(createBoss(this.nextEnemyId, pickSpawn(this.spawnData.bossSpawns), fallbackPlayer));
       this.nextEnemyId += 1;
-      this.nextBossSpawnAt = now + nextBossDelay();
-      this.broadcast('notice', { text: 'Boss spawned: Rift Brute' });
+      this.nextBossSpawnAt = Number.POSITIVE_INFINITY;
+      this.broadcast('notice', { text: 'Boss spawned: Elder Briarheart' });
     }
 
     this.enemies = this.enemies.map((enemy) => {
@@ -715,31 +1078,7 @@ class WorldRoom extends Room {
       }
 
       if (enemy.state !== 'aggro') {
-        const bounds = enemy.spawnBounds;
-        let target = enemy.wanderTarget;
-        const shouldPickNewTarget = !target || now >= enemy.nextWanderAt || distance(enemy, target) < 8;
-        if (shouldPickNewTarget) target = randomPointInBounds(bounds);
-
-        const toTargetX = target.x - enemy.x;
-        const toTargetY = target.y - enemy.y;
-        const length = Math.hypot(toTargetX, toTargetY) || 1;
-        const wanderSpeed = this.isBossEnemy(enemy) ? ENEMY.wanderSpeed * 0.65 : ENEMY.wanderSpeed;
-
-        return {
-          ...enemy,
-          wanderTarget: target,
-          nextWanderAt: shouldPickNewTarget ? now + 900 + Math.random() * 2200 : enemy.nextWanderAt,
-          x: clamp(
-            enemy.x + (toTargetX / length) * wanderSpeed * delta,
-            bounds.x + (enemy.radius ?? ENEMY.radius),
-            bounds.x + bounds.width - (enemy.radius ?? ENEMY.radius),
-          ),
-          y: clamp(
-            enemy.y + (toTargetY / length) * wanderSpeed * delta,
-            bounds.y + (enemy.radius ?? ENEMY.radius),
-            bounds.y + bounds.height - (enemy.radius ?? ENEMY.radius),
-          ),
-        };
+        return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy));
       }
 
       const toPlayerX = targetPlayer.x - enemy.x;
@@ -918,6 +1257,14 @@ class WorldRoom extends Room {
       if (!viewer) return;
       client.send('world', {
         players: [...this.players.values()].filter((player) => this.canSeePlayer(viewer, player)),
+        onlinePlayers: [...this.players.values()].map((player) => ({
+          id: player.id,
+          name: player.name,
+          classId: player.classId,
+          level: player.level,
+          partyId: player.partyId,
+          partyLeaderId: player.partyLeaderId,
+        })),
         enemies: this.enemies.filter((enemy) => this.canShareSpace(viewer, enemy)),
         serverTime: Date.now(),
       });
@@ -976,7 +1323,8 @@ const gameServer = new Server({
         return;
       }
 
-      response.setHeader('Cache-Control', fileName === 'latest.yml' ? 'no-store' : 'public, max-age=3600');
+      const isUpdateManifest = /^latest(?:-[a-z]+)?\.(?:ya?ml|json)$/i.test(fileName);
+      response.setHeader('Cache-Control', isUpdateManifest ? 'no-store' : 'public, max-age=3600');
       response.sendFile(filePath);
     });
   },

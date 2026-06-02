@@ -1,7 +1,7 @@
 {
   "name": "mmo-project",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.21",
   "type": "module",
   "engines": {
     "node": "22.x",
@@ -17,7 +17,11 @@
     "electron": "npm run build && electron .",
     "electron:pack": "npm run build && set ELECTRON_BUILDER_CACHE=.cache\\electron-builder&& electron-builder --dir",
     "electron:dist": "npm run build && set ELECTRON_BUILDER_CACHE=.cache\\electron-builder&& electron-builder",
-    "update:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\prepare-update.ps1"
+    "electron:dist:win": "npm run build && set ELECTRON_BUILDER_CACHE=.cache\\electron-builder&& electron-builder --win",
+    "electron:dist:mac": "npm run build && electron-builder --mac",
+    "update:prepare": "node scripts/prepare-update.mjs",
+    "generate:sprites": "node scripts/generate-character-sprites.mjs && node scripts/generate-game-assets.mjs",
+    "generate:game-assets": "node scripts/generate-game-assets.mjs"
   },
   "main": "electron/main.cjs",
   "dependencies": {
@@ -54,6 +58,15 @@
     "win": {
       "target": "nsis",
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.games",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     }
   }
 }

@@ -7,4 +7,9 @@ contextBridge.exposeInMainWorld('mmoLauncher', {
   checkUpdate: (updateManifestUrl) => ipcRenderer.invoke('launcher:check-update', updateManifestUrl),
   downloadUpdate: (updateUrl) => ipcRenderer.invoke('launcher:download-update', updateUrl),
   play: (serverUrl) => ipcRenderer.invoke('launcher:play', serverUrl),
+  onGameEscape: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('game:escape', listener);
+    return () => ipcRenderer.removeListener('game:escape', listener);
+  },
 });

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="288" viewBox="0 0 320 288" shape-rendering="crispEdges">
+  <rect width="320" height="288" fill="none"/>
+  <defs>
+    <g id="base">
+      <rect x="17" y="42" width="30" height="6" fill="#000" opacity=".22"/>
+      <rect x="16" y="20" width="32" height="28" fill="#101820"/>
+      <rect x="20" y="24" width="24" height="22" fill="var(--robe, #4263eb)"/>
+      <rect x="29" y="24" width="6" height="22" fill="var(--trim, #8be9fd)"/>
+      <rect x="18" y="32" width="8" height="16" fill="var(--trim, #8be9fd)"/>
+      <rect x="38" y="32" width="8" height="16" fill="var(--trim, #8be9fd)"/>
+    </g>
+    <g id="human">
+      <rect x="19" y="4" width="26" height="26" fill="#101820"/>
+      <rect x="22" y="7" width="20" height="20" fill="#f2c7a4"/>
+      <rect x="21" y="5" width="22" height="7" fill="#8b5a2b"/>
+      <rect x="25" y="16" width="3" height="4" fill="#111827"/>
+      <rect x="36" y="16" width="3" height="4" fill="#111827"/>
+    </g>
+    <g id="elf">
+      <rect x="12" y="14" width="10" height="4" fill="#f0d6ad"/>
+      <rect x="42" y="14" width="10" height="4" fill="#f0d6ad"/>
+      <rect x="19" y="4" width="26" height="26" fill="#101820"/>
+      <rect x="22" y="7" width="20" height="20" fill="#f0d6ad"/>
+      <rect x="21" y="5" width="22" height="7" fill="#f6d365"/>
+      <rect x="25" y="16" width="3" height="4" fill="#111827"/>
+      <rect x="36" y="16" width="3" height="4" fill="#111827"/>
+    </g>
+    <g id="dwarf">
+      <rect x="19" y="5" width="26" height="26" fill="#101820"/>
+      <rect x="22" y="8" width="20" height="19" fill="#d6a06f"/>
+      <rect x="22" y="5" width="20" height="7" fill="#7c2d12"/>
+      <rect x="23" y="22" width="18" height="12" fill="#9a3412"/>
+      <rect x="25" y="16" width="3" height="4" fill="#111827"/>
+      <rect x="36" y="16" width="3" height="4" fill="#111827"/>
+    </g>
+    <g id="orc">
+      <rect x="16" y="12" width="7" height="7" fill="#74a85a"/>
+      <rect x="41" y="12" width="7" height="7" fill="#74a85a"/>
+      <rect x="19" y="4" width="26" height="26" fill="#101820"/>
+      <rect x="22" y="7" width="20" height="20" fill="#74a85a"/>
+      <rect x="22" y="5" width="20" height="6" fill="#2f5f2d"/>
+      <rect x="25" y="16" width="3" height="4" fill="#111827"/>
+      <rect x="36" y="16" width="3" height="4" fill="#111827"/>
+      <rect x="25" y="25" width="3" height="5" fill="#f8fafc"/>
+      <rect x="36" y="25" width="3" height="5" fill="#f8fafc"/>
+    </g>
+    <g id="undead">
+      <rect x="19" y="4" width="26" height="26" fill="#101820"/>
+      <rect x="22" y="7" width="20" height="20" fill="#cbd5c0"/>
+      <rect x="25" y="16" width="4" height="4" fill="#111827"/>
+      <rect x="35" y="16" width="4" height="4" fill="#111827"/>
+      <rect x="28" y="25" width="3" height="4" fill="#64748b"/>
+      <rect x="34" y="25" width="3" height="4" fill="#64748b"/>
+    </g>
+    <g id="mage" style="--robe:#4263eb;--trim:#8be9fd"><use href="#base"/><rect x="47" y="29" width="5" height="22" fill="#d7f9ff"/><rect x="45" y="25" width="10" height="10" fill="#67e8f9"/></g>
+    <g id="hunter" style="--robe:#2f9e44;--trim:#bef264"><use href="#base"/><rect x="46" y="23" width="4" height="28" fill="#8d6e45"/><rect x="50" y="31" width="8" height="4" fill="#fde68a"/></g>
+    <g id="paladin" style="--robe:#c9a227;--trim:#fef3c7"><use href="#base"/><rect x="12" y="29" width="12" height="16" fill="#facc15"/><rect x="47" y="30" width="12" height="12" fill="#fef08a"/></g>
+    <g id="warrior" style="--robe:#b42318;--trim:#cbd5e1"><use href="#base"/><rect x="48" y="23" width="5" height="28" fill="#e5e7eb"/><rect x="45" y="21" width="11" height="6" fill="#f8fafc"/></g>
+    <g id="priest" style="--robe:#f8fafc;--trim:#a5b4fc"><use href="#base"/><rect x="48" y="29" width="4" height="22" fill="#fde68a"/><rect x="45" y="24" width="10" height="8" fill="#fef08a"/></g>
+    <g id="rogue" style="--robe:#312e81;--trim:#111827"><use href="#base"/><rect x="11" y="30" width="13" height="5" fill="#e5e7eb"/><rect x="41" y="30" width="13" height="5" fill="#e5e7eb"/></g>
+  </defs>
+  <g id="row-mage" transform="translate(0 0)"><use href="#mage"/><use href="#human"/><use href="#mage" transform="translate(64)"/><use href="#elf" transform="translate(64)"/><use href="#mage" transform="translate(128)"/><use href="#dwarf" transform="translate(128)"/><use href="#mage" transform="translate(192)"/><use href="#orc" transform="translate(192)"/><use href="#mage" transform="translate(256)"/><use href="#undead" transform="translate(256)"/></g>
+  <g id="row-hunter" transform="translate(0 48)"><use href="#hunter"/><use href="#human"/><use href="#hunter" transform="translate(64)"/><use href="#elf" transform="translate(64)"/><use href="#hunter" transform="translate(128)"/><use href="#dwarf" transform="translate(128)"/><use href="#hunter" transform="translate(192)"/><use href="#orc" transform="translate(192)"/><use href="#hunter" transform="translate(256)"/><use href="#undead" transform="translate(256)"/></g>
+  <g id="row-paladin" transform="translate(0 96)"><use href="#paladin"/><use href="#human"/><use href="#paladin" transform="translate(64)"/><use href="#elf" transform="translate(64)"/><use href="#paladin" transform="translate(128)"/><use href="#dwarf" transform="translate(128)"/><use href="#paladin" transform="translate(192)"/><use href="#orc" transform="translate(192)"/><use href="#paladin" transform="translate(256)"/><use href="#undead" transform="translate(256)"/></g>
+  <g id="row-warrior" transform="translate(0 144)"><use href="#warrior"/><use href="#human"/><use href="#warrior" transform="translate(64)"/><use href="#elf" transform="translate(64)"/><use href="#warrior" transform="translate(128)"/><use href="#dwarf" transform="translate(128)"/><use href="#warrior" transform="translate(192)"/><use href="#orc" transform="translate(192)"/><use href="#warrior" transform="translate(256)"/><use href="#undead" transform="translate(256)"/></g>
+  <g id="row-priest" transform="translate(0 192)"><use href="#priest"/><use href="#human"/><use href="#priest" transform="translate(64)"/><use href="#elf" transform="translate(64)"/><use href="#priest" transform="translate(128)"/><use href="#dwarf" transform="translate(128)"/><use href="#priest" transform="translate(192)"/><use href="#orc" transform="translate(192)"/><use href="#priest" transform="translate(256)"/><use href="#undead" transform="translate(256)"/></g>
+  <g id="row-rogue" transform="translate(0 240)"><use href="#rogue"/><use href="#human"/><use href="#rogue" transform="translate(64)"/><use href="#elf" transform="translate(64)"/><use href="#rogue" transform="translate(128)"/><use href="#dwarf" transform="translate(128)"/><use href="#rogue" transform="translate(192)"/><use href="#orc" transform="translate(192)"/><use href="#rogue" transform="translate(256)"/><use href="#undead" transform="translate(256)"/></g>
+</svg>

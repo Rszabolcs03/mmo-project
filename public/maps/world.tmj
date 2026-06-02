@@ -789,6 +789,21 @@
                          "value":"wolf"
                         }, 
                         {
+                         "name":"maxAlive",
+                         "type":"string",
+                         "value":"14"
+                        }, 
+                        {
+                         "name":"respawnMax",
+                         "type":"string",
+                         "value":"30000"
+                        }, 
+                        {
+                         "name":"respawnMin",
+                         "type":"string",
+                         "value":"15000"
+                        }, 
+                        {
                          "name":"zoneId",
                          "type":"string",
                          "value":"forest_01"
@@ -828,6 +843,32 @@
                  "id":19,
                  "name":"desert_mobs",
                  "opacity":1,
+                 "properties":[
+                        {
+                         "name":"enemyType",
+                         "type":"string",
+                         "value":"scarab"
+                        }, 
+                        {
+                         "name":"maxAlive",
+                         "type":"string",
+                         "value":"10"
+                        }, 
+                        {
+                         "name":"respawnMax",
+                         "type":"string",
+                         "value":"35000"
+                        }, 
+                        {
+                         "name":"respawnMin",
+                         "type":"string",
+                         "value":"18000"
+                        }, 
+                        {
+                         "name":"zoneId",
+                         "type":"string",
+                         "value":"desert_01"
+                        }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -847,6 +888,43 @@
                  "width":214,
                  "x":4948,
                  "y":5446
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
+        }, 
+        {
+         "draworder":"topdown",
+         "id":10,
+         "name":"graveyard",
+         "objects":[
+                {
+                 "height":0,
+                 "id":23,
+                 "name":"graveyard_forest",
+                 "opacity":1,
+                 "point":true,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":208,
+                 "y":1184
+                }, 
+                {
+                 "height":0,
+                 "id":24,
+                 "name":"graveyard_desert",
+                 "opacity":1,
+                 "point":true,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":6208,
+                 "y":5372
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -891,8 +969,8 @@
          "x":0,
          "y":0
         }],
- "nextlayerid":10,
- "nextobjectid":23,
+ "nextlayerid":11,
+ "nextobjectid":25,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.1",

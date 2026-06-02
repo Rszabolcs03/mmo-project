@@ -1,5 +1,5 @@
 {
-  "version": "0.1.1",
-  "url": "https://your-site.web.app/updates/Top-Down%20MMO%20Prototype%20Setup%200.1.1.exe",
-  "notes": "New game build"
+    "url":  "http://localhost:2567/updates/Top-Down%20MMO%20Prototype%20Setup%200.1.21.exe",
+    "version":  "0.1.21",
+    "notes":  "Version 0.1.21"
 }

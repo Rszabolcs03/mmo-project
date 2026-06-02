@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import {
   Backpack,
+  BookOpen,
   Cloud,
   Crosshair,
   Crown,
@@ -18,12 +19,16 @@ import {
   Leaf,
   LogOut,
   Map,
+  Monitor,
+  Settings,
   Shield,
   Skull,
   Sparkles,
   Sword,
   User,
+  UserPlus,
   UserMinus,
+  Users,
   Wand2,
 } from 'lucide-react';
 import { deleteCloudCharacter, loadCloudCharacters, saveCloudCharacter } from './characterCloud';
@@ -65,24 +70,33 @@ const ENEMY = {
 };
 
 const SAVE_KEY = 'mmo-project.characters.v1';
+const FRIENDS_KEY = 'mmo-project.friends.v1';
 const MAX_LEVEL = 20;
 const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
+const BOSS_RESPAWN_DELAY = 60000;
 const COLYSEUS_INPUT_MS = 50;
 const COLYSEUS_RECONNECT_MS = 1800;
 const REMOTE_PLAYER_LEAD_MS = 90;
 const REMOTE_PLAYER_SMOOTHING = 15;
 const REMOTE_PLAYER_SNAP_DISTANCE = 360;
-const AUTO_ATTACK_COOLDOWN_MS = 720;
+const AUTO_ATTACK_BASE_COOLDOWN_MS = 900;
+const AUTO_ATTACK_MIN_COOLDOWN_MS = 360;
+const AUTO_ATTACK_MAX_COOLDOWN_MS = 1600;
 const BASE_STATS = {
   health: 100,
   mana: 60,
   strength: 5,
   agility: 5,
   intellect: 5,
+  attackSpeed: 1,
 };
+
+const INVENTORY_CAPACITY = 24;
+const ABILITY_BAR_SLOTS = 5;
+const TALENT_UNLOCK_LEVEL = 10;
 
 const EQUIPMENT_SLOTS = [
   { id: 'head', label: 'Head' },
@@ -96,11 +110,12 @@ const EQUIPMENT_SLOTS = [
 ];
 
 const STAT_GROWTH = {
-  mage: { health: 8, mana: 16, strength: 1, agility: 1, intellect: 4 },
-  hunter: { health: 11, mana: 8, strength: 2, agility: 4, intellect: 1 },
-  paladin: { health: 14, mana: 10, strength: 3, agility: 1, intellect: 2 },
-  warrior: { health: 16, mana: 4, strength: 4, agility: 2, intellect: 0 },
-  priest: { health: 9, mana: 15, strength: 1, agility: 1, intellect: 4 },
+  mage: { health: 8, mana: 16, strength: 1, agility: 1, intellect: 4, attackSpeed: 0.01 },
+  hunter: { health: 11, mana: 8, strength: 2, agility: 4, intellect: 1, attackSpeed: 0.035 },
+  paladin: { health: 14, mana: 10, strength: 3, agility: 1, intellect: 2, attackSpeed: 0.02 },
+  warrior: { health: 16, mana: 4, strength: 4, agility: 2, intellect: 0, attackSpeed: 0.025 },
+  priest: { health: 9, mana: 15, strength: 1, agility: 1, intellect: 4, attackSpeed: 0.015 },
+  rogue: { health: 10, mana: 8, strength: 2, agility: 5, intellect: 1, attackSpeed: 0.055 },
 };
 
 const ABILITY_MANA_COST = {
@@ -110,6 +125,19 @@ const ABILITY_MANA_COST = {
   4: 36,
   5: 48,
   6: 62,
+};
+
+const ABILITY_COOLDOWNS = {
+  strike: 900,
+  cleave: 1200,
+  shot: 1100,
+  bolt: 1150,
+  nova: 2600,
+  trap: 3200,
+  shield: 4200,
+  shout: 3600,
+  heal: 1600,
+  channel: 4800,
 };
 
 const TALENTS = {
@@ -270,6 +298,84 @@ const TALENTS = {
       },
     },
   },
+  rogue: {
+    unlockLevel: 10,
+    specs: {
+      nightblade: {
+        name: 'Nightblade',
+        role: 'Damage',
+        description: 'Fast openers, poison, and short-range burst.',
+        bonuses: { agility: 7, strength: 2, attackSpeed: 0.18 },
+        abilities: [
+          { key: '1', level: 10, name: 'Shadow Cut', type: 'strike', color: '#c084fc', damage: 104, manaCost: 28 },
+          { key: '2', level: 10, name: 'Poison Fan', type: 'cleave', color: '#86efac', damage: 72, manaCost: 30 },
+          { key: '3', level: 12, name: 'Backstab', type: 'strike', color: '#d8b4fe', damage: 128, manaCost: 42 },
+          { key: '4', level: 16, name: 'Nightfall', type: 'trap', color: '#7c3aed', damage: 146, manaCost: 58 },
+        ],
+      },
+      duelist: {
+        name: 'Duelist',
+        role: 'Damage',
+        description: 'Cleaner rhythm, faster autos, and precise finishers.',
+        bonuses: { agility: 5, strength: 4, health: 18, attackSpeed: 0.25 },
+        abilities: [
+          { key: '1', level: 10, name: 'Twin Slash', type: 'cleave', color: '#f9a8d4', damage: 92, manaCost: 26 },
+          { key: '2', level: 10, name: 'Feint Step', type: 'shield', color: '#e9d5ff', damage: 20, manaCost: 22 },
+          { key: '3', level: 12, name: 'Piercing Lunge', type: 'shot', color: '#f0abfc', damage: 108, manaCost: 38 },
+          { key: '4', level: 16, name: 'Final Flourish', type: 'strike', color: '#f5d0fe', damage: 155, manaCost: 56 },
+        ],
+      },
+    },
+  },
+};
+
+const TALENT_NODES = [
+  {
+    id: 'core',
+    name: 'Core Discipline',
+    maxRank: 3,
+    description: 'Improves your main combat stats.',
+  },
+  {
+    id: 'flow',
+    name: 'Battle Flow',
+    maxRank: 3,
+    description: 'Improves resource comfort and attack rhythm.',
+  },
+  {
+    id: 'signature',
+    name: 'Signature Technique',
+    maxRank: 1,
+    requiresSpent: 3,
+    description: 'Unlocks a new specialization ability.',
+  },
+];
+
+const TALENT_SIGNATURE_ABILITIES = {
+  mage: {
+    arcane: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Arcane Singularity', type: 'trap', color: '#67e8f9', damage: 150, manaCost: 68, cooldown: 7800 },
+    frost: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Deep Freeze', type: 'trap', color: '#bae6fd', damage: 132, manaCost: 58, cooldown: 7600 },
+  },
+  hunter: {
+    beastmaster: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Alpha Command', type: 'shout', color: '#bef264', damage: 122, manaCost: 52, cooldown: 7200 },
+    survival: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Wildfire Snare', type: 'trap', color: '#fb923c', damage: 148, manaCost: 62, cooldown: 8200 },
+  },
+  paladin: {
+    verdict: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Sunfall Verdict', type: 'shot', color: '#fef08a', damage: 168, manaCost: 72, cooldown: 8200 },
+    aegis: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Beacon Wall', type: 'shield', color: '#dbeafe', damage: 52, manaCost: 48, cooldown: 8800 },
+  },
+  warrior: {
+    berserker: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Rampage', type: 'cleave', color: '#fb7185', damage: 156, furyCost: 48, cooldown: 7400 },
+    ironward: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Iron Quake', type: 'nova', color: '#cbd5e1', damage: 118, furyCost: 42, cooldown: 8200 },
+  },
+  priest: {
+    void: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Void Eruption', type: 'nova', color: '#7c3aed', damage: 152, manaCost: 72, cooldown: 8600 },
+    light: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Radiant Hymn', type: 'heal', color: '#bbf7d0', healing: 190, manaCost: 76, cooldown: 8800 },
+  },
+  rogue: {
+    nightblade: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Shadow Bloom', type: 'trap', color: '#a78bfa', damage: 154, manaCost: 64, cooldown: 7600 },
+    duelist: { key: 'T', level: TALENT_UNLOCK_LEVEL, name: 'Perfect Riposte', type: 'strike', color: '#f0abfc', damage: 174, manaCost: 58, cooldown: 6800 },
+  },
 };
 
 const BOSS_LOOT = [
@@ -297,7 +403,7 @@ const RACES = {
     skin: '#f2c7a4',
     hair: '#8b5e34',
     scale: 1,
-    allowedClasses: ['mage', 'hunter', 'paladin', 'warrior', 'priest'],
+    allowedClasses: ['mage', 'hunter', 'paladin', 'warrior', 'priest', 'rogue'],
   },
   elf: {
     name: 'Elf',
@@ -305,7 +411,7 @@ const RACES = {
     skin: '#f0d6ad',
     hair: '#e9d66b',
     scale: 0.96,
-    allowedClasses: ['mage', 'hunter', 'priest'],
+    allowedClasses: ['mage', 'hunter', 'priest', 'rogue'],
   },
   dwarf: {
     name: 'Dwarf',
@@ -313,7 +419,7 @@ const RACES = {
     skin: '#d6a06f',
     hair: '#9a4f2f',
     scale: 0.88,
-    allowedClasses: ['paladin', 'warrior', 'hunter', 'priest'],
+    allowedClasses: ['paladin', 'warrior', 'hunter', 'priest', 'rogue'],
   },
   orc: {
     name: 'Orc',
@@ -321,7 +427,7 @@ const RACES = {
     skin: '#74a85a',
     hair: '#20251f',
     scale: 1.08,
-    allowedClasses: ['warrior', 'hunter'],
+    allowedClasses: ['warrior', 'hunter', 'rogue'],
   },
   undead: {
     name: 'Undead',
@@ -329,7 +435,7 @@ const RACES = {
     skin: '#cbd5c0',
     hair: '#d8dee9',
     scale: 1,
-    allowedClasses: ['mage', 'warrior', 'priest'],
+    allowedClasses: ['mage', 'warrior', 'priest', 'rogue'],
   },
 };
 
@@ -424,6 +530,24 @@ const CLASSES = {
       { key: '6', level: 16, name: 'Divine Wrath', type: 'shout', color: '#fff7ed', damage: 82 },
     ],
   },
+  rogue: {
+    name: 'Rogue',
+    icon: Sword,
+    colors: {
+      robe: '#312e81',
+      trim: '#c084fc',
+      hair: '#1f2937',
+      weapon: '#e5e7eb',
+    },
+    abilities: [
+      { key: '1', level: 1, name: 'Quick Stab', type: 'strike', color: '#d8b4fe', damage: 44 },
+      { key: '2', level: 1, name: 'Blade Fan', type: 'cleave', color: '#a78bfa', damage: 34 },
+      { key: '3', level: 4, name: 'Poison Knife', type: 'shot', color: '#86efac', damage: 58 },
+      { key: '4', level: 8, name: 'Smoke Bomb', type: 'trap', color: '#94a3b8', damage: 48 },
+      { key: '5', level: 12, name: 'Ambush', type: 'strike', color: '#f0abfc', damage: 88 },
+      { key: '6', level: 16, name: 'Eviscerate', type: 'shot', color: '#f5d0fe', damage: 118 },
+    ],
+  },
 };
 
 const CLASS_NAME_POOLS = {
@@ -432,6 +556,61 @@ const CLASS_NAME_POOLS = {
   paladin: ['Aurel Dawnshield', 'Ser Caldus', 'Tirion Vale', 'Maren Lightward', 'Garran'],
   warrior: ['Brakka Ironhand', 'Duran Steelborn', 'Rokar', 'Hilda Axebreaker', 'Torvik'],
   priest: ['Elowen Lightcall', 'Seren Dawn', 'Iria Solace', 'Neris', 'Calen Vow'],
+  rogue: ['Nyx Shade', 'Vera Quickstep', 'Silas Dusk', 'Kira Vex', 'Ren Blackvale'],
+};
+
+const CHARACTER_SPRITE_SIZE = 48;
+const CHARACTER_SPRITE_DRAW_SIZE = 72;
+const CHARACTER_SPRITE_VARIANTS = ['male', 'female'];
+const CHARACTER_SPRITE_ROWS = {
+  down: 0,
+  left: 1,
+  right: 2,
+  up: 3,
+};
+const CHARACTER_SPRITES = new globalThis.Map();
+const CHARACTER_SPRITE_LOADS = new globalThis.Map();
+const CHARACTER_TINTED_SPRITES = new globalThis.Map();
+const CHARACTER_SPRITE_SOURCE_PALETTES = {
+  priest: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#b794f4', robe: '#f8fafc', trim: '#facc15' },
+  paladin: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#facc15', robe: '#f8fafc', trim: '#facc15' },
+  hunter: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#2f221d', robe: '#365c2d', trim: '#d6a354' },
+  mage: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#2563eb', robe: '#1d4ed8', trim: '#facc15' },
+  rogue: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#111827', robe: '#1f2937', trim: '#9ca3af' },
+  warrior: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5a2b', robe: '#7f1d1d', trim: '#cbd5e1' },
+};
+const CHARACTER_LAYER_ORDER = ['cape', 'base', 'hair', 'beard', 'outfit', 'weapon'];
+const CHARACTER_LAYER_DIRS = {
+  base: 'base',
+  hair: 'hair',
+  beard: 'beard',
+  outfit: 'outfits',
+  weapon: 'weapons',
+  cape: 'capes',
+};
+const CHARACTER_LAYER_IMAGES = new globalThis.Map();
+const CHARACTER_LAYER_LOADS = new globalThis.Map();
+const ENEMY_SPRITES = new globalThis.Map();
+const ENEMY_SPRITE_LOADS = new globalThis.Map();
+const ENEMY_SPRITE_CONFIG = {
+  wolf: {
+    path: 'assets/enemies/wolf.png',
+    frameWidth: 64,
+    frameHeight: 64,
+    frameCount: 4,
+    drawWidth: 74,
+    drawHeight: 74,
+    yOffset: -50,
+  },
+  'elder-briarheart': {
+    path: 'assets/enemies/elder-briarheart.png',
+    frameWidth: 96,
+    frameHeight: 96,
+    frameCount: 4,
+    drawWidth: 148,
+    drawHeight: 148,
+    yOffset: -112,
+  },
 };
 
 const CUSTOMIZATION = {
@@ -439,6 +618,38 @@ const CUSTOMIZATION = {
   hair: ['#8b5e34', '#f6d365', '#2f221d', '#d8b4fe', '#d8dee9'],
   robe: ['#4263eb', '#2f9e44', '#e6c55c', '#b42318', '#f8fafc'],
   trim: ['#8be9fd', '#f8fafc', '#facc15', '#64748b', '#c084fc'],
+};
+
+const APPEARANCE_CHOICES = {
+  gender: [
+    { id: 'male', label: 'Male' },
+    { id: 'female', label: 'Female' },
+  ],
+  hairStyle: [
+    { id: 'short', label: 'Short' },
+    { id: 'long', label: 'Long' },
+    { id: 'hooded', label: 'Hood' },
+  ],
+  beard: [
+    { id: 'none', label: 'None' },
+    { id: 'short', label: 'Short' },
+    { id: 'full', label: 'Full' },
+  ],
+  outfitVariant: [
+    { id: 'classic', label: 'Classic' },
+    { id: 'veteran', label: 'Veteran' },
+    { id: 'dark', label: 'Dark' },
+  ],
+  weaponVariant: [
+    { id: 'classic', label: 'Classic' },
+    { id: 'ornate', label: 'Ornate' },
+    { id: 'shadow', label: 'Shadow' },
+  ],
+  capeStyle: [
+    { id: 'none', label: 'None' },
+    { id: 'short', label: 'Short' },
+    { id: 'long', label: 'Long' },
+  ],
 };
 
 const TREES = [
@@ -485,6 +696,21 @@ function samePartyMembers(current, next) {
   });
 }
 
+function sameOnlinePlayers(current, next) {
+  if (current.length !== next.length) return false;
+  return current.every((player, index) => {
+    const candidate = next[index];
+    return (
+      player.id === candidate.id
+      && player.name === candidate.name
+      && player.classId === candidate.classId
+      && player.level === candidate.level
+      && player.partyId === candidate.partyId
+      && player.partyLeaderId === candidate.partyLeaderId
+    );
+  });
+}
+
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -509,6 +735,76 @@ function xpForLevel(level) {
   return level >= MAX_LEVEL ? 0 : level * 100;
 }
 
+function getAbilityId(ability) {
+  return ability ? `${ability.key}:${ability.name}` : '';
+}
+
+function resolveAbility(abilities, abilityId) {
+  return abilities.find((ability) => getAbilityId(ability) === abilityId)
+    ?? abilities.find((ability) => ability.name === abilityId)
+    ?? null;
+}
+
+function getDefaultAbilitySlots(character) {
+  const slots = getCharacterAbilities(character).slice(0, ABILITY_BAR_SLOTS).map(getAbilityId);
+  while (slots.length < ABILITY_BAR_SLOTS) slots.push(null);
+  return slots;
+}
+
+function getTalentRanks(character) {
+  return character?.talents?.ranks ?? {};
+}
+
+function getTalentNodeKey(specId, nodeId) {
+  return `${specId}:${nodeId}`;
+}
+
+function getEarnedTalentPoints(character) {
+  return Math.max(0, (character?.level ?? 1) - TALENT_UNLOCK_LEVEL + 1);
+}
+
+function getSpentTalentPoints(character) {
+  return Object.values(getTalentRanks(character)).reduce((total, rank) => total + Number(rank ?? 0), 0);
+}
+
+function getAvailableTalentPoints(character) {
+  return Math.max(0, getEarnedTalentPoints(character) - getSpentTalentPoints(character));
+}
+
+function getSpecSpentPoints(character, specId) {
+  const ranks = getTalentRanks(character);
+  return TALENT_NODES.reduce((total, node) => total + Number(ranks[getTalentNodeKey(specId, node.id)] ?? 0), 0);
+}
+
+function getTalentStatBonuses(character) {
+  const selectedSpec = character?.talents?.spec;
+  if (!selectedSpec) return {};
+  const ranks = getTalentRanks(character);
+  const coreRank = Number(ranks[getTalentNodeKey(selectedSpec, 'core')] ?? 0);
+  const flowRank = Number(ranks[getTalentNodeKey(selectedSpec, 'flow')] ?? 0);
+  const classId = character?.classId;
+  const primary = classId === 'mage' || classId === 'priest'
+    ? 'intellect'
+    : classId === 'hunter' || classId === 'rogue'
+      ? 'agility'
+      : 'strength';
+
+  return {
+    [primary]: coreRank * 2,
+    health: coreRank * 8,
+    mana: classId === 'warrior' ? 0 : flowRank * 8,
+    attackSpeed: flowRank * 0.035,
+  };
+}
+
+function getTalentSignatureAbility(character) {
+  const selectedSpec = character?.talents?.spec;
+  if (!selectedSpec) return null;
+  const ranks = getTalentRanks(character);
+  if (!ranks[getTalentNodeKey(selectedSpec, 'signature')]) return null;
+  return TALENT_SIGNATURE_ABILITIES[character.classId]?.[selectedSpec] ?? null;
+}
+
 function getUnlockedAbilities(classId, level) {
   return CLASSES[classId].abilities.filter((ability) => ability.level <= level);
 }
@@ -520,14 +816,16 @@ function getCharacterAbilities(character) {
   const selectedSpec = character.talents?.spec;
   const specAbilities = selectedSpec ? talentTree?.specs[selectedSpec]?.abilities : null;
 
-  if (specAbilities && level >= (talentTree?.unlockLevel ?? 10)) {
-    return specAbilities.filter((ability) => ability.level <= level);
-  }
-
-  return getUnlockedAbilities(character.classId, level);
+  const abilities = specAbilities && level >= (talentTree?.unlockLevel ?? TALENT_UNLOCK_LEVEL)
+    ? specAbilities.filter((ability) => ability.level <= level)
+    : getUnlockedAbilities(character.classId, level);
+  const signatureAbility = getTalentSignatureAbility(character);
+  return signatureAbility ? [...abilities, signatureAbility] : abilities;
 }
 
 const WARRIOR_FURY_PER_ATTACK = 12;
+const ROGUE_ENERGY_REGEN_PER_SECOND = 32;
+const PARTY_INVITE_COOLDOWN_MS = 8000;
 
 const WARRIOR_ABILITY_COSTS = {
   1: 12,
@@ -543,8 +841,19 @@ function getAbilityManaCost(ability, character = null) {
     const furyCost = ability.furyCost ?? WARRIOR_ABILITY_COSTS[ability.key];
     if (typeof furyCost === 'number') return furyCost;
   }
+  if (character?.classId === 'rogue') {
+    const energyCost = ability.energyCost ?? ability.manaCost ?? ability.resourceCost ?? ABILITY_MANA_COST[ability.key];
+    if (typeof energyCost === 'number') return energyCost;
+  }
 
   return ability.manaCost ?? ability.resourceCost ?? ABILITY_MANA_COST[ability.key] ?? 15;
+}
+
+function getAbilityCooldownMs(ability) {
+  if (!ability) return 0;
+  if (ability.cooldown) return ability.cooldown;
+  if (ability.type === 'channel') return (ability.duration ?? 3000) + (ABILITY_COOLDOWNS.channel ?? 4800);
+  return ABILITY_COOLDOWNS[ability.type] ?? 1000;
 }
 
 function getResourceConfig(character) {
@@ -552,6 +861,13 @@ function getResourceConfig(character) {
     return {
       key: 'fury',
       label: 'Fury',
+      max: 100,
+    };
+  }
+  if (character?.classId === 'rogue') {
+    return {
+      key: 'energy',
+      label: 'Energy',
       max: 100,
     };
   }
@@ -563,7 +879,7 @@ function getResourceConfig(character) {
   };
 }
 
-function getCurrentResource(character, vitals = vitalsRef.current) {
+function getCurrentResource(character, vitals = {}) {
   const resourceConfig = getResourceConfig(character);
   return Math.floor(vitals?.[resourceConfig.key] ?? 0);
 }
@@ -572,14 +888,20 @@ function getResourceMax(character, stats = getTotalStats(character)) {
   return getResourceConfig({ ...character, ...stats }).max;
 }
 
+function getAutoAttackCooldownMs(character) {
+  const stats = character ? getTotalStats(character) : BASE_STATS;
+  const speed = Math.max(0.25, Number(stats.attackSpeed ?? 1) + Number(stats.agility ?? 0) * 0.012);
+  return clamp(AUTO_ATTACK_BASE_COOLDOWN_MS / speed, AUTO_ATTACK_MIN_COOLDOWN_MS, AUTO_ATTACK_MAX_COOLDOWN_MS);
+}
+
 function getAutoAttackAbility(classId) {
-  if (classId === 'warrior' || classId === 'paladin') {
+  if (classId === 'warrior' || classId === 'paladin' || classId === 'rogue') {
     return {
       key: 'M1',
-      name: 'Swing',
+      name: classId === 'rogue' ? 'Dagger Slice' : 'Swing',
       type: 'strike',
-      color: classId === 'paladin' ? '#fde68a' : '#d1d5db',
-      damage: classId === 'paladin' ? 28 : 30,
+      color: classId === 'paladin' ? '#fde68a' : classId === 'rogue' ? '#d8b4fe' : '#d1d5db',
+      damage: classId === 'paladin' ? 28 : classId === 'rogue' ? 25 : 30,
       duration: 420,
       autoAttack: true,
     };
@@ -616,6 +938,7 @@ function getInitialStats(classId) {
     strength: BASE_STATS.strength + growth.strength,
     agility: BASE_STATS.agility + growth.agility,
     intellect: BASE_STATS.intellect + growth.intellect,
+    attackSpeed: BASE_STATS.attackSpeed + (growth.attackSpeed ?? 0),
   };
 }
 
@@ -632,12 +955,36 @@ function formatItemStats(stats = {}) {
     strength: 'Strength',
     agility: 'Agility',
     intellect: 'Intellect',
+    attackSpeed: 'Attack Speed',
   };
 
   return Object.entries(stats)
     .filter(([, value]) => value)
     .map(([key, value]) => `+${value} ${labels[key] ?? key}`)
     .join(', ');
+}
+
+function getItemScore(item) {
+  const weights = {
+    health: 0.18,
+    mana: 0.16,
+    strength: 1,
+    agility: 1,
+    intellect: 1,
+    attackSpeed: 18,
+  };
+  return Object.entries(item?.stats ?? {}).reduce((total, [key, value]) => (
+    total + Number(value ?? 0) * (weights[key] ?? 1)
+  ), 0);
+}
+
+function getItemComparison(item, equippedItems) {
+  const equipped = equippedItems?.[item?.slot];
+  const diff = Math.round((getItemScore(item) - getItemScore(equipped)) * 10) / 10;
+  if (!equipped) return '+ New slot';
+  if (diff > 0) return `+${diff} upgrade`;
+  if (diff < 0) return `${diff} downgrade`;
+  return 'Sidegrade';
 }
 
 function getItemSellValue(item) {
@@ -664,7 +1011,8 @@ function getTotalStats(character) {
 
   const selectedSpec = character?.talents?.spec;
   const talentBonuses = selectedSpec ? TALENTS[character.classId]?.specs[selectedSpec]?.bonuses : null;
-  return talentBonuses ? addStats(equipmentStats, talentBonuses) : equipmentStats;
+  const specStats = talentBonuses ? addStats(equipmentStats, talentBonuses) : equipmentStats;
+  return addStats(specStats, getTalentStatBonuses(character));
 }
 
 function normalizeInventory(inventory = []) {
@@ -712,6 +1060,193 @@ async function loadImage(src) {
   return image;
 }
 
+function hexToRgb(hex) {
+  if (typeof hex !== 'string' || !hex.startsWith('#') || hex.length < 7) return null;
+  return [
+    Number.parseInt(hex.slice(1, 3), 16),
+    Number.parseInt(hex.slice(3, 5), 16),
+    Number.parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function shiftHexColor(hex, amount) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const shifted = rgb.map((channel) => clamp(Math.round(channel * amount), 0, 255));
+  return `#${shifted.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function colorDistanceSquared(red, green, blue, target) {
+  if (!target) return Number.POSITIVE_INFINITY;
+  return (red - target[0]) ** 2 + (green - target[1]) ** 2 + (blue - target[2]) ** 2;
+}
+
+function getCharacterSpriteBaseClass(spriteId) {
+  if (typeof spriteId !== 'string') return null;
+  return spriteId.split('-')[0];
+}
+
+function getCharacterSpriteCandidates(selectedClass, appearance = {}) {
+  const classId = normalizeCharacterLayerId(selectedClass) ?? 'warrior';
+  const gender = normalizeCharacterLayerId(appearance.gender);
+  const candidates = [];
+  if (gender) candidates.push(`${classId}-${gender}`);
+  candidates.push(classId);
+  return [...new Set(candidates)];
+}
+
+function loadCharacterSprite(spriteId) {
+  const baseClassId = getCharacterSpriteBaseClass(spriteId);
+  if (!spriteId || !baseClassId || !CLASSES[baseClassId]) return Promise.resolve(null);
+  if (CHARACTER_SPRITES.has(spriteId)) return Promise.resolve(CHARACTER_SPRITES.get(spriteId));
+  if (CHARACTER_SPRITE_LOADS.has(spriteId)) return CHARACTER_SPRITE_LOADS.get(spriteId);
+
+  const promise = loadImage(resolveAssetUrl(`assets/characters/${spriteId}.png`))
+    .then((image) => {
+      if (image.naturalWidth !== 192 || image.naturalHeight !== 192) {
+        console.warn(`Character spritesheet for ${spriteId} should be 192x192, got ${image.naturalWidth}x${image.naturalHeight}.`);
+      }
+      CHARACTER_SPRITES.set(spriteId, image);
+      return image;
+    })
+    .catch((error) => {
+      console.warn(`Missing character spritesheet for ${spriteId}; using generated fallback.`, error);
+      CHARACTER_SPRITES.set(spriteId, null);
+      return null;
+    });
+
+  CHARACTER_SPRITE_LOADS.set(spriteId, promise);
+  return promise;
+}
+
+function loadCharacterSprites() {
+  const spriteIds = Object.keys(CLASSES).flatMap((classId) => [
+    classId,
+    ...CHARACTER_SPRITE_VARIANTS.map((variant) => `${classId}-${variant}`),
+  ]);
+  return Promise.all(spriteIds.map(loadCharacterSprite));
+}
+
+function loadEnemySprite(spriteId) {
+  const config = ENEMY_SPRITE_CONFIG[spriteId];
+  if (!config) return Promise.resolve(null);
+  if (ENEMY_SPRITES.has(spriteId)) return Promise.resolve(ENEMY_SPRITES.get(spriteId));
+  if (ENEMY_SPRITE_LOADS.has(spriteId)) return ENEMY_SPRITE_LOADS.get(spriteId);
+
+  const promise = loadImage(resolveAssetUrl(config.path))
+    .then((image) => {
+      ENEMY_SPRITES.set(spriteId, image);
+      return image;
+    })
+    .catch((error) => {
+      console.warn(`Missing enemy spritesheet for ${spriteId}; using generated fallback.`, error);
+      ENEMY_SPRITES.set(spriteId, null);
+      return null;
+    });
+
+  ENEMY_SPRITE_LOADS.set(spriteId, promise);
+  return promise;
+}
+
+function loadEnemySprites() {
+  return Promise.all(Object.keys(ENEMY_SPRITE_CONFIG).map(loadEnemySprite));
+}
+
+function getEnemySpriteId(enemy) {
+  if (enemy?.type === 'boss') return 'elder-briarheart';
+  if (enemy?.type === 'enemy' && (enemy.enemyKind ?? 'wolf') === 'wolf') return 'wolf';
+  return null;
+}
+
+function getEnemySpriteImage(spriteId) {
+  if (!spriteId) return null;
+  if (!ENEMY_SPRITES.has(spriteId) && !ENEMY_SPRITE_LOADS.has(spriteId)) {
+    loadEnemySprite(spriteId);
+  }
+  return ENEMY_SPRITES.get(spriteId) ?? null;
+}
+
+function normalizeCharacterLayerId(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('#')) return null;
+  return trimmed.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+}
+
+function normalizeOptionalCharacterLayerId(value) {
+  const normalized = normalizeCharacterLayerId(value);
+  return normalized === 'none' ? null : normalized;
+}
+
+function getCharacterLayerSelection(selectedClass, selectedRace, appearance = {}) {
+  const classId = normalizeCharacterLayerId(selectedClass) ?? 'warrior';
+  const genderId = normalizeCharacterLayerId(appearance.gender) ?? 'male';
+  const bodyId = normalizeCharacterLayerId(appearance.body);
+  const outfitId = normalizeCharacterLayerId(appearance.outfit);
+  const weaponId = normalizeCharacterLayerId(appearance.weapon);
+  const outfitVariant = normalizeCharacterLayerId(appearance.outfitVariant) ?? 'classic';
+  const weaponVariant = normalizeCharacterLayerId(appearance.weaponVariant) ?? 'classic';
+  const raceId = normalizeCharacterLayerId(appearance.race)
+    ?? (bodyId && !bodyId.includes('-') ? bodyId : null)
+    ?? normalizeCharacterLayerId(selectedRace)
+    ?? 'human';
+
+  return {
+    base: bodyId && bodyId.includes('-') ? bodyId : `${raceId}-${genderId}`,
+    hair: normalizeCharacterLayerId(appearance.hairAsset) ?? normalizeCharacterLayerId(appearance.hairStyle),
+    beard: normalizeOptionalCharacterLayerId(appearance.beard),
+    outfit: outfitId && outfitId.includes('-') ? outfitId : `${classId}-${outfitVariant}`,
+    weapon: weaponId && weaponId.includes('-') ? weaponId : `${classId}-${weaponVariant}`,
+    cape: normalizeOptionalCharacterLayerId(appearance.cape) ?? normalizeOptionalCharacterLayerId(appearance.capeStyle),
+  };
+}
+
+function getCharacterLayerCacheKey(layer, layerId) {
+  return `${layer}:${layerId}`;
+}
+
+function loadCharacterLayer(layer, layerId) {
+  if (!layer || !layerId || !CHARACTER_LAYER_DIRS[layer]) return Promise.resolve(null);
+
+  const cacheKey = getCharacterLayerCacheKey(layer, layerId);
+  if (CHARACTER_LAYER_IMAGES.has(cacheKey)) return Promise.resolve(CHARACTER_LAYER_IMAGES.get(cacheKey));
+  if (CHARACTER_LAYER_LOADS.has(cacheKey)) return CHARACTER_LAYER_LOADS.get(cacheKey);
+
+  const promise = loadImage(resolveAssetUrl(`assets/characters/${CHARACTER_LAYER_DIRS[layer]}/${layerId}.png`))
+    .then((image) => {
+      if (image.naturalWidth !== 192 || image.naturalHeight !== 192) {
+        console.warn(`Character layer ${cacheKey} should be 192x192, got ${image.naturalWidth}x${image.naturalHeight}.`);
+      }
+      CHARACTER_LAYER_IMAGES.set(cacheKey, image);
+      return image;
+    })
+    .catch(() => {
+      CHARACTER_LAYER_IMAGES.set(cacheKey, null);
+      return null;
+    });
+
+  CHARACTER_LAYER_LOADS.set(cacheKey, promise);
+  return promise;
+}
+
+function loadCharacterLayersForAppearance(selectedClass, selectedRace, appearance = {}) {
+  const selection = getCharacterLayerSelection(selectedClass, selectedRace, appearance);
+  return Promise.all(
+    CHARACTER_LAYER_ORDER
+      .filter((layer) => selection[layer])
+      .map((layer) => loadCharacterLayer(layer, selection[layer])),
+  );
+}
+
+function getCharacterLayerImage(layer, layerId) {
+  if (!layer || !layerId) return null;
+  const cacheKey = getCharacterLayerCacheKey(layer, layerId);
+  if (!CHARACTER_LAYER_IMAGES.has(cacheKey) && !CHARACTER_LAYER_LOADS.has(cacheKey)) {
+    loadCharacterLayer(layer, layerId);
+  }
+  return CHARACTER_LAYER_IMAGES.get(cacheKey) ?? null;
+}
+
 function resolveAssetUrl(relativePath, baseUrl = null) {
   const appBaseUrl = new URL(import.meta.env.BASE_URL || './', window.location.href);
   return new URL(relativePath, baseUrl ?? appBaseUrl).href;
@@ -743,6 +1278,7 @@ async function loadTiledMap(mapId = 'world') {
   const npcsLayer = map.layers.find((layer) => layer.name === 'NPCs');
   const raceStartsLayer = map.layers.find((layer) => layer.name === 'raceStart');
   const transitionsLayer = map.layers.find((layer) => layer.name === 'Transitions');
+  const graveyardsLayer = map.layers.find((layer) => ['Graveyard', 'Graveyards', 'graveyard'].includes(layer.name));
   const spawns = [
     ...(spawnsLayer?.objects ?? []),
     ...(bossSpawnsLayer?.objects ?? []),
@@ -759,6 +1295,7 @@ async function loadTiledMap(mapId = 'world') {
     npcs: (npcsLayer?.objects ?? []).map((npc) => ({ ...npc, props: getProperties(npc) })),
     raceStarts: (raceStartsLayer?.objects ?? []).map((start) => ({ ...start, props: getProperties(start) })),
     transitions: (transitionsLayer?.objects ?? []).map((transition) => ({ ...transition, props: getProperties(transition) })),
+    graveyards: (graveyardsLayer?.objects ?? []).map((graveyard) => ({ ...graveyard, props: getProperties(graveyard) })),
   };
 }
 
@@ -773,7 +1310,7 @@ function normalizeCharacter(character) {
     appearance: {},
     ...character,
     inventory: normalizeInventory(character.inventory),
-    talents: character.talents ?? { spec: null },
+    talents: { spec: null, ranks: {}, ...(character.talents ?? {}) },
     appearance: character.appearance ?? {},
   };
 }
@@ -842,6 +1379,19 @@ function saveCharacters(characters) {
   localStorage.setItem(SAVE_KEY, JSON.stringify(characters));
 }
 
+function loadFriends() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FRIENDS_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFriends(friends) {
+  localStorage.setItem(FRIENDS_KEY, JSON.stringify(friends));
+}
+
 function randomPointInObject(object, fallbackPosition) {
   if (!object) return fallbackPosition;
 
@@ -876,6 +1426,221 @@ function randomPointInBounds(bounds) {
   };
 }
 
+function numberProp(object, name, fallback) {
+  const value = Number(object?.props?.[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function getSpawnPackId(spawnObject, fallbackId = 'fallback_spawn') {
+  return String(spawnObject?.props?.spawnId ?? spawnObject?.name ?? spawnObject?.id ?? fallbackId);
+}
+
+function getSpawnEnemyType(spawnObject) {
+  const spawnName = String(spawnObject?.name ?? '').toLowerCase();
+  return String(spawnObject?.props?.enemyType ?? (spawnName.includes('desert') ? 'scarab' : 'wolf')).toLowerCase();
+}
+
+function getSpawnMaxAlive(spawnObject) {
+  return Math.max(1, Math.floor(numberProp(spawnObject, 'maxAlive', ENEMY.maxCount)));
+}
+
+function getSpawnRespawnMin(spawnObject) {
+  return Math.max(1000, numberProp(spawnObject, 'respawnMin', ENEMY.spawnEvery));
+}
+
+function getSpawnRespawnMax(spawnObject) {
+  return Math.max(getSpawnRespawnMin(spawnObject), numberProp(spawnObject, 'respawnMax', getSpawnRespawnMin(spawnObject)));
+}
+
+function getSpawnRespawnDelay(spawnObject) {
+  const min = getSpawnRespawnMin(spawnObject);
+  const max = getSpawnRespawnMax(spawnObject);
+  return min + Math.random() * (max - min);
+}
+
+function hashNumber(value) {
+  const text = String(value ?? '0');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededUnit(seed, salt = 0) {
+  const value = Math.sin(hashNumber(`${seed}:${salt}`) * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function pointForSpawnSlot(bounds, slotIndex, maxAlive) {
+  const aspect = Math.max(0.35, bounds.width / Math.max(1, bounds.height));
+  const columns = Math.max(1, Math.ceil(Math.sqrt(maxAlive * aspect)));
+  const rows = Math.max(1, Math.ceil(maxAlive / columns));
+  const column = slotIndex % columns;
+  const row = Math.floor(slotIndex / columns) % rows;
+  const cellWidth = bounds.width / columns;
+  const cellHeight = bounds.height / rows;
+  const seed = `${bounds.x}:${bounds.y}:${slotIndex}`;
+  return {
+    x: bounds.x + cellWidth * (column + 0.5) + (seededUnit(seed, 1) - 0.5) * Math.max(10, cellWidth * 0.36),
+    y: bounds.y + cellHeight * (row + 0.5) + (seededUnit(seed, 2) - 0.5) * Math.max(10, cellHeight * 0.36),
+  };
+}
+
+function getSpawnMovementMode(spawnObject, slotIndex = 0) {
+  const configured = String(
+    spawnObject?.props?.movement
+    ?? spawnObject?.props?.movementMode
+    ?? spawnObject?.props?.patrol
+    ?? '',
+  ).toLowerCase();
+  if (['still', 'stationary', 'guard', 'sentinel'].includes(configured)) return 'sentinel';
+  if (['pause', 'wander_pause', 'roam_pause', 'stop'].includes(configured)) return 'roam-pause';
+  if (['patrol', 'path', 'loop'].includes(configured)) return 'patrol';
+  if (slotIndex % 5 === 0) return 'sentinel';
+  if (slotIndex % 3 === 0) return 'roam-pause';
+  return 'patrol';
+}
+
+function clampPointToBounds(point, bounds, radius = ENEMY.radius) {
+  return {
+    x: clamp(point.x, bounds.x + radius, bounds.x + bounds.width - radius),
+    y: clamp(point.y, bounds.y + radius, bounds.y + bounds.height - radius),
+  };
+}
+
+function buildPatrolPoints(home, bounds, slotIndex, radius = ENEMY.radius) {
+  const seed = `${bounds.x}:${bounds.y}:${slotIndex}:patrol`;
+  const spreadX = Math.min(Math.max(bounds.width * 0.12, 36), 170);
+  const spreadY = Math.min(Math.max(bounds.height * 0.12, 36), 140);
+  const direction = seededUnit(seed, 7) > 0.5 ? 1 : -1;
+  const offsets = [
+    { x: -spreadX, y: -spreadY * 0.25 },
+    { x: spreadX * 0.7, y: -spreadY * 0.9 },
+    { x: spreadX, y: spreadY * 0.45 },
+    { x: -spreadX * 0.55, y: spreadY },
+  ];
+  return offsets.map((offset, index) => clampPointToBounds({
+    x: home.x + offset.x * direction + (seededUnit(seed, index) - 0.5) * 18,
+    y: home.y + offset.y + (seededUnit(seed, index + 10) - 0.5) * 18,
+  }, bounds, radius));
+}
+
+function makeEnemyMovementState(spawnObject, bounds, slotIndex, maxAlive, radius = ENEMY.radius) {
+  const home = clampPointToBounds(pointForSpawnSlot(bounds, slotIndex, maxAlive), bounds, radius);
+  const movementMode = getSpawnMovementMode(spawnObject, slotIndex);
+  const patrolPoints = movementMode === 'sentinel' ? [home] : buildPatrolPoints(home, bounds, slotIndex, radius);
+  return {
+    home,
+    movementMode,
+    patrolPoints,
+    patrolIndex: Math.floor(seededUnit(`${slotIndex}:patrol`, 3) * patrolPoints.length),
+    pauseUntil: 0,
+    wanderTarget: patrolPoints[0] ?? home,
+    nextWanderAt: performance.now() + 500 + seededUnit(`${slotIndex}:wander`, 4) * 1500,
+  };
+}
+
+function getReadyRespawnSlots(pack, now, occupiedSlots) {
+  const readySlots = [];
+  const waitingRespawns = [];
+  pack.pendingRespawns.forEach((respawn) => {
+    const normalizedRespawn = typeof respawn === 'number' ? { at: respawn, slotIndex: null } : respawn;
+    if (normalizedRespawn.at > now) {
+      waitingRespawns.push(normalizedRespawn);
+      return;
+    }
+    if (normalizedRespawn.slotIndex != null && !occupiedSlots.has(normalizedRespawn.slotIndex)) {
+      readySlots.push(normalizedRespawn.slotIndex);
+      occupiedSlots.add(normalizedRespawn.slotIndex);
+      return;
+    }
+    const openSlot = Array.from({ length: pack.maxAlive }).findIndex((_, index) => !occupiedSlots.has(index));
+    if (openSlot >= 0) {
+      readySlots.push(openSlot);
+      occupiedSlots.add(openSlot);
+    }
+  });
+  pack.pendingRespawns = waitingRespawns;
+  return readySlots;
+}
+
+function updateIdleEnemyMovement(enemy, now, delta, isBoss = false) {
+  const bounds = enemy.spawnBounds;
+  if (!bounds) return enemy;
+  const radius = enemy.radius ?? ENEMY.radius;
+  const mode = enemy.movementMode ?? 'patrol';
+  let target = enemy.wanderTarget;
+  let patrolIndex = enemy.patrolIndex ?? 0;
+  let pauseUntil = enemy.pauseUntil ?? 0;
+  let nextWanderAt = enemy.nextWanderAt ?? 0;
+  const patrolPoints = enemy.patrolPoints?.length ? enemy.patrolPoints : [enemy.home ?? randomPointInBounds(bounds)];
+
+  if (mode === 'sentinel') {
+    if (!target || now >= nextWanderAt || distance(enemy, target) < 5) {
+      const home = enemy.home ?? patrolPoints[0];
+      target = clampPointToBounds({
+        x: home.x + (seededUnit(`${enemy.id}:${Math.floor(now / 1000)}`, 1) - 0.5) * 34,
+        y: home.y + (seededUnit(`${enemy.id}:${Math.floor(now / 1000)}`, 2) - 0.5) * 34,
+      }, bounds, radius);
+      nextWanderAt = now + 3000 + Math.random() * 4000;
+    }
+  } else if (mode === 'roam-pause') {
+    if (pauseUntil > now && target && distance(enemy, target) < 10) {
+      return { ...enemy, pauseUntil };
+    }
+    if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
+      patrolIndex = (patrolIndex + 1) % patrolPoints.length;
+      target = patrolPoints[patrolIndex];
+      pauseUntil = now + 900 + Math.random() * 1900;
+      nextWanderAt = now + 6500 + Math.random() * 2500;
+    }
+  } else if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
+    patrolIndex = (patrolIndex + 1) % patrolPoints.length;
+    target = patrolPoints[patrolIndex];
+    nextWanderAt = now + 9000 + Math.random() * 3000;
+  }
+
+  const toTargetX = target.x - enemy.x;
+  const toTargetY = target.y - enemy.y;
+  const length = Math.hypot(toTargetX, toTargetY) || 1;
+  const speedMultiplier = mode === 'sentinel' ? 0.24 : mode === 'roam-pause' ? 0.52 : 0.78;
+  const wanderSpeed = (isBoss ? ENEMY.wanderSpeed * 0.65 : ENEMY.wanderSpeed) * speedMultiplier;
+
+  return {
+    ...enemy,
+    wanderTarget: target,
+    patrolIndex,
+    pauseUntil,
+    nextWanderAt,
+    x: clamp(enemy.x + (toTargetX / length) * wanderSpeed * delta, bounds.x + radius, bounds.x + bounds.width - radius),
+    y: clamp(enemy.y + (toTargetY / length) * wanderSpeed * delta, bounds.y + radius, bounds.y + bounds.height - radius),
+  };
+}
+
+function createWorldSpawnPacks(spawns = []) {
+  const sourceSpawns = spawns.length
+    ? spawns
+    : [{ x: 720, y: 520, width: 420, height: 320, name: 'fallback_spawn' }];
+
+  return new globalThis.Map(sourceSpawns.map((spawn, index) => {
+    const id = getSpawnPackId(spawn, `fallback_spawn_${index}`);
+    return [id, {
+      id,
+      spawn,
+      maxAlive: getSpawnMaxAlive(spawn),
+      pendingRespawns: [],
+    }];
+  }));
+}
+
+function scheduleWorldSpawnRespawn(spawnPacks, spawnId, now, spawnSlot = null) {
+  const pack = spawnPacks.get(spawnId);
+  if (!pack) return;
+  pack.pendingRespawns.push({ at: now + getSpawnRespawnDelay(pack.spawn), slotIndex: spawnSlot });
+}
+
 function getRaceStartPosition(tiledWorld, raceId) {
   const normalizedRace = String(raceId ?? '').toLowerCase();
   const start = tiledWorld?.raceStarts?.find((candidate) => (
@@ -906,17 +1671,25 @@ function getCharacterStartPosition(tiledWorld, character) {
   return getRaceStartPosition(tiledWorld, character?.raceId);
 }
 
-function createEnemy(id, spawnObject, fallbackPosition) {
-  const spawnPoint = randomPointInObject(spawnObject, fallbackPosition);
+function getGraveyardPosition(tiledWorld, character) {
+  return getNearestGraveyardPosition(tiledWorld, character?.position, character);
+}
+
+function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive = getSpawnMaxAlive(spawnObject)) {
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition);
+  const enemyKind = getSpawnEnemyType(spawnObject);
+  const movement = makeEnemyMovementState(spawnObject, spawnBounds, spawnSlot, maxAlive, ENEMY.radius);
+  const spawnPoint = movement.home;
   return {
     id,
     type: 'enemy',
+    enemyKind,
     state: 'idle',
     spawnName: spawnObject?.name,
+    spawnId: getSpawnPackId(spawnObject),
+    spawnSlot,
     spawnBounds,
-    wanderTarget: randomPointInBounds(spawnBounds),
-    nextWanderAt: performance.now() + 800 + Math.random() * 1800,
+    ...movement,
     x: clamp(spawnPoint.x, ENEMY.radius, WORLD.width - ENEMY.radius),
     y: clamp(spawnPoint.y, ENEMY.radius, WORLD.height - ENEMY.radius),
     hp: 100,
@@ -935,7 +1708,7 @@ function createBoss(id, spawnObject, fallbackPosition) {
   return {
     id,
     type: 'boss',
-    name: 'Rift Brute',
+    name: 'Elder Briarheart',
     state: 'idle',
     spawnName: spawnObject?.name,
     spawnBounds,
@@ -976,10 +1749,512 @@ function usePressedKeys() {
   return keys;
 }
 
+function pixelRect(context, x, y, width, height, color) {
+  context.fillStyle = color;
+  context.fillRect(Math.round(x), Math.round(y), Math.round(width), Math.round(height));
+}
+
+function pixelLine(context, fromX, fromY, toX, toY, size, color, steps = 10) {
+  for (let index = 0; index <= steps; index += 1) {
+    const amount = index / steps;
+    pixelRect(
+      context,
+      fromX + (toX - fromX) * amount - size / 2,
+      fromY + (toY - fromY) * amount - size / 2,
+      size,
+      size,
+      color,
+    );
+  }
+}
+
+function isRangedClass(classId) {
+  return ['hunter', 'mage', 'priest'].includes(classId);
+}
+
+function drawCharacterAttackOverlay(context, player, selectedClass) {
+  const attack = player?.attack;
+  const now = performance.now();
+  if (!attack || !Number.isFinite(attack.startedAt) || now > attack.until) return;
+
+  const duration = Math.max(1, attack.until - attack.startedAt);
+  const progress = clamp((now - attack.startedAt) / duration, 0, 1);
+  const facing = Number.isFinite(attack.facing) ? attack.facing : player.facing ?? 0;
+  const fx = Math.cos(facing);
+  const fy = Math.sin(facing);
+  const sideX = Math.cos(facing + Math.PI / 2);
+  const sideY = Math.sin(facing + Math.PI / 2);
+  const ranged = isRangedClass(selectedClass) || attack.ranged || attack.autoAttack && selectedClass === 'hunter';
+  const color = selectedClass === 'priest'
+    ? '#fef08a'
+    : selectedClass === 'mage'
+      ? '#7dd3fc'
+      : selectedClass === 'hunter'
+        ? '#fbbf24'
+        : selectedClass === 'rogue'
+          ? '#e5e7eb'
+          : '#f8fafc';
+
+  context.save();
+  context.translate(player.x, player.y - 22);
+  context.globalAlpha = 1 - progress * 0.28;
+  context.imageSmoothingEnabled = false;
+
+  if (ranged) {
+    const length = 22 + progress * 42;
+    const startX = fx * 12 + sideX * 8;
+    const startY = fy * 12 + sideY * 8;
+    const endX = fx * length + sideX * 8;
+    const endY = fy * length + sideY * 8;
+    pixelLine(context, startX, startY, endX, endY, 4, 'rgba(0, 0, 0, 0.32)', 14);
+    pixelLine(context, startX, startY, endX, endY, 2, color, 14);
+    pixelRect(context, endX - 3, endY - 3, 6, 6, color);
+  } else {
+    const reach = 30 + Math.sin(progress * Math.PI) * 18;
+    const arcCenterX = fx * reach;
+    const arcCenterY = fy * reach;
+    for (let step = -4; step <= 4; step += 1) {
+      const sx = sideX * step * 4;
+      const sy = sideY * step * 4;
+      pixelRect(context, arcCenterX + sx - 3, arcCenterY + sy - 3, 6, 6, 'rgba(0, 0, 0, 0.25)');
+      pixelRect(context, arcCenterX + sx - 2, arcCenterY + sy - 2, 4, 4, color);
+    }
+  }
+
+  context.restore();
+}
+
+function drawPixelCross(context, x, y, size, color) {
+  pixelRect(context, x - size / 2, y - size * 1.5, size, size * 3, color);
+  pixelRect(context, x - size * 1.5, y - size / 2, size * 3, size, color);
+}
+
+const CHARACTER_SPRITE_FRAMES = [
+  { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bodyBob: 0 },
+  { leftLeg: 3, rightLeg: -2, leftArm: -2, rightArm: 2, bodyBob: -1 },
+  { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bodyBob: 0 },
+  { leftLeg: -2, rightLeg: 3, leftArm: 2, rightArm: -2, bodyBob: -1 },
+];
+
+const CLASS_SPRITE_DETAILS = {
+  mage: { collar: '#67e8f9', dark: '#312e81', weapon: 'staff', glow: '#67e8f9' },
+  hunter: { collar: '#bef264', dark: '#7c4a22', weapon: 'bow', glow: '#fde68a' },
+  paladin: { collar: '#fef08a', dark: '#facc15', weapon: 'hammer-shield', glow: '#fef08a' },
+  warrior: { collar: '#94a3b8', dark: '#475569', weapon: 'greatsword', glow: '#f8fafc' },
+  priest: { collar: '#e0e7ff', dark: '#f8fafc', weapon: 'staff', glow: '#fef08a' },
+  rogue: { collar: '#111827', dark: '#1f2937', weapon: 'daggers', glow: '#c084fc' },
+};
+
+function getCharacterAnimationFrame(player) {
+  const moving = Math.abs(player?.vx ?? 0) + Math.abs(player?.vy ?? 0) > 0.05;
+  if (!moving) return CHARACTER_SPRITE_FRAMES[0];
+  const frameIndex = Math.floor(performance.now() / 120) % CHARACTER_SPRITE_FRAMES.length;
+  return CHARACTER_SPRITE_FRAMES[frameIndex];
+}
+
+function getCharacterSpriteDirection(player) {
+  const facing = Number.isFinite(player?.facing) ? player.facing : 0;
+  const fx = Math.cos(facing);
+  const fy = Math.sin(facing);
+  if (Math.abs(fy) > Math.abs(fx)) return fy < 0 ? 'up' : 'down';
+  return fx < 0 ? 'left' : 'right';
+}
+
+function getCharacterSpriteColumn(player) {
+  const moving = Math.abs(player?.vx ?? 0) + Math.abs(player?.vy ?? 0) > 0.05;
+  if (!moving) return 0;
+  const walkFrame = Math.floor(performance.now() / 120) % 3;
+  return walkFrame + 1;
+}
+
+function drawCharacterSpriteFrame(context, image, player, selectedRace, row, column) {
+  const raceConfig = RACES[selectedRace];
+  if (!image || !raceConfig || !Number.isFinite(player?.x) || !Number.isFinite(player?.y)) return false;
+
+  const size = CHARACTER_SPRITE_DRAW_SIZE * raceConfig.scale * (selectedRace === 'dwarf' ? 0.96 : selectedRace === 'orc' ? 1.06 : 1);
+  context.drawImage(
+    image,
+    column * CHARACTER_SPRITE_SIZE,
+    row * CHARACTER_SPRITE_SIZE,
+    CHARACTER_SPRITE_SIZE,
+    CHARACTER_SPRITE_SIZE,
+    Math.round(player.x - size / 2),
+    Math.round(player.y - size + 18),
+    Math.round(size),
+    Math.round(size),
+  );
+  return true;
+}
+
+function drawCharacterLayeredSprite(context, player, selectedClass, selectedRace, appearance = {}) {
+  const raceConfig = RACES[selectedRace];
+  if (!raceConfig || !Number.isFinite(player?.x) || !Number.isFinite(player?.y)) return false;
+
+  const selection = getCharacterLayerSelection(selectedClass, selectedRace, appearance);
+  const baseLayer = getCharacterLayerImage('base', selection.base);
+  const outfitLayer = getCharacterLayerImage('outfit', selection.outfit);
+  if (!baseLayer || !outfitLayer) return false;
+
+  const direction = getCharacterSpriteDirection(player);
+  const row = CHARACTER_SPRITE_ROWS[direction] ?? CHARACTER_SPRITE_ROWS.down;
+  const column = getCharacterSpriteColumn(player);
+
+  const previousSmoothing = context.imageSmoothingEnabled;
+  context.imageSmoothingEnabled = false;
+  for (const layer of CHARACTER_LAYER_ORDER) {
+    const layerImage = getCharacterLayerImage(layer, selection[layer]);
+    if (layerImage) drawCharacterSpriteFrame(context, layerImage, player, selectedRace, row, column);
+  }
+  context.imageSmoothingEnabled = previousSmoothing;
+  return true;
+}
+
+function getCharacterSpriteImage(selectedClass, appearance = {}) {
+  for (const spriteId of getCharacterSpriteCandidates(selectedClass, appearance)) {
+    if (!CHARACTER_SPRITES.has(spriteId) && !CHARACTER_SPRITE_LOADS.has(spriteId)) {
+      loadCharacterSprite(spriteId);
+    }
+    const image = CHARACTER_SPRITES.get(spriteId);
+    if (image) return { image, spriteId };
+  }
+  return null;
+}
+
+function getTintedCharacterSpriteImage(sourceImage, spriteId, selectedClass, appearance = {}) {
+  const palette = CHARACTER_SPRITE_SOURCE_PALETTES[selectedClass];
+  if (!sourceImage || !palette) return sourceImage;
+
+  const tintValues = {
+    skin: appearance.skin,
+    hair: appearance.hair,
+    robe: appearance.robe,
+    trim: appearance.trim,
+  };
+  const tintKey = `${spriteId}|${Object.entries(tintValues).map(([key, value]) => `${key}:${value ?? ''}`).join('|')}`;
+  if (CHARACTER_TINTED_SPRITES.has(tintKey)) return CHARACTER_TINTED_SPRITES.get(tintKey);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceImage.naturalWidth || sourceImage.width || 192;
+  canvas.height = sourceImage.naturalHeight || sourceImage.height || 192;
+  const spriteContext = canvas.getContext('2d');
+  spriteContext.imageSmoothingEnabled = false;
+  spriteContext.drawImage(sourceImage, 0, 0);
+
+  const imageData = spriteContext.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const sources = {
+    skin: hexToRgb(palette.skin),
+    skinShade: hexToRgb(palette.skinShade),
+    hair: hexToRgb(palette.hair),
+    robe: hexToRgb(palette.robe),
+    trim: hexToRgb(palette.trim),
+  };
+  const targets = {
+    skin: hexToRgb(appearance.skin),
+    skinShade: hexToRgb(shiftHexColor(appearance.skin, 0.78)),
+    hair: hexToRgb(appearance.hair),
+    robe: hexToRgb(appearance.robe),
+    trim: hexToRgb(appearance.trim),
+  };
+  const replacements = [
+    ['skinShade', 18],
+    ['skin', 18],
+    ['hair', 22],
+    ['robe', 22],
+    ['trim', 20],
+  ];
+
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] === 0) continue;
+    for (const [key, threshold] of replacements) {
+      const target = targets[key];
+      if (!target) continue;
+      if (colorDistanceSquared(data[index], data[index + 1], data[index + 2], sources[key]) > threshold ** 2) continue;
+      data[index] = target[0];
+      data[index + 1] = target[1];
+      data[index + 2] = target[2];
+      break;
+    }
+  }
+
+  spriteContext.putImageData(imageData, 0, 0);
+  CHARACTER_TINTED_SPRITES.set(tintKey, canvas);
+  return canvas;
+}
+
+function drawCharacterAssetSprite(context, player, selectedClass, selectedRace, appearance = {}) {
+  if (drawCharacterLayeredSprite(context, player, selectedClass, selectedRace, appearance)) return true;
+
+  const sprite = getCharacterSpriteImage(selectedClass, appearance);
+  const raceConfig = RACES[selectedRace];
+  if (!sprite?.image || !raceConfig || !Number.isFinite(player?.x) || !Number.isFinite(player?.y)) return false;
+
+  const direction = getCharacterSpriteDirection(player);
+  const row = CHARACTER_SPRITE_ROWS[direction] ?? CHARACTER_SPRITE_ROWS.down;
+  const column = getCharacterSpriteColumn(player);
+  const previousSmoothing = context.imageSmoothingEnabled;
+  context.imageSmoothingEnabled = false;
+  const image = getTintedCharacterSpriteImage(sprite.image, sprite.spriteId, selectedClass, appearance);
+  drawCharacterSpriteFrame(context, image, player, selectedRace, row, column);
+  context.imageSmoothingEnabled = previousSmoothing;
+  return true;
+}
+
+function drawPixelPlayerSprite(context, player, selectedClass, selectedRace, appearance = {}) {
+  const classConfig = CLASSES[selectedClass];
+  const raceConfig = RACES[selectedRace];
+  if (!classConfig || !raceConfig || !Number.isFinite(player?.x) || !Number.isFinite(player?.y)) return;
+
+  const previousSmoothing = context.imageSmoothingEnabled;
+  context.imageSmoothingEnabled = false;
+
+  const colors = { ...classConfig.colors, ...appearance };
+  const skin = appearance.skin ?? raceConfig.skin;
+  const hair = appearance.hair ?? (selectedRace === 'human' ? colors.hair : raceConfig.hair);
+  const body = appearance.robe ?? colors.robe;
+  const trim = appearance.trim ?? colors.trim;
+  const weapon = colors.weapon ?? '#e5e7eb';
+  const facing = Number.isFinite(player.facing) ? player.facing : 0;
+  const fx = Math.cos(facing);
+  const fy = Math.sin(facing);
+  const direction = Math.abs(fy) > Math.abs(fx)
+    ? (fy < 0 ? 'back' : 'front')
+    : (fx < 0 ? 'left' : 'right');
+  const isBack = direction === 'back';
+  const isSide = direction === 'left' || direction === 'right';
+  const sideSign = direction === 'left' ? -1 : 1;
+  const sideX = Math.cos(facing + Math.PI / 2);
+  const sideY = Math.sin(facing + Math.PI / 2);
+  const now = performance.now();
+  const frame = getCharacterAnimationFrame(player);
+  const idleBreath = Math.round(Math.sin(now / 420 + player.x * 0.01) * 1);
+  const bob = frame.bodyBob + idleBreath;
+  const outline = '#101820';
+  const shade = 'rgba(0, 0, 0, 0.26)';
+  const scaleY = selectedRace === 'dwarf' ? 0.9 : 1;
+  const spriteScale = selectedRace === 'dwarf' ? 1.12 : 1.18;
+  const classSprite = CLASS_SPRITE_DETAILS[selectedClass] ?? CLASS_SPRITE_DETAILS.warrior;
+  const highlight = selectedClass === 'priest'
+    ? '#f8fafc'
+    : selectedClass === 'mage'
+      ? '#a5f3fc'
+      : selectedClass === 'hunter'
+        ? '#bef264'
+        : selectedClass === 'paladin'
+          ? '#fef08a'
+          : selectedClass === 'rogue'
+            ? '#c084fc'
+            : '#cbd5e1';
+
+  context.save();
+  context.translate(player.x, player.y + bob);
+  context.scale(raceConfig.scale * spriteScale, raceConfig.scale * scaleY * spriteScale);
+
+  pixelRect(context, -18, 21, 36, 7, shade);
+
+  const leftStep = frame.leftLeg;
+  const rightStep = frame.rightLeg;
+  pixelRect(context, -12, 12, 8, 18 + leftStep, outline);
+  pixelRect(context, 4, 12, 8, 18 + rightStep, outline);
+  pixelRect(context, -10, 13, 5, 14 + leftStep, trim);
+  pixelRect(context, 5, 13, 5, 14 + rightStep, trim);
+  pixelRect(context, -11, 27 + leftStep, 8, 4, outline);
+  pixelRect(context, 3, 27 + rightStep, 10, 4, outline);
+
+  pixelRect(context, -18, -15, 36, 38, outline);
+  pixelRect(context, -14, -11, 28, 32, body);
+  pixelRect(context, -8, -5, 16, 24, selectedClass === 'rogue' ? '#111827' : body);
+  if (isSide) {
+    pixelRect(context, -13 * sideSign, -12, 24 * sideSign, 34, outline);
+    pixelRect(context, -10 * sideSign, -9, 18 * sideSign, 28, body);
+    pixelRect(context, -4 * sideSign, -7, 7 * sideSign, 26, trim);
+  }
+  pixelRect(context, -10, -8, 7, 27, 'rgba(255, 255, 255, 0.12)');
+  pixelRect(context, 7, -8, 4, 25, 'rgba(0, 0, 0, 0.16)');
+  pixelRect(context, -10, 5, 20, 4, trim);
+  pixelRect(context, -3, -9, 6, 30, trim);
+  if (isBack) {
+    pixelRect(context, -13, -10, 26, 31, body);
+    pixelRect(context, -3, -8, 6, 28, trim);
+    pixelRect(context, -15, 16, 30, 6, trim);
+  }
+  pixelRect(context, -20, -13, 9, 10, outline);
+  pixelRect(context, 11, -13, 9, 10, outline);
+  pixelRect(context, -18, -11, 7, 7, highlight);
+  pixelRect(context, 11, -11, 7, 7, highlight);
+  pixelRect(context, -14, -15, 28, 4, classSprite.collar);
+
+  if (selectedClass === 'paladin') {
+    pixelRect(context, -15, -11, 30, 14, '#fef08a');
+    pixelRect(context, -11, -8, 22, 8, body);
+    if (isBack) {
+      pixelRect(context, -4, -5, 8, 22, '#fef08a');
+      pixelRect(context, -10, 2, 20, 5, '#fef08a');
+    }
+  }
+  if (selectedClass === 'warrior') {
+    pixelRect(context, -15, -11, 30, 13, '#94a3b8');
+    pixelRect(context, -9, -7, 18, 7, body);
+    if (isBack) {
+      pixelRect(context, -16, 4, 32, 24, '#7f1d1d');
+      pixelRect(context, -5, 9, 10, 12, '#f59e0b');
+    }
+  }
+  if (selectedClass === 'priest') {
+    pixelRect(context, -14, -10, 28, 5, '#e0e7ff');
+    pixelRect(context, -4, 9, 8, 10, '#f8fafc');
+    pixelRect(context, -16, 19, 32, 5, '#e0e7ff');
+    if (isBack) {
+      pixelRect(context, -3, -2, 6, 22, '#facc15');
+      pixelRect(context, -9, 7, 18, 4, '#facc15');
+    }
+  }
+  if (selectedClass === 'mage') {
+    pixelRect(context, -13, -11, 26, 5, '#67e8f9');
+    pixelRect(context, -8, 10, 16, 5, '#dbeafe');
+    pixelRect(context, -15, 18, 30, 5, '#312e81');
+    if (isBack) {
+      pixelRect(context, -15, -17, 30, 9, '#1d4ed8');
+      pixelRect(context, -12, -25, 24, 11, '#1e3a8a');
+    }
+  }
+  if (selectedClass === 'hunter') {
+    pixelRect(context, -14, -10, 28, 5, '#bef264');
+    pixelRect(context, -12, 10, 24, 5, '#7c4a22');
+    if (isBack) {
+      pixelRect(context, -17, -14, 34, 17, '#2f5f2d');
+      pixelLine(context, -18, 16, 13, -18, 4, '#7c4a22', 10);
+    }
+  }
+  if (selectedClass === 'rogue') {
+    pixelRect(context, -13, -12, 26, 9, '#111827');
+    pixelRect(context, -14, 5, 28, 7, '#1f2937');
+    pixelRect(context, -10, 16, 20, 8, '#111827');
+    pixelRect(context, -16, -2, 5, 22, '#111827');
+    pixelRect(context, 11, -2, 5, 22, '#111827');
+  }
+
+  pixelRect(context, -21, -5, 7, 20 + frame.leftArm, outline);
+  pixelRect(context, 14, -5, 7, 20 + frame.rightArm, outline);
+  pixelRect(context, -19, -4, 4, 16 + frame.leftArm, trim);
+  pixelRect(context, 15, -4, 4, 16 + frame.rightArm, trim);
+
+  const headY = -30;
+  if (selectedRace === 'elf') {
+    if (!isBack) {
+      pixelRect(context, -23, headY - 2, 10, 5, outline);
+      pixelRect(context, 13, headY - 2, 10, 5, outline);
+      pixelRect(context, -24, headY - 1, 9, 3, skin);
+      pixelRect(context, 15, headY - 1, 9, 3, skin);
+    }
+  }
+
+  pixelRect(context, -14, headY - 12, 28, 5, outline);
+  pixelRect(context, -16, headY - 7, 32, 18, outline);
+  pixelRect(context, -12, headY + 11, 24, 5, outline);
+  if (isBack) {
+    pixelRect(context, -13, headY - 9, 26, 24, hair);
+    pixelRect(context, -9, headY - 12, 18, 6, hair);
+    pixelRect(context, -11, headY + 6, 22, 8, 'rgba(0, 0, 0, 0.12)');
+  } else if (isSide) {
+    pixelRect(context, -12 * sideSign, headY - 9, 23 * sideSign, 5, skin);
+    pixelRect(context, -14 * sideSign, headY - 4, 25 * sideSign, 14, skin);
+    pixelRect(context, -8 * sideSign, headY + 9, 18 * sideSign, 5, skin);
+    pixelRect(context, 8 * sideSign, headY - 1, 4 * sideSign, 8, skin);
+  } else {
+    pixelRect(context, -11, headY - 9, 22, 5, skin);
+    pixelRect(context, -13, headY - 4, 26, 13, skin);
+    pixelRect(context, -9, headY + 9, 18, 5, skin);
+    pixelRect(context, -11, headY - 5, 6, 7, 'rgba(255, 255, 255, 0.12)');
+  }
+
+  if (selectedRace === 'orc') {
+    if (!isBack) {
+      pixelRect(context, -13, headY - 5, 5, 8, skin);
+      pixelRect(context, 8, headY - 5, 5, 8, skin);
+      pixelRect(context, -8, headY + 8, 3, 6, '#f8fafc');
+      pixelRect(context, 5, headY + 8, 3, 6, '#f8fafc');
+    }
+  }
+
+  if (selectedRace === 'undead') {
+    if (!isBack) {
+      pixelRect(context, -9, headY - 8, 18, 8, '#d8e1cf');
+      pixelRect(context, -5, headY + 5, 2, 5, '#64748b');
+      pixelRect(context, 1, headY + 5, 2, 5, '#64748b');
+    }
+  } else if (!isBack) {
+    pixelRect(context, -11, headY - 12, 22, 7, hair);
+    if (isSide) {
+      pixelRect(context, -13 * sideSign, headY - 7, 9 * sideSign, 17, hair);
+      pixelRect(context, 7 * sideSign, headY - 7, 5 * sideSign, 9, hair);
+    } else {
+      pixelRect(context, -12, headY - 6, 6, 8, hair);
+      pixelRect(context, 7, headY - 7, 5, 7, hair);
+    }
+  }
+
+  if (selectedRace === 'dwarf') {
+    pixelRect(context, -9, headY + 4, 18, 12, '#7c2d12');
+    pixelRect(context, -5, headY + 12, 10, 5, '#9a3412');
+    pixelRect(context, -14, headY - 8, 5, 6, hair);
+    pixelRect(context, 9, headY - 8, 5, 6, hair);
+  }
+
+  if (!isBack) {
+    if (isSide) {
+      pixelRect(context, 4 * sideSign, headY - 1, 3 * sideSign, 4, '#111827');
+      pixelRect(context, 5 * sideSign, headY + 8, 6 * sideSign, 2, '#111827');
+    } else {
+      pixelRect(context, -6 + Math.round(fx * 2), headY - 1 + Math.round(fy), 3, 4, '#111827');
+      pixelRect(context, 4 + Math.round(fx * 2), headY - 1 + Math.round(fy), 3, 4, '#111827');
+      pixelRect(context, -3 + Math.round(fx * 2), headY + 8, 7, 2, '#111827');
+    }
+  }
+
+  const handX = sideX * 20 + fx * 4;
+  const handY = sideY * 20 + fy * 4;
+  const offHandX = -sideX * 20 + fx * 4;
+  const offHandY = -sideY * 20 + fy * 4;
+
+  if (classSprite.weapon === 'staff') {
+    const orb = classSprite.glow;
+    pixelLine(context, handX, handY, handX + fx * 30 + sideX * 8, handY + fy * 30 + sideY * 8, 4, weapon, 9);
+    pixelRect(context, handX + fx * 34 + sideX * 8 - 5, handY + fy * 34 + sideY * 8 - 5, 10, 10, orb);
+    pixelRect(context, handX + fx * 37 + sideX * 8 - 2, handY + fy * 37 + sideY * 8 - 2, 4, 4, '#f8fafc');
+  } else if (classSprite.weapon === 'bow') {
+    pixelLine(context, handX - sideX * 9, handY - sideY * 9, handX + sideX * 9, handY + sideY * 9, 3, '#8d6e45', 8);
+    pixelLine(context, handX - sideX * 10, handY - sideY * 10, handX + sideX * 10, handY + sideY * 10, 1, '#f8fafc', 8);
+    pixelLine(context, offHandX, offHandY, offHandX + fx * 24, offHandY + fy * 24, 3, '#fde68a', 7);
+  } else if (classSprite.weapon === 'daggers') {
+    pixelLine(context, handX, handY, handX + fx * 20 + sideX * 5, handY + fy * 20 + sideY * 5, 4, weapon, 7);
+    pixelLine(context, offHandX, offHandY, offHandX + fx * 20 - sideX * 5, offHandY + fy * 20 - sideY * 5, 4, weapon, 7);
+  } else if (classSprite.weapon === 'hammer-shield') {
+    pixelRect(context, offHandX - 8, offHandY - 8, 16, 18, '#facc15');
+    pixelRect(context, offHandX - 5, offHandY - 5, 10, 12, '#334155');
+    pixelLine(context, handX, handY, handX + fx * 34 + sideX * 9, handY + fy * 34 + sideY * 9, 5, weapon, 8);
+    pixelRect(context, handX + fx * 35 + sideX * 9 - 6, handY + fy * 35 + sideY * 9 - 6, 12, 12, '#fef08a');
+  } else {
+    pixelLine(context, handX, handY, handX + fx * 42 + sideX * 8, handY + fy * 42 + sideY * 8, 5, weapon, 10);
+    pixelRect(context, handX + fx * 42 + sideX * 8 - 3, handY + fy * 42 + sideY * 8 - 10, 6, 18, '#f8fafc');
+  }
+
+  context.restore();
+  context.imageSmoothingEnabled = previousSmoothing;
+}
+
 function drawPlayer(context, player, selectedClass, selectedRace, appearance = {}) {
   const classConfig = CLASSES[selectedClass];
   const raceConfig = RACES[selectedRace];
   if (!classConfig || !raceConfig || !Number.isFinite(player?.x) || !Number.isFinite(player?.y)) return;
+
+  if (drawCharacterAssetSprite(context, player, selectedClass, selectedRace, appearance)) {
+    drawCharacterAttackOverlay(context, player, selectedClass);
+    return;
+  }
+  drawPixelPlayerSprite(context, player, selectedClass, selectedRace, appearance);
+  drawCharacterAttackOverlay(context, player, selectedClass);
+  return;
 
   const colors = { ...classConfig.colors, ...appearance };
   const x = player.x;
@@ -1003,6 +2278,24 @@ function drawPlayer(context, player, selectedClass, selectedRace, appearance = {
   context.lineWidth = 4;
   context.lineCap = 'round';
 
+  const stride = Math.sin(performance.now() / 160 + x * 0.02 + y * 0.01) * 4;
+  context.strokeStyle = '#15222b';
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(-7, 16);
+  context.lineTo(-10 + stride, 30);
+  context.moveTo(7, 16);
+  context.lineTo(10 - stride, 30);
+  context.stroke();
+  context.strokeStyle = colors.trim;
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(-7, 17);
+  context.lineTo(-10 + stride, 28);
+  context.moveTo(7, 17);
+  context.lineTo(10 - stride, 28);
+  context.stroke();
+
   context.strokeStyle = colors.trim;
   context.beginPath();
   context.moveTo(-10 * sideX - 2 * fx, -5 * sideY - 2 * fy);
@@ -1018,6 +2311,25 @@ function drawPlayer(context, player, selectedClass, selectedRace, appearance = {
   context.roundRect(-14, -12, 28, 34, 8);
   context.fill();
   context.stroke();
+
+  if (selectedClass === 'paladin' || selectedClass === 'warrior') {
+    context.fillStyle = selectedClass === 'paladin' ? 'rgba(254, 240, 138, 0.45)' : 'rgba(203, 213, 225, 0.38)';
+    context.beginPath();
+    context.roundRect(-13, -9, 26, 16, 5);
+    context.fill();
+  }
+
+  if (selectedClass === 'rogue') {
+    context.fillStyle = 'rgba(15, 23, 42, 0.48)';
+    context.beginPath();
+    context.moveTo(-16, -8);
+    context.lineTo(0, 25);
+    context.lineTo(16, -8);
+    context.lineTo(8, 2);
+    context.lineTo(-8, 2);
+    context.closePath();
+    context.fill();
+  }
 
   context.strokeStyle = colors.trim;
   context.lineWidth = 3;
@@ -1114,6 +2426,15 @@ function drawPlayer(context, player, selectedClass, selectedRace, appearance = {
     context.beginPath();
     context.arc(sideX * 26 + fx * 24, sideY * 26 + fy * 24, 5, 0, Math.PI * 2);
     context.fill();
+  } else if (selectedClass === 'rogue') {
+    context.strokeStyle = colors.weapon;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(sideX * 16 - fx * 2, sideY * 16 - fy * 2);
+    context.lineTo(sideX * 27 + fx * 14, sideY * 27 + fy * 14);
+    context.moveTo(-sideX * 16 - fx * 2, -sideY * 16 - fy * 2);
+    context.lineTo(-sideX * 27 + fx * 14, -sideY * 27 + fy * 14);
+    context.stroke();
   } else {
     context.strokeStyle = colors.weapon;
     context.lineWidth = selectedClass === 'warrior' ? 5 : 4;
@@ -1126,7 +2447,7 @@ function drawPlayer(context, player, selectedClass, selectedRace, appearance = {
   context.restore();
 }
 
-function CharacterPreview({ character }) {
+function CharacterPreview({ character, spriteLoadVersion = 0 }) {
   const previewRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -1152,13 +2473,13 @@ function CharacterPreview({ character }) {
     context.scale(2.65, 2.65);
     drawPlayer(
       context,
-      { x: 0, y: 0, facing: -Math.PI / 2 },
+      { x: 0, y: 0, facing: Math.PI / 2 },
       character.classId,
       character.raceId,
       character.appearance,
     );
     context.restore();
-  }, [character]);
+  }, [character, spriteLoadVersion]);
 
   if (!character) {
     return (
@@ -1185,10 +2506,38 @@ function getDefaultAppearance(raceId, classId) {
   const race = RACES[raceId] ?? RACES.human;
   const classConfig = CLASSES[classId] ?? CLASSES.warrior;
   return {
+    race: raceId,
+    body: raceId,
+    outfit: classId,
+    weapon: classId,
+    beard: 'none',
+    cape: 'none',
+    outfitVariant: 'classic',
+    weaponVariant: 'classic',
+    capeStyle: 'none',
+    gender: 'male',
+    hairStyle: 'short',
     skin: race.skin,
     hair: raceId === 'human' ? classConfig.colors.hair : race.hair,
     robe: classConfig.colors.robe,
     trim: classConfig.colors.trim,
+  };
+}
+
+function getMergedDefaultAppearance(raceId, classId, current = {}) {
+  const nextDefault = getDefaultAppearance(raceId, classId);
+  return {
+    ...nextDefault,
+    gender: current.gender ?? 'male',
+    hairStyle: current.hairStyle ?? 'short',
+    beard: current.beard ?? nextDefault.beard,
+    outfitVariant: current.outfitVariant ?? nextDefault.outfitVariant,
+    weaponVariant: current.weaponVariant ?? nextDefault.weaponVariant,
+    capeStyle: current.capeStyle ?? current.cape ?? nextDefault.capeStyle,
+    skin: current.skin ?? nextDefault.skin,
+    hair: current.hair ?? nextDefault.hair,
+    robe: current.robe ?? nextDefault.robe,
+    trim: current.trim ?? nextDefault.trim,
   };
 }
 
@@ -1257,10 +2606,193 @@ function drawSelectedPlayerRing(context, remotePlayer) {
   context.restore();
 }
 
+function drawPixelEnemyLabel(context, enemy, isBoss, radius, hp, maxHp) {
+  const barWidth = isBoss ? 92 : 42;
+  const barHeight = isBoss ? 8 : 5;
+  const bossLabelOffset = enemy.type === 'boss' ? 124 : radius + 24;
+  const barY = isBoss ? -bossLabelOffset : -radius - 15;
+
+  context.fillStyle = '#111827';
+  context.fillRect(-barWidth / 2, barY, barWidth, barHeight);
+  context.fillStyle = '#22c55e';
+  context.fillRect(-barWidth / 2, barY, barWidth * (hp / Math.max(1, maxHp)), barHeight);
+
+  if (isBoss || enemy.state !== 'aggro') {
+    context.fillStyle = isBoss ? '#f6f1df' : '#cbd5e1';
+    context.font = isBoss ? '900 13px Inter, Arial' : '900 12px Inter, Arial';
+    context.textAlign = 'center';
+    context.fillText(isBoss ? enemy.name : 'idle', 0, isBoss ? barY - 10 : barY - 8);
+  }
+}
+
+function drawPixelWolf(context, radius, pulse, walk, bodyColor, outline, recentlyHit) {
+  pixelRect(context, -radius - 16, 6 + pulse, radius * 2 + 24, 13, 'rgba(0, 0, 0, 0.22)');
+  pixelRect(context, -radius - 8, -9 + pulse, radius * 2 + 12, 23, outline);
+  pixelRect(context, -radius - 4, -6 + pulse, radius * 2 + 7, 17, bodyColor);
+  pixelRect(context, radius - 3, -16 + pulse, 21, 21, outline);
+  pixelRect(context, radius + 1, -13 + pulse, 15, 15, recentlyHit ? '#fecaca' : '#475569');
+  pixelRect(context, radius, -24 + pulse, 7, 10, outline);
+  pixelRect(context, radius + 10, -25 + pulse, 7, 11, outline);
+  pixelRect(context, radius + 2, -23 + pulse, 4, 8, bodyColor);
+  pixelRect(context, radius + 11, -23 + pulse, 4, 8, bodyColor);
+  pixelRect(context, radius + 4, -8 + pulse, 4, 4, '#e0e7ff');
+  pixelRect(context, radius + 13, -8 + pulse, 4, 4, '#e0e7ff');
+  pixelRect(context, radius + 6, 2 + pulse, 10, 3, '#111827');
+  pixelRect(context, -radius - 13, -5 + pulse, 14, 6, outline);
+  pixelLine(context, -radius - 10, -4 + pulse, -radius - 28, -11 + pulse, 5, bodyColor, 4);
+  pixelRect(context, -radius + 1, 8 + pulse, 6, 15 + walk, outline);
+  pixelRect(context, 7, 8 + pulse, 6, 15 - walk, outline);
+  pixelRect(context, -radius + 2, 8 + pulse, 3, 12 + walk, bodyColor);
+  pixelRect(context, 8, 8 + pulse, 3, 12 - walk, bodyColor);
+}
+
+function drawPixelScarab(context, radius, pulse, walk, isAggro, recentlyHit) {
+  const shell = recentlyHit ? '#fecaca' : isAggro ? '#92400e' : '#b45309';
+  const trim = '#facc15';
+  const outline = '#3f2a13';
+  pixelRect(context, -radius - 15, 10 + pulse, radius * 2 + 30, 8, 'rgba(0, 0, 0, 0.2)');
+  pixelRect(context, -radius - 10, -12 + pulse, radius * 2 + 20, 28, outline);
+  pixelRect(context, -radius - 6, -9 + pulse, radius * 2 + 12, 22, shell);
+  pixelRect(context, -4, -10 + pulse, 8, 24, trim);
+  pixelRect(context, -radius - 2, -2 + pulse, radius * 2 + 4, 4, trim);
+  for (let index = -1; index <= 1; index += 1) {
+    pixelLine(context, -radius - 4, -3 + index * 8 + pulse, -radius - 22, 2 + index * 9 + walk, 4, outline, 4);
+    pixelLine(context, radius + 4, -3 + index * 8 + pulse, radius + 22, 2 + index * 9 - walk, 4, outline, 4);
+  }
+  pixelRect(context, -7, -18 + pulse, 5, 5, '#fff7ed');
+  pixelRect(context, 2, -18 + pulse, 5, 5, '#fff7ed');
+}
+
+function drawPixelStalker(context, radius, pulse, walk, bodyColor, outline, recentlyHit) {
+  const fill = recentlyHit ? '#fecaca' : bodyColor;
+  pixelRect(context, -radius - 10, 13 + pulse, radius * 2 + 20, 8, 'rgba(0, 0, 0, 0.25)');
+  pixelRect(context, -radius - 7, -radius + pulse, radius * 2 + 14, radius * 2 + 12, outline);
+  pixelRect(context, -radius - 2, -radius + 5 + pulse, radius * 2 + 4, radius * 2 + 3, fill);
+  pixelLine(context, -radius + 2, -radius + 7 + pulse, -radius - 18, -radius - 12 + pulse, 6, outline, 4);
+  pixelLine(context, radius - 2, -radius + 7 + pulse, radius + 18, -radius - 12 + pulse, 6, outline, 4);
+  pixelRect(context, -10, -6 + pulse, 6, 6, '#f8fafc');
+  pixelRect(context, 5, -6 + pulse, 6, 6, '#f8fafc');
+  pixelRect(context, -8, 11 + pulse, 16, 4, '#94a3b8');
+  pixelRect(context, -radius + 3, radius + pulse, 6, 14 + walk, outline);
+  pixelRect(context, radius - 9, radius + pulse, 6, 14 - walk, outline);
+}
+
+function drawPixelBoss(context, enemy, radius, pulse, walk, bodyColor, outline, recentlyHit) {
+  const isFinal = enemy.type === 'dungeon_final_boss';
+  const fill = recentlyHit ? '#fecaca' : bodyColor;
+  pixelRect(context, -radius - 10, radius - 2 + pulse, radius * 2 + 20, 12, 'rgba(0, 0, 0, 0.28)');
+  pixelRect(context, -radius, -radius + pulse, radius * 2, radius * 2, outline);
+  pixelRect(context, -radius + 6, -radius + 6 + pulse, radius * 2 - 12, radius * 2 - 12, fill);
+  pixelRect(context, -radius + 14, -radius - 13 + pulse, 12, 18, '#facc15');
+  pixelRect(context, -6, -radius - 18 + pulse, 12, 23, '#facc15');
+  pixelRect(context, radius - 26, -radius - 13 + pulse, 12, 18, '#facc15');
+  pixelRect(context, -15, -8 + pulse, 9, 9, '#f8fafc');
+  pixelRect(context, 7, -8 + pulse, 9, 9, '#f8fafc');
+  pixelRect(context, -15, 18 + pulse, 30, 6, '#111827');
+  if (isFinal) {
+    for (let ring = 0; ring < 8; ring += 1) {
+      const angle = ring * (Math.PI / 4) + performance.now() / 420;
+      pixelRect(
+        context,
+        Math.cos(angle) * (radius + 12) - 4,
+        Math.sin(angle) * (radius + 12) + pulse - 4,
+        8,
+        8,
+        ring % 2 === 0 ? '#a78bfa' : '#f0abfc',
+      );
+    }
+  } else {
+    pixelRect(context, -radius - 6, 5 + pulse, 12, 28 + walk, outline);
+    pixelRect(context, radius - 6, 5 + pulse, 12, 28 - walk, outline);
+  }
+}
+
+function drawEnemyAssetSprite(context, enemy, now, recentlyHit) {
+  const spriteId = getEnemySpriteId(enemy);
+  const config = ENEMY_SPRITE_CONFIG[spriteId];
+  const image = getEnemySpriteImage(spriteId);
+  if (!config || !image) return false;
+
+  const frame = Math.floor((now / 155 + (enemy.wobble ?? 0)) % config.frameCount);
+  const sx = frame * config.frameWidth;
+  const alpha = recentlyHit ? 0.72 : 1;
+
+  context.save();
+  context.globalAlpha = alpha;
+  context.drawImage(
+    image,
+    sx,
+    0,
+    config.frameWidth,
+    config.frameHeight,
+    Math.round(-config.drawWidth / 2),
+    Math.round(config.yOffset),
+    config.drawWidth,
+    config.drawHeight,
+  );
+  context.restore();
+  return true;
+}
+
+function drawPixelEnemySprite(context, enemy, now) {
+  const x = Number.isFinite(enemy?.x) ? enemy.x : enemy?.targetX;
+  const y = Number.isFinite(enemy?.y) ? enemy.y : enemy?.targetY;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  const previousSmoothing = context.imageSmoothingEnabled;
+  context.imageSmoothingEnabled = false;
+
+  const time = Number.isFinite(now) ? now : performance.now();
+  const pulse = Math.round(Math.sin(time / 180 + (enemy.wobble ?? 0)) * 2);
+  const walk = Math.round(Math.sin(time / 110 + (enemy.wobble ?? 0)) * 3);
+  const recentlyHit = time - (enemy.hitAt ?? 0) < 140;
+  const isBoss = enemy.type === 'boss' || enemy.type === 'dungeon_miniboss' || enemy.type === 'dungeon_final_boss';
+  const isAggro = enemy.state === 'aggro';
+  const radius = enemy.radius ?? ENEMY.radius;
+  const maxHp = enemy.maxHp || (isBoss ? 620 : 100);
+  const hp = clamp(enemy.hp ?? maxHp, 0, maxHp);
+  const outline = '#221722';
+  const bodyColor = enemy.type === 'dungeon_enemy'
+    ? '#475569'
+    : enemy.type === 'dungeon_miniboss'
+      ? '#7c2d12'
+      : enemy.type === 'dungeon_final_boss'
+        ? '#4c1d95'
+        : isBoss
+          ? '#5b21b6'
+          : isAggro
+            ? '#7f1d1d'
+            : '#4b5563';
+
+  context.save();
+  context.translate(x, y);
+
+  if (drawEnemyAssetSprite(context, enemy, time, recentlyHit)) {
+    drawPixelEnemyLabel(context, enemy, isBoss, radius, hp, maxHp);
+  } else if (enemy.type === 'enemy' && enemy.enemyKind === 'scarab') {
+    drawPixelScarab(context, radius, pulse, walk, isAggro, recentlyHit);
+    drawPixelEnemyLabel(context, enemy, isBoss, radius, hp, maxHp);
+  } else if (enemy.type === 'enemy') {
+    drawPixelWolf(context, radius, pulse, walk, bodyColor, outline, recentlyHit);
+    drawPixelEnemyLabel(context, enemy, isBoss, radius, hp, maxHp);
+  } else if (enemy.type === 'dungeon_enemy') {
+    drawPixelStalker(context, radius, pulse, walk, bodyColor, outline, recentlyHit);
+    drawPixelEnemyLabel(context, enemy, isBoss, radius, hp, maxHp);
+  } else {
+    drawPixelBoss(context, enemy, radius, pulse, walk, bodyColor, outline, recentlyHit);
+    drawPixelEnemyLabel(context, enemy, isBoss, radius, hp, maxHp);
+  }
+  context.restore();
+  context.imageSmoothingEnabled = previousSmoothing;
+}
+
 function drawEnemy(context, enemy, now) {
   const x = Number.isFinite(enemy?.x) ? enemy.x : enemy?.targetX;
   const y = Number.isFinite(enemy?.y) ? enemy.y : enemy?.targetY;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  drawPixelEnemySprite(context, enemy, now);
+  return;
 
   const pulse = Math.sin(now / 180 + (enemy.wobble ?? 0)) * 2;
   const recentlyHit = now - (enemy.hitAt ?? 0) < 140;
@@ -1278,25 +2810,108 @@ function drawEnemy(context, enemy, now) {
   context.ellipse(0, isBoss ? 34 : 17, isBoss ? 38 : 18, isBoss ? 13 : 7, 0, 0, Math.PI * 2);
   context.fill();
 
-  context.fillStyle = recentlyHit ? '#fecaca' : isBoss ? '#5b21b6' : isAggro ? '#7f1d1d' : '#334155';
-  context.strokeStyle = '#2b1111';
-  context.lineWidth = isBoss ? 5 : 3;
-  context.beginPath();
-  context.arc(0, pulse, radius, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
+  const walk = Math.sin(now / 120 + (enemy.wobble ?? 0)) * 4;
+  const bodyColor = recentlyHit
+    ? '#fecaca'
+    : enemy.type === 'dungeon_enemy'
+      ? '#475569'
+      : enemy.type === 'dungeon_miniboss'
+        ? '#7c2d12'
+        : enemy.type === 'dungeon_final_boss'
+          ? '#4c1d95'
+          : isBoss
+            ? '#5b21b6'
+            : isAggro
+              ? '#7f1d1d'
+              : '#4b5563';
+
+  if (enemy.type === 'enemy' && enemy.enemyKind === 'scarab') {
+    context.strokeStyle = '#3b2f1c';
+    context.lineWidth = 4;
+    context.fillStyle = recentlyHit ? '#fecaca' : isAggro ? '#92400e' : '#b45309';
+    context.beginPath();
+    context.ellipse(0, 3 + pulse, radius + 9, radius - 2, 0, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = '#fbbf24';
+    context.beginPath();
+    context.ellipse(0, -2 + pulse, radius - 2, radius - 9, 0, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = '#3b2f1c';
+    context.lineWidth = 3;
+    context.beginPath();
+    for (let leg = -1; leg <= 1; leg += 1) {
+      context.moveTo(-12, 4 + leg * 7 + pulse);
+      context.lineTo(-28, 8 + leg * 7 + walk);
+      context.moveTo(12, 4 + leg * 7 + pulse);
+      context.lineTo(28, 8 + leg * 7 - walk);
+    }
+    context.stroke();
+  } else if (enemy.type === 'enemy') {
+    context.strokeStyle = '#2b1111';
+    context.lineWidth = 4;
+    context.fillStyle = bodyColor;
+    context.beginPath();
+    context.ellipse(0, 3 + pulse, radius + 8, radius - 3, 0, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = '#374151';
+    context.beginPath();
+    context.ellipse(18, -4 + pulse, 13, 11, 0.2, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = '#374151';
+    context.beginPath();
+    context.moveTo(18, -16 + pulse);
+    context.lineTo(24, -28 + pulse);
+    context.lineTo(27, -12 + pulse);
+    context.moveTo(7, -15 + pulse);
+    context.lineTo(5, -28 + pulse);
+    context.lineTo(16, -15 + pulse);
+    context.fill();
+    context.stroke();
+    context.strokeStyle = '#2b1111';
+    context.lineWidth = 4;
+    context.beginPath();
+    context.moveTo(-12, 12 + pulse);
+    context.lineTo(-18, 24 + walk);
+    context.moveTo(6, 12 + pulse);
+    context.lineTo(2, 25 - walk);
+    context.moveTo(-24, 1 + pulse);
+    context.quadraticCurveTo(-38, -8 + pulse, -44, -1 + pulse);
+    context.stroke();
+  } else {
+    context.fillStyle = bodyColor;
+    context.strokeStyle = '#2b1111';
+    context.lineWidth = isBoss ? 5 : 3;
+    context.beginPath();
+    context.arc(0, pulse, radius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    if (enemy.type === 'dungeon_enemy') {
+      context.fillStyle = '#94a3b8';
+      context.beginPath();
+      context.moveTo(-18, -9 + pulse);
+      context.lineTo(-30, -21 + pulse);
+      context.lineTo(-21, 1 + pulse);
+      context.moveTo(18, -9 + pulse);
+      context.lineTo(30, -21 + pulse);
+      context.lineTo(21, 1 + pulse);
+      context.fill();
+    }
+  }
 
   context.fillStyle = '#fef2f2';
   context.beginPath();
-  context.arc(isBoss ? -12 : -6, (isBoss ? -8 : -4) + pulse, isBoss ? 5 : 3, 0, Math.PI * 2);
-  context.arc(isBoss ? 12 : 6, (isBoss ? -8 : -4) + pulse, isBoss ? 5 : 3, 0, Math.PI * 2);
+  context.arc(isBoss ? -12 : 7, (isBoss ? -8 : -5) + pulse, isBoss ? 5 : 3, 0, Math.PI * 2);
+  context.arc(isBoss ? 12 : 19, (isBoss ? -8 : -5) + pulse, isBoss ? 5 : 3, 0, Math.PI * 2);
   context.fill();
 
   context.strokeStyle = '#111827';
   context.lineWidth = isBoss ? 4 : 2;
   context.beginPath();
-  context.moveTo(isBoss ? -13 : -6, (isBoss ? 12 : 6) + pulse);
-  context.lineTo(isBoss ? 13 : 6, (isBoss ? 12 : 6) + pulse);
+  context.moveTo(isBoss ? -13 : 9, (isBoss ? 12 : 7) + pulse);
+  context.lineTo(isBoss ? 13 : 19, (isBoss ? 12 : 7) + pulse);
   context.stroke();
 
   if (isBoss) {
@@ -1333,6 +2948,173 @@ function drawEnemy(context, enemy, now) {
   }
 
   context.restore();
+}
+
+function drawPixelRing(context, x, y, radius, color, count = 20, size = 6, spin = 0) {
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index / count) * Math.PI * 2 + spin;
+    pixelRect(
+      context,
+      x + Math.cos(angle) * radius - size / 2,
+      y + Math.sin(angle) * radius - size / 2,
+      size,
+      size,
+      color,
+    );
+  }
+}
+
+function drawPixelAbilityEffect(context, effect, now) {
+  const duration = Math.max(1, effect.duration ?? 320);
+  const progress = clamp((now - effect.start) / duration, 0, 1);
+  const alpha = 1 - progress;
+  const facing = Number.isFinite(effect.facing) ? effect.facing : 0;
+  const fx = Math.cos(facing);
+  const fy = Math.sin(facing);
+  const sideX = Math.cos(facing + Math.PI / 2);
+  const sideY = Math.sin(facing + Math.PI / 2);
+  const color = effect.color ?? '#8be9fd';
+  const light = effect.type === 'heal' ? '#f0fdf4' : '#f8fafc';
+  const previousSmoothing = context.imageSmoothingEnabled;
+  context.imageSmoothingEnabled = false;
+
+  context.save();
+  context.globalAlpha = Math.max(alpha, 0);
+
+  if (effect.type === 'bolt') {
+    const distance = 42 + progress * 190;
+    pixelLine(context, effect.x + fx * 18, effect.y + fy * 18, effect.x + fx * distance, effect.y + fy * distance, 6, color, 12);
+    for (let spark = 0; spark < 5; spark += 1) {
+      const offset = (spark - 2) * 7;
+      pixelRect(
+        context,
+        effect.x + fx * (distance - spark * 13) + sideX * offset - 4,
+        effect.y + fy * (distance - spark * 13) + sideY * offset - 4,
+        8,
+        8,
+        spark % 2 ? light : color,
+      );
+    }
+  }
+
+  if (effect.type === 'shot') {
+    const head = 85 + progress * 230;
+    pixelLine(context, effect.x + fx * 20, effect.y + fy * 20, effect.x + fx * head, effect.y + fy * head, 4, '#fde68a', 14);
+    pixelRect(context, effect.x + fx * head - 5, effect.y + fy * head - 5, 10, 10, color);
+    pixelRect(context, effect.x + fx * head + sideX * 8 - 3, effect.y + fy * head + sideY * 8 - 3, 6, 6, light);
+    pixelRect(context, effect.x + fx * head - sideX * 8 - 3, effect.y + fy * head - sideY * 8 - 3, 6, 6, light);
+  }
+
+  if (effect.type === 'channel') {
+    context.globalAlpha = 0.45 + Math.sin(now / 55) * 0.18;
+    for (let segment = 0; segment < 15; segment += 1) {
+      const distance = 24 + segment * 17;
+      const wobble = Math.sin(now / 90 + segment) * 5;
+      pixelRect(
+        context,
+        effect.x + fx * distance + sideX * wobble - 5,
+        effect.y + fy * distance + sideY * wobble - 5,
+        10,
+        10,
+        segment % 2 ? color : '#f5d0fe',
+      );
+    }
+  }
+
+  if (effect.type === 'nova' || effect.type === 'shield' || effect.type === 'shout') {
+    const baseRadius = effect.type === 'shield' ? 24 : 30;
+    const radius = baseRadius + progress * 98;
+    const iconColor = effect.type === 'shout' ? '#fb7185' : color;
+    drawPixelRing(context, effect.x, effect.y, radius, iconColor, effect.type === 'shield' ? 28 : 22, effect.type === 'shield' ? 5 : 7, now / 240);
+    if (effect.type === 'shield') {
+      drawPixelRing(context, effect.x, effect.y, Math.max(8, radius - 15), '#fef3c7', 18, 4, -now / 280);
+    }
+  }
+
+  if (effect.type === 'heal') {
+    const radius = 18 + progress * 55;
+    drawPixelRing(context, effect.x, effect.y, radius, '#86efac', 16, 6, now / 180);
+    drawPixelCross(context, effect.x, effect.y - 36 - progress * 18, 7, color);
+    for (let spark = 0; spark < 6; spark += 1) {
+      pixelRect(
+        context,
+        effect.x + Math.cos(spark) * (12 + spark * 4) - 3,
+        effect.y - progress * 45 + Math.sin(spark * 1.7) * 18 - 3,
+        6,
+        6,
+        spark % 2 ? '#f0fdf4' : color,
+      );
+    }
+  }
+
+  if (effect.type === 'trap') {
+    const trapX = effect.x + fx * 95;
+    const trapY = effect.y + fy * 95;
+    const pulse = 28 + Math.sin(now / 90) * 4;
+    pixelRect(context, trapX - 18, trapY - 18, 36, 4, color);
+    pixelRect(context, trapX - 18, trapY + 14, 36, 4, color);
+    pixelRect(context, trapX - 18, trapY - 18, 4, 36, color);
+    pixelRect(context, trapX + 14, trapY - 18, 4, 36, color);
+    drawPixelRing(context, trapX, trapY, pulse, '#f5d0fe', 12, 4, now / 150);
+  }
+
+  if (effect.type === 'strike') {
+    for (let slash = 0; slash < 9; slash += 1) {
+      const distance = 20 + slash * 9;
+      const width = 9 - slash * 0.35;
+      pixelRect(
+        context,
+        effect.x + fx * distance + sideX * (slash - 4) * 7 - width / 2,
+        effect.y + fy * distance + sideY * (slash - 4) * 7 - width / 2,
+        width,
+        width,
+        slash % 2 ? light : color,
+      );
+    }
+  }
+
+  if (effect.type === 'cleave') {
+    for (let slash = -8; slash <= 8; slash += 1) {
+      const angle = facing + slash * 0.115;
+      const radius = 48 + progress * 18;
+      pixelRect(
+        context,
+        effect.x + Math.cos(angle) * radius - 5,
+        effect.y + Math.sin(angle) * radius - 5,
+        10,
+        10,
+        slash % 2 ? color : light,
+      );
+    }
+  }
+
+  if (effect.type === 'dungeon_aoe') {
+    const radius = effect.radius ?? 90;
+    context.globalAlpha = 0.18 + alpha * 0.26;
+    for (let ring = 0; ring < 3; ring += 1) {
+      drawPixelRing(context, effect.x, effect.y, radius * (0.45 + ring * 0.22 + progress * 0.08), effect.color ?? '#ef4444', 22 + ring * 6, 9, now / (220 + ring * 80));
+    }
+  }
+
+  if (effect.type === 'dungeon_laser') {
+    const length = effect.length ?? 520;
+    const width = effect.width ?? 42;
+    context.globalAlpha = 0.22 + alpha * 0.42;
+    for (let index = 0; index <= 32; index += 1) {
+      const distance = 24 + (length / 32) * index;
+      pixelRect(
+        context,
+        effect.x + fx * distance - width / 2 * Math.abs(sideX) - 4,
+        effect.y + fy * distance - width / 2 * Math.abs(sideY) - 4,
+        Math.max(8, Math.abs(sideX) * width + 8),
+        Math.max(8, Math.abs(sideY) * width + 8),
+        index % 2 ? effect.color ?? '#f43f5e' : '#ffe4e6',
+      );
+    }
+  }
+
+  context.restore();
+  context.imageSmoothingEnabled = previousSmoothing;
 }
 
 function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWidth, viewHeight) {
@@ -1525,6 +3307,11 @@ function getObjectCenter(object) {
   };
 }
 
+function getObjectPosition(object) {
+  if (!object) return null;
+  return object.point ? { x: Number(object.x ?? 0), y: Number(object.y ?? 0) } : getObjectCenter(object);
+}
+
 function pointInObject(point, object) {
   if (!object || !point) return false;
   if (object.point) return distance(point, object) < 42;
@@ -1540,8 +3327,77 @@ function getTransition(tiledWorld, name) {
   return tiledWorld?.transitions?.find((transition) => transition.name === name) ?? null;
 }
 
+function getNearestGraveyardPosition(tiledWorld, origin, character) {
+  const graveyards = [
+    ...(tiledWorld?.graveyards ?? []),
+    ...(tiledWorld?.transitions ?? []).filter((transition) => transition.name?.toLowerCase().includes('graveyard')),
+  ];
+  const source = origin ?? getRaceStartPosition(tiledWorld, character?.raceId);
+
+  if (graveyards.length > 0) {
+    const nearest = graveyards
+      .map((graveyard) => ({ graveyard, point: getObjectPosition(graveyard) }))
+      .filter((entry) => entry.point)
+      .sort((a, b) => distance(source, a.point) - distance(source, b.point))[0];
+
+    if (nearest) {
+      return {
+        x: nearest.point.x,
+        y: nearest.point.y,
+        facing: Number(nearest.graveyard.props?.facing ?? 0),
+      };
+    }
+  }
+
+  return getRaceStartPosition(tiledWorld, character?.raceId);
+}
+
 function hasFinalBossAlive(enemiesList) {
   return enemiesList.some((enemy) => enemy.type === 'dungeon_final_boss');
+}
+
+function getAbilityIconLabel(ability) {
+  const labels = {
+    bolt: 'BL',
+    nova: 'NV',
+    shot: 'SH',
+    trap: 'TR',
+    strike: 'ST',
+    cleave: 'CL',
+    shout: 'AO',
+    shield: 'GD',
+    heal: 'HL',
+    channel: 'CH',
+  };
+  return labels[ability?.type] ?? 'AB';
+}
+
+function describeAbility(ability, stats, character) {
+  if (!ability) return '';
+  const damage = ability.damage
+    ? ability.damage + Math.floor(((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 8)
+    : 0;
+  const healing = ability.healing ? ability.healing + Math.floor((stats.intellect ?? 0) / 3) : 0;
+  const parts = [];
+  if (damage) parts.push(`${damage} damage`);
+  if (healing) parts.push(`${healing} healing`);
+  parts.push(`${getAbilityManaCost(ability, character)} ${getResourceConfig(character).label.toLowerCase()}`);
+  parts.push(`${(getAbilityCooldownMs(ability) / 1000).toFixed(1)}s cooldown`);
+  return parts.join(' | ');
+}
+
+function getItemIconLabel(item) {
+  const labels = {
+    head: 'HD',
+    chest: 'CH',
+    legs: 'LG',
+    boots: 'BT',
+    weapon: 'WP',
+    offhand: 'OH',
+    ring: 'RG',
+    trinket: 'TR',
+  };
+  return labels[item?.slot] ?? 'IT';
 }
 
 function AuthGate({
@@ -1613,6 +3469,7 @@ function CharacterMenu({
   onDelete,
   onEnter,
   onLogout,
+  spriteLoadVersion = 0,
 }) {
   const [mode, setMode] = React.useState(characters.length > 0 ? 'list' : 'create');
   const [creationStep, setCreationStep] = React.useState('identity');
@@ -1638,7 +3495,7 @@ function CharacterMenu({
     if (!selectedRace.allowedClasses.includes(classId)) {
       const nextClassId = selectedRace.allowedClasses[0];
       setClassId(nextClassId);
-      setAppearance(getDefaultAppearance(raceId, nextClassId));
+      setAppearance((current) => getMergedDefaultAppearance(raceId, nextClassId, current));
     }
   }, [classId, raceId, selectedRace]);
 
@@ -1653,16 +3510,28 @@ function CharacterMenu({
     const nextClassId = race.allowedClasses.includes(classId) ? classId : race.allowedClasses[0];
     setRaceId(id);
     setClassId(nextClassId);
-    setAppearance(getDefaultAppearance(id, nextClassId));
+    setAppearance((current) => getMergedDefaultAppearance(id, nextClassId, current));
   };
 
   const selectClass = (id) => {
     setClassId(id);
-    setAppearance(getDefaultAppearance(raceId, id));
+    setAppearance((current) => getMergedDefaultAppearance(raceId, id, current));
   };
 
   const updateAppearance = (key, value) => {
     setAppearance((current) => ({ ...current, [key]: value }));
+  };
+
+  const cycleAppearanceValue = (key, values, direction) => {
+    const currentIndex = values.indexOf(appearance[key]);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + direction + values.length) % values.length;
+    updateAppearance(key, values[nextIndex]);
+  };
+
+  const cycleAppearanceChoice = (key, choices, direction) => {
+    const values = choices.map((choice) => choice.id);
+    cycleAppearanceValue(key, values, direction);
   };
 
   const startCreate = () => {
@@ -1757,7 +3626,7 @@ function CharacterMenu({
 
           {mode === 'list' && (
             <section className="character-preview-panel">
-              <CharacterPreview character={selectedCharacter} />
+              <CharacterPreview character={selectedCharacter} spriteLoadVersion={spriteLoadVersion} />
               <div className="preview-actions">
                 <button
                   className="create-button"
@@ -1774,7 +3643,7 @@ function CharacterMenu({
           {mode === 'create' && (
             <section className="character-builder">
               <div className="builder-preview">
-                <CharacterPreview character={draftCharacter} />
+                <CharacterPreview character={draftCharacter} spriteLoadVersion={spriteLoadVersion} />
               </div>
 
               <div className="builder-fields">
@@ -1833,20 +3702,80 @@ function CharacterMenu({
                   <>
                     <p className="section-label">Customize</p>
                     <div className="customization-grid">
+                      {Object.entries(APPEARANCE_CHOICES).map(([key, choices]) => (
+                        <div className="customization-row" key={key}>
+                          <strong>{key}</strong>
+                          {key === 'gender' ? (
+                            <div className="choice-buttons">
+                              {choices.map((choice) => (
+                                <button
+                                  className={appearance[key] === choice.id ? 'selected text-choice' : 'text-choice'}
+                                  key={choice.id}
+                                  type="button"
+                                  onClick={() => updateAppearance(key, choice.id)}
+                                >
+                                  {choice.label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="cycle-control">
+                              <button
+                                aria-label={`Previous ${key}`}
+                                className="cycle-arrow"
+                                type="button"
+                                onClick={() => cycleAppearanceChoice(key, choices, -1)}
+                              >
+                                {'<'}
+                              </button>
+                              <button
+                                className="cycle-value"
+                                type="button"
+                                onClick={() => cycleAppearanceChoice(key, choices, 1)}
+                              >
+                                {choices.find((choice) => choice.id === appearance[key])?.label ?? choices[0]?.label}
+                              </button>
+                              <button
+                                aria-label={`Next ${key}`}
+                                className="cycle-arrow"
+                                type="button"
+                                onClick={() => cycleAppearanceChoice(key, choices, 1)}
+                              >
+                                {'>'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                       {Object.entries(CUSTOMIZATION).map(([key, values]) => (
                         <div className="customization-row" key={key}>
                           <strong>{key}</strong>
-                          <div>
-                            {values.map((value) => (
-                              <button
-                                className={appearance[key] === value ? 'selected' : ''}
-                                key={value}
-                                style={{ backgroundColor: value }}
-                                type="button"
-                                onClick={() => updateAppearance(key, value)}
-                                title={value}
-                              />
-                            ))}
+                          <div className="cycle-control">
+                            <button
+                              aria-label={`Previous ${key}`}
+                              className="cycle-arrow"
+                              type="button"
+                              onClick={() => cycleAppearanceValue(key, values, -1)}
+                            >
+                              {'<'}
+                            </button>
+                            <button
+                              className="cycle-value color-value"
+                              type="button"
+                              onClick={() => cycleAppearanceValue(key, values, 1)}
+                              title={appearance[key]}
+                            >
+                              <span className="cycle-swatch" style={{ backgroundColor: appearance[key] }} />
+                              <span>{appearance[key]}</span>
+                            </button>
+                            <button
+                              aria-label={`Next ${key}`}
+                              className="cycle-arrow"
+                              type="button"
+                              onClick={() => cycleAppearanceValue(key, values, 1)}
+                            >
+                              {'>'}
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1925,13 +3854,15 @@ function App() {
   const nextEnemyId = React.useRef(1);
   const nextSpawnAt = React.useRef(0);
   const nextBossSpawnAt = React.useRef(0);
-  const cooldowns = React.useRef({ 1: 0, 2: 0 });
+  const worldSpawnPacks = React.useRef(new globalThis.Map());
+  const cooldowns = React.useRef({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  const abilitySlotsRef = React.useRef(Array(ABILITY_BAR_SLOTS).fill(null));
   const selectedClassRef = React.useRef(null);
   const selectedRaceRef = React.useRef(null);
   const characterRef = React.useRef(null);
   const charactersRef = React.useRef([]);
   const lastRenderStatusAt = React.useRef(0);
-  const vitalsRef = React.useRef({ hp: BASE_STATS.health, mana: BASE_STATS.mana, fury: 0 });
+  const vitalsRef = React.useRef({ hp: BASE_STATS.health, mana: BASE_STATS.mana, fury: 0, energy: 100 });
   const deadRef = React.useRef(false);
   const shopOpenRef = React.useRef(false);
   const lastCombatAt = React.useRef(0);
@@ -1940,11 +3871,15 @@ function App() {
   const colyseusRoomRef = React.useRef(null);
   const colyseusSessionIdRef = React.useRef(null);
   const remotePlayersRef = React.useRef([]);
+  const onlinePlayersRef = React.useRef([]);
   const displayedRemotePlayersRef = React.useRef([]);
+  const remoteAttackStatesRef = React.useRef(new globalThis.Map());
+  const partyInviteCooldownsRef = React.useRef(new globalThis.Map());
   const selectedPlayerIdRef = React.useRef(null);
   const lastColyseusInputAt = React.useRef(0);
   const mapTransitioningRef = React.useRef(false);
   const nextAutoAttackAt = React.useRef(0);
+  const autoAttackHeld = React.useRef(false);
   const [characters, setCharacters] = React.useState(() => loadCharacters());
   const [character, setCharacter] = React.useState(null);
   const [position, setPosition] = React.useState(player.current);
@@ -1955,6 +3890,15 @@ function App() {
   const [inventoryOpen, setInventoryOpen] = React.useState(false);
   const [shopOpen, setShopOpen] = React.useState(false);
   const [talentsOpen, setTalentsOpen] = React.useState(false);
+  const [abilityBookOpen, setAbilityBookOpen] = React.useState(false);
+  const [gameMenuOpen, setGameMenuOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [friendsOpen, setFriendsOpen] = React.useState(false);
+  const [mapOpen, setMapOpen] = React.useState(false);
+  const [journalOpen, setJournalOpen] = React.useState(false);
+  const [friends, setFriends] = React.useState(() => loadFriends());
+  const [friendNameInput, setFriendNameInput] = React.useState('');
+  const [resurrectionCast, setResurrectionCast] = React.useState(null);
   const [mapStatus, setMapStatus] = React.useState('Loading map...');
   const [currentMapId, setCurrentMapId] = React.useState('world');
   const [authUser, setAuthUser] = React.useState(OFFLINE_DEMO ? OFFLINE_USER : null);
@@ -1966,6 +3910,9 @@ function App() {
   const [selectedPlayerId, setSelectedPlayerId] = React.useState(null);
   const [partyInvite, setPartyInvite] = React.useState(null);
   const [partyMembers, setPartyMembers] = React.useState([]);
+  const [onlinePlayers, setOnlinePlayers] = React.useState([]);
+  const [abilitySlots, setAbilitySlots] = React.useState(Array(ABILITY_BAR_SLOTS).fill(null));
+  const [spriteLoadVersion, setSpriteLoadVersion] = React.useState(0);
   const [authStatus, setAuthStatus] = React.useState(
     OFFLINE_DEMO ? 'Offline demo' : hasFirebaseConfig ? 'Login or create an account' : 'Firebase config missing',
   );
@@ -1978,6 +3925,7 @@ function App() {
   deadRef.current = isDead;
   shopOpenRef.current = shopOpen;
   selectedPlayerIdRef.current = selectedPlayerId;
+  abilitySlotsRef.current = abilitySlots;
 
   const setVitalsValue = (nextVitals) => {
     vitalsRef.current = {
@@ -1994,6 +3942,16 @@ function App() {
       setAuthStatus(`Cloud save failed: ${error.message}`);
     });
   }, [authUser]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    Promise.all([loadCharacterSprites(), loadEnemySprites()]).finally(() => {
+      if (!cancelled) setSpriteLoadVersion((version) => version + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (OFFLINE_DEMO) return undefined;
@@ -2108,10 +4066,19 @@ function App() {
     nextEnemyId.current = 1;
     nextSpawnAt.current = performance.now() + 700;
     nextBossSpawnAt.current = performance.now() + nextBossDelay();
-    cooldowns.current = { 1: 0, 2: 0 };
+    worldSpawnPacks.current = createWorldSpawnPacks(tiledWorld.current?.enemySpawns ?? []);
+    cooldowns.current = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const nextAbilitySlots = getDefaultAbilitySlots(nextCharacter);
+    abilitySlotsRef.current = nextAbilitySlots;
+    setAbilitySlots(nextAbilitySlots);
     player.current = getCharacterStartPosition(tiledWorld.current, nextCharacter);
     const stats = getTotalStats(nextCharacter);
-    setVitalsValue({ hp: stats.health, mana: stats.mana, fury: nextCharacter.classId === 'warrior' ? 0 : 0 });
+    setVitalsValue({
+      hp: stats.health,
+      mana: stats.mana,
+      fury: nextCharacter.classId === 'warrior' ? 0 : 0,
+      energy: nextCharacter.classId === 'rogue' ? 100 : 0,
+    });
     setIsDead(false);
     deadRef.current = false;
     lastCombatAt.current = 0;
@@ -2120,6 +4087,8 @@ function App() {
     setInventoryOpen(false);
     setShopOpen(false);
     setTalentsOpen(false);
+    setAbilityBookOpen(false);
+    setGameMenuOpen(false);
     setCharacter(nextCharacter);
   };
 
@@ -2137,7 +4106,7 @@ function App() {
       stats: getInitialStats(newCharacter.classId),
       inventory: [],
       gold: 0,
-      talents: { spec: null },
+      talents: { spec: null, ranks: {} },
       createdAt: new Date().toISOString(),
       position: getRaceStartPosition(tiledWorld.current, newCharacter.raceId),
     };
@@ -2206,6 +4175,11 @@ function App() {
   const addLoot = (item) => {
     const activeCharacter = characterRef.current;
     if (!activeCharacter) return;
+    const bagCount = (activeCharacter.inventory ?? []).filter((inventoryItem) => !inventoryItem.equippedSlot).length;
+    if (bagCount >= INVENTORY_CAPACITY) {
+      setLastCast('Inventory full');
+      return;
+    }
 
     const updatedCharacter = {
       ...activeCharacter,
@@ -2271,11 +4245,33 @@ function App() {
     setLastCast(`Sold: ${itemToSell.name} +${value}g`);
   };
 
+  const sendPartyInviteToPlayer = (targetId, targetName = 'player') => {
+    if (!targetId || !colyseusRoomRef.current) return false;
+    const activeCharacter = characterRef.current;
+    const currentParty = partyMembers.find((member) => member.id === targetId);
+    if (currentParty && !currentParty.isSelf) {
+      setLastCast(`${targetName} is already in your party`);
+      return false;
+    }
+
+    const now = performance.now();
+    const cooldownUntil = partyInviteCooldownsRef.current.get(targetId) ?? 0;
+    if (cooldownUntil > now) {
+      setLastCast('Party invite already pending');
+      return false;
+    }
+
+    partyInviteCooldownsRef.current.set(targetId, now + PARTY_INVITE_COOLDOWN_MS);
+    colyseusRoomRef.current.send('partyInvite', { targetId });
+    setLastCast(`Party invite sent to ${targetName}`);
+    return Boolean(activeCharacter);
+  };
+
   const inviteSelectedPlayer = () => {
     const targetId = selectedPlayerIdRef.current;
-    if (!targetId || !colyseusRoomRef.current) return;
-    colyseusRoomRef.current.send('partyInvite', { targetId });
-    setLastCast('Party invite sent');
+    const targetPlayer = [...displayedRemotePlayersRef.current, ...onlinePlayersRef.current]
+      .find((candidate) => candidate.id === targetId);
+    sendPartyInviteToPlayer(targetId, targetPlayer?.name ?? 'player');
   };
 
   const acceptPartyInvite = () => {
@@ -2304,6 +4300,80 @@ function App() {
     setSelectedPlayerId(member.id);
   };
 
+  const addFriendByName = (rawName) => {
+    const name = String(rawName ?? '').trim();
+    if (!name) return;
+    const alreadyAdded = friends.some((friend) => normalizeName(friend.name) === normalizeName(name));
+    if (alreadyAdded) {
+      setLastCast(`${name} is already on your friends list`);
+      return;
+    }
+
+    const nextFriends = [
+      ...friends,
+      {
+        id: crypto.randomUUID(),
+        name,
+        addedAt: new Date().toISOString(),
+      },
+    ];
+    setFriends(nextFriends);
+    saveFriends(nextFriends);
+    setFriendNameInput('');
+    setLastCast(`${name} added to friends`);
+  };
+
+  const addSelectedPlayerAsFriend = () => {
+    const selectedPlayer = displayedRemotePlayersRef.current.find((remotePlayer) => remotePlayer.id === selectedPlayerIdRef.current);
+    if (!selectedPlayer?.name) {
+      setLastCast('Target a player first');
+      return;
+    }
+    addFriendByName(selectedPlayer.name);
+  };
+
+  const removeFriend = (friendId) => {
+    const nextFriends = friends.filter((friend) => friend.id !== friendId);
+    setFriends(nextFriends);
+    saveFriends(nextFriends);
+  };
+
+  const inviteFriend = (friend) => {
+    const onlineFriend = onlinePlayersRef.current.find((candidate) => (
+      normalizeName(candidate.name) === normalizeName(friend.name)
+      && candidate.id !== colyseusSessionIdRef.current
+    ));
+    if (!onlineFriend) {
+      setLastCast(`${friend.name} is offline`);
+      return;
+    }
+    sendPartyInviteToPlayer(onlineFriend.id, onlineFriend.name);
+  };
+
+  const canResurrect = () => {
+    const activeCharacter = characterRef.current;
+    return activeCharacter?.classId === 'priest' && activeCharacter?.talents?.spec === 'light';
+  };
+
+  const startResurrection = (targetPlayer) => {
+    if (!targetPlayer || !canResurrect() || !colyseusRoomRef.current) return false;
+    if ((targetPlayer.hp ?? targetPlayer.maxHp ?? 1) > 0) return false;
+    if (distance(targetPlayer, player.current) > 110) {
+      setLastCast('Move closer to resurrect');
+      return true;
+    }
+
+    setResurrectionCast({ targetId: targetPlayer.id, targetName: targetPlayer.name ?? 'Adventurer', startedAt: performance.now() });
+    setLastCast(`Resurrecting ${targetPlayer.name ?? 'Adventurer'}...`);
+    window.setTimeout(() => {
+      const room = colyseusRoomRef.current;
+      if (!room || deadRef.current) return;
+      room.send('resurrect', { targetId: targetPlayer.id });
+      setResurrectionCast(null);
+    }, 3200);
+    return true;
+  };
+
   const chooseTalentSpec = (specId) => {
     const activeCharacter = characterRef.current;
     const talentTree = activeCharacter ? TALENTS[activeCharacter.classId] : null;
@@ -2311,7 +4381,56 @@ function App() {
 
     const updatedCharacter = {
       ...activeCharacter,
-      talents: { ...(activeCharacter.talents ?? {}), spec: specId },
+      talents: { spec: specId, ranks: activeCharacter.talents?.spec === specId ? getTalentRanks(activeCharacter) : {} },
+      updatedAt: new Date().toISOString(),
+    };
+    persistCharacter(updatedCharacter);
+    const nextAbilitySlots = getDefaultAbilitySlots(updatedCharacter);
+    abilitySlotsRef.current = nextAbilitySlots;
+    setAbilitySlots(nextAbilitySlots);
+    cooldowns.current = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const stats = getTotalStats(updatedCharacter);
+    setVitalsValue({
+      hp: Math.min(vitalsRef.current.hp, stats.health),
+      mana: Math.min(vitalsRef.current.mana, stats.mana),
+      fury: activeCharacter.classId === 'warrior' ? Math.min(vitalsRef.current.fury ?? 0, 100) : 0,
+      energy: activeCharacter.classId === 'rogue' ? Math.min(vitalsRef.current.energy ?? 100, 100) : 0,
+    });
+    setLastCast(`Spec: ${talentTree.specs[specId].name}`);
+  };
+
+  const spendTalentPoint = (specId, nodeId) => {
+    const activeCharacter = characterRef.current;
+    const talentTree = activeCharacter ? TALENTS[activeCharacter.classId] : null;
+    const node = TALENT_NODES.find((candidate) => candidate.id === nodeId);
+    if (!activeCharacter || !talentTree || !node) return;
+    if ((activeCharacter.level ?? 1) < (talentTree.unlockLevel ?? TALENT_UNLOCK_LEVEL)) return;
+
+    const selectedSpec = activeCharacter.talents?.spec;
+    if (selectedSpec !== specId) {
+      chooseTalentSpec(specId);
+      return;
+    }
+
+    const ranks = getTalentRanks(activeCharacter);
+    const nodeKey = getTalentNodeKey(specId, nodeId);
+    const currentRank = Number(ranks[nodeKey] ?? 0);
+    if (currentRank >= node.maxRank || getAvailableTalentPoints(activeCharacter) <= 0) return;
+    if (node.requiresSpent && getSpecSpentPoints(activeCharacter, specId) < node.requiresSpent) {
+      setLastCast(`Spend ${node.requiresSpent} points in this branch first`);
+      return;
+    }
+
+    const updatedCharacter = {
+      ...activeCharacter,
+      talents: {
+        ...(activeCharacter.talents ?? {}),
+        spec: specId,
+        ranks: {
+          ...ranks,
+          [nodeKey]: currentRank + 1,
+        },
+      },
       updatedAt: new Date().toISOString(),
     };
     persistCharacter(updatedCharacter);
@@ -2319,9 +4438,34 @@ function App() {
     setVitalsValue({
       hp: Math.min(vitalsRef.current.hp, stats.health),
       mana: Math.min(vitalsRef.current.mana, stats.mana),
-      fury: activeCharacter.classId === 'warrior' ? Math.min(vitalsRef.current.fury ?? 0, 100) : 0,
+      fury: updatedCharacter.classId === 'warrior' ? Math.min(vitalsRef.current.fury ?? 0, 100) : 0,
+      energy: updatedCharacter.classId === 'rogue' ? Math.min(vitalsRef.current.energy ?? 100, 100) : 0,
     });
-    setLastCast(`Spec: ${talentTree.specs[specId].name}`);
+
+    const nextSlots = abilitySlotsRef.current.map((slotId) => {
+      const ability = resolveAbility(getCharacterAbilities(updatedCharacter), slotId);
+      return ability ? getAbilityId(ability) : null;
+    });
+    if (!nextSlots.some(Boolean)) {
+      const defaults = getDefaultAbilitySlots(updatedCharacter);
+      abilitySlotsRef.current = defaults;
+      setAbilitySlots(defaults);
+    } else {
+      abilitySlotsRef.current = nextSlots;
+      setAbilitySlots(nextSlots);
+    }
+  };
+
+  const assignAbilitySlot = (slotIndex, ability) => {
+    if (!abilityBookOpen || !ability) return;
+    const abilityId = getAbilityId(ability);
+    setAbilitySlots((current) => {
+      const nextSlots = current.map((slotId) => (slotId === abilityId ? null : slotId));
+      nextSlots[slotIndex] = abilityId;
+      abilitySlotsRef.current = nextSlots;
+      return nextSlots;
+    });
+    setLastCast(`${ability.name} assigned to ${slotIndex + 1}`);
   };
 
   const killPlayer = () => {
@@ -2335,17 +4479,44 @@ function App() {
     enemies.current = enemies.current.map((enemy) => ({ ...enemy, state: 'idle' }));
   };
 
-  const respawnPlayer = () => {
+  const respawnPlayer = async () => {
     const activeCharacter = characterRef.current;
     if (!activeCharacter) return;
 
     const stats = getTotalStats(activeCharacter);
-    player.current = getRaceStartPosition(tiledWorld.current, activeCharacter.raceId);
+    let respawnMap = tiledWorld.current;
+    let respawnOrigin = { x: player.current.x, y: player.current.y };
+
+    if (currentMapIdRef.current === 'dungeon_01') {
+      try {
+        respawnMap = await loadTiledMap('world');
+        tiledWorld.current = respawnMap;
+        currentMapIdRef.current = 'world';
+        setCurrentMapId('world');
+        const dungeonEntrance = getTransition(respawnMap, 'dungeon_01_entrance');
+        respawnOrigin = getObjectPosition(dungeonEntrance) ?? respawnOrigin;
+        setMapStatus(`Map loaded: ${respawnMap.zones.length} zone, ${respawnMap.spawns.length} spawn`);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    player.current = getNearestGraveyardPosition(respawnMap, respawnOrigin, activeCharacter);
+    setPosition({ ...player.current });
     enemies.current = [];
     effects.current = [];
+    remotePlayersRef.current = [];
+    displayedRemotePlayersRef.current = [];
+    setSelectedPlayerId(null);
     nextSpawnAt.current = performance.now() + 900;
     nextBossSpawnAt.current = performance.now() + nextBossDelay();
-    setVitalsValue({ hp: stats.health, mana: stats.mana, fury: activeCharacter.classId === 'warrior' ? 0 : 0 });
+    worldSpawnPacks.current = createWorldSpawnPacks(respawnMap?.enemySpawns ?? []);
+    setVitalsValue({
+      hp: stats.health,
+      mana: stats.mana,
+      fury: activeCharacter.classId === 'warrior' ? 0 : 0,
+      energy: activeCharacter.classId === 'rogue' ? 100 : 0,
+    });
     setEnemyCount(0);
     setIsDead(false);
     deadRef.current = false;
@@ -2377,6 +4548,7 @@ function App() {
     remotePlayersRef.current = [];
     displayedRemotePlayersRef.current = [];
     setSelectedPlayerId(null);
+    worldSpawnPacks.current = createWorldSpawnPacks(loadedMap.mapId === 'world' ? loadedMap.enemySpawns : []);
     setEnemyCount(0);
     setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
 
@@ -2414,6 +4586,8 @@ function App() {
     setInventoryOpen(false);
     setShopOpen(false);
     setTalentsOpen(false);
+    setAbilityBookOpen(false);
+    setGameMenuOpen(false);
   };
 
   React.useEffect(() => {
@@ -2423,6 +4597,7 @@ function App() {
       .then((loadedMap) => {
         if (cancelled) return;
         tiledWorld.current = loadedMap;
+        worldSpawnPacks.current = createWorldSpawnPacks(loadedMap.enemySpawns);
         currentMapIdRef.current = loadedMap.mapId;
         setCurrentMapId(loadedMap.mapId);
         setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
@@ -2489,7 +4664,14 @@ function App() {
 
         room.onMessage('world', (worldState) => {
           const worldPlayers = worldState.players ?? [];
-          const localOnlinePlayer = worldPlayers.find((worldPlayer) => worldPlayer.id === room.sessionId) ?? null;
+          const onlinePlayerList = worldState.onlinePlayers ?? worldPlayers;
+          onlinePlayersRef.current = onlinePlayerList;
+          setOnlinePlayers((currentPlayers) => (
+            sameOnlinePlayers(currentPlayers, onlinePlayerList) ? currentPlayers : onlinePlayerList
+          ));
+          const localOnlinePlayer = onlinePlayerList.find((worldPlayer) => worldPlayer.id === room.sessionId)
+            ?? worldPlayers.find((worldPlayer) => worldPlayer.id === room.sessionId)
+            ?? null;
           const currentPartyId = localOnlinePlayer?.partyId ?? null;
 
           remotePlayersRef.current = worldPlayers
@@ -2526,7 +4708,20 @@ function App() {
         });
 
         room.onMessage('effect', (effect) => {
+          if (effect?.casterId && effect.casterId === room.sessionId) {
+            return;
+          }
           const now = performance.now();
+          if (effect?.casterId) {
+            remoteAttackStatesRef.current.set(effect.casterId, {
+              startedAt: now,
+              until: now + 320,
+              type: effect.type,
+              facing: effect.facing,
+              ranged: effect.range > 80 || effect.projectile || effect.autoAttack,
+              autoAttack: effect.autoAttack,
+            });
+          }
           effects.current.push({
             ...effect,
             start: now,
@@ -2561,6 +4756,22 @@ function App() {
           setLastCast(`+${amount} HP`);
         });
 
+        room.onMessage('resurrected', (message) => {
+          const stats = characterRef.current ? getTotalStats(characterRef.current) : BASE_STATS;
+          const nextHp = Math.max(1, Math.min(stats.health, Number(message?.hp ?? Math.ceil(stats.health * 0.45))));
+          const nextPosition = {
+            x: Number(message?.x ?? player.current.x),
+            y: Number(message?.y ?? player.current.y),
+            facing: player.current.facing,
+          };
+          player.current = nextPosition;
+          setPosition({ ...nextPosition });
+          setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+          setIsDead(false);
+          deadRef.current = false;
+          setLastCast('Resurrected');
+        });
+
         room.onMessage('partyInvite', (message) => {
           if (!message?.fromId) return;
           setPartyInvite({
@@ -2579,6 +4790,9 @@ function App() {
           colyseusSessionIdRef.current = null;
           remotePlayersRef.current = [];
           displayedRemotePlayersRef.current = [];
+          onlinePlayersRef.current = [];
+          remoteAttackStatesRef.current.clear();
+          setOnlinePlayers([]);
           setPartyMembers([]);
           reconnectAttempt += 1;
           setColyseusStatus(`Colyseus reconnecting... (${reconnectAttempt})`);
@@ -2591,6 +4805,9 @@ function App() {
         colyseusSessionIdRef.current = null;
         remotePlayersRef.current = [];
         displayedRemotePlayersRef.current = [];
+        onlinePlayersRef.current = [];
+        remoteAttackStatesRef.current.clear();
+        setOnlinePlayers([]);
         setPartyMembers([]);
         reconnectAttempt += 1;
         setColyseusStatus(`Colyseus retry ${reconnectAttempt}: ${error.message}`);
@@ -2605,6 +4822,10 @@ function App() {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       remotePlayersRef.current = [];
       displayedRemotePlayersRef.current = [];
+      onlinePlayersRef.current = [];
+      remoteAttackStatesRef.current.clear();
+      partyInviteCooldownsRef.current.clear();
+      setOnlinePlayers([]);
       setPartyMembers([]);
       colyseusRoomRef.current?.leave();
       colyseusRoomRef.current = null;
@@ -2635,6 +4856,12 @@ function App() {
 
       if (defeatedEnemies.length > 0) {
         awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
+        if (defeatedEnemies.some((enemy) => enemy.type === 'boss')) {
+          nextBossSpawnAt.current = performance.now() + BOSS_RESPAWN_DELAY;
+        }
+        defeatedEnemies
+          .filter((enemy) => enemy.type === 'enemy' && enemy.spawnId)
+          .forEach((enemy) => scheduleWorldSpawnRespawn(worldSpawnPacks.current, enemy.spawnId, now, enemy.spawnSlot));
         defeatedEnemies
           .filter((enemy) => enemy.type === 'boss')
           .forEach(() => addLoot(rollBossLoot()));
@@ -2651,6 +4878,23 @@ function App() {
       setVitalsValue({ ...vitalsRef.current, hp: nextHp });
     };
 
+    const pushLocalEffect = (ability, facing, now) => {
+      effects.current.push({
+        ...ability,
+        casterId: colyseusSessionIdRef.current ?? 'local',
+        x: player.current.x,
+        y: player.current.y,
+        facing,
+        start: now,
+        nextTickAt: ability.type === 'channel' ? now : ability.nextTickAt,
+        duration: ability.type === 'channel'
+          ? ability.duration ?? 3000
+          : ability.type === 'shield' || ability.type === 'heal'
+            ? 900
+            : ability.duration ?? 650,
+      });
+    };
+
     const fireAbility = (slot) => {
       const classId = selectedClassRef.current;
       if (!classId || deadRef.current) return;
@@ -2660,16 +4904,23 @@ function App() {
 
       const activeCharacter = characterRef.current;
       const unlockedAbilities = getCharacterAbilities(activeCharacter);
-      const ability = unlockedAbilities[slot - 1];
+      const ability = resolveAbility(unlockedAbilities, abilitySlotsRef.current[slot - 1]);
       if (!ability) return;
       const resourceConfig = getResourceConfig(activeCharacter);
       const resourceCost = getAbilityManaCost(ability, activeCharacter);
-      if (getCurrentResource(activeCharacter) < resourceCost) {
+      if (getCurrentResource(activeCharacter, vitalsRef.current) < resourceCost) {
         setLastCast(`Not enough ${resourceConfig.label.toLowerCase()}`);
         return;
       }
       const facing = Math.atan2(mouse.current.y - player.current.y, mouse.current.x - player.current.x);
       player.current.facing = facing;
+      player.current.attack = {
+        startedAt: now,
+        until: now + 320,
+        type: ability.type,
+        facing,
+        ranged: ability.range > 80 || ability.projectile,
+      };
       const room = colyseusRoomRef.current;
       const stats = activeCharacter ? getTotalStats(activeCharacter) : BASE_STATS;
       const damage = ability.damage
@@ -2680,9 +4931,10 @@ function App() {
         : 0;
 
       if (ability.type === 'channel') {
-        cooldowns.current[slot] = now + (ability.duration ?? 3000) + 800;
+        cooldowns.current[slot] = now + getAbilityCooldownMs(ability);
         effects.current = effects.current.filter((effect) => effect.type !== 'channel');
         if (room) {
+          pushLocalEffect(ability, facing, now);
           room.send('ability', {
             ability,
             origin: { x: player.current.x, y: player.current.y },
@@ -2691,16 +4943,10 @@ function App() {
             effectOnly: true,
           });
         } else {
-          effects.current.push({
+          pushLocalEffect({
             ...ability,
-            x: player.current.x,
-            y: player.current.y,
-            facing,
-            start: now,
-            nextTickAt: now,
-            duration: ability.duration ?? 3000,
             tickRate: ability.tickRate ?? 500,
-          });
+          }, facing, now);
         }
         setLastCast(`${ability.key}: ${ability.name}`);
         return;
@@ -2708,13 +4954,14 @@ function App() {
 
       const nextVitals = {
         ...vitalsRef.current,
-        [resourceConfig.key]: Math.max(0, getCurrentResource(activeCharacter) - resourceCost),
+        [resourceConfig.key]: Math.max(0, getCurrentResource(activeCharacter, vitalsRef.current) - resourceCost),
       };
       setVitalsValue(nextVitals);
-      cooldowns.current[slot] = now + 650;
+      cooldowns.current[slot] = now + getAbilityCooldownMs(ability);
 
       if (ability.damage) {
         if (room) {
+          pushLocalEffect(ability, facing, now);
           room.send('ability', {
             ability,
             origin: { x: player.current.x, y: player.current.y },
@@ -2732,6 +4979,9 @@ function App() {
           applyAbilityHealing(ability);
         }
         if (room && !ability.damage) {
+          pushLocalEffect(ability, facing, now);
+        }
+        if (room && !ability.damage) {
           room.send('ability', {
             ability,
             origin: { x: player.current.x, y: player.current.y },
@@ -2742,14 +4992,7 @@ function App() {
         }
       }
       if (!room) {
-        effects.current.push({
-          ...ability,
-          x: player.current.x,
-          y: player.current.y,
-          facing,
-          start: now,
-          duration: ability.type === 'shield' || ability.type === 'heal' ? 900 : 650,
-        });
+        pushLocalEffect(ability, facing, now);
       }
       setLastCast(`${ability.key}: ${ability.name}`);
     };
@@ -2766,6 +5009,28 @@ function App() {
         setShopOpen(false);
         return;
       }
+      if (event.key.toLowerCase() === 'o' && characterRef.current) {
+        setFriendsOpen((open) => !open);
+        return;
+      }
+      if (event.key.toLowerCase() === 'm' && characterRef.current) {
+        setMapOpen((open) => !open);
+        return;
+      }
+      if (event.key.toLowerCase() === 'j' && characterRef.current) {
+        setJournalOpen((open) => !open);
+        return;
+      }
+      if (event.key.toLowerCase() === 'p' && characterRef.current) {
+        setAbilityBookOpen((open) => !open);
+        return;
+      }
+      if (event.key === 'Escape' && characterRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        setGameMenuOpen((open) => !open);
+        return;
+      }
       if (event.key.toLowerCase() === 'e' && characterRef.current) {
         const shopkeeper = getShopkeeperFromMap(tiledWorld.current);
         if (shopkeeper && !deadRef.current && distance(player.current, shopkeeper) <= shopkeeper.interactRange) {
@@ -2775,11 +5040,21 @@ function App() {
         }
         return;
       }
-      if (/^[1-9]$/.test(event.key)) fireAbility(Number(event.key));
+      if (/^[1-9]$/.test(event.key)) {
+        const slot = Number(event.key);
+        if (slot <= ABILITY_BAR_SLOTS) fireAbility(slot);
+      }
     };
 
+    const removeGameEscapeListener = window.mmoLauncher?.onGameEscape?.(() => {
+      if (characterRef.current) setGameMenuOpen((open) => !open);
+    });
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      removeGameEscapeListener?.();
+    };
   }, []);
 
   React.useEffect(() => {
@@ -2811,27 +5086,36 @@ function App() {
       mouse.current.y = mouse.current.screenY + camera.current.y;
     };
 
-    const selectPlayerAtMouse = (event) => {
-      updateMouse(event);
-      const clickedPlayer = [...displayedRemotePlayersRef.current]
-        .sort((a, b) => distance(a, mouse.current) - distance(b, mouse.current))
-        .find((remotePlayer) => distance(remotePlayer, mouse.current) <= 54);
-      if (clickedPlayer) {
-        setSelectedPlayerId(clickedPlayer.id);
-        return;
-      }
+    const pushAutoAttackEffect = (ability, facing, now) => {
+      effects.current.push({
+        ...ability,
+        casterId: colyseusSessionIdRef.current ?? 'local',
+        x: player.current.x,
+        y: player.current.y,
+        facing,
+        start: now,
+        duration: ability.duration ?? 450,
+      });
+    };
 
-      setSelectedPlayerId(null);
+    const runAutoAttack = (now) => {
       if (!characterRef.current || deadRef.current) return;
-
-      const now = performance.now();
       if (now < nextAutoAttackAt.current) return;
-      nextAutoAttackAt.current = now + AUTO_ATTACK_COOLDOWN_MS;
 
       const activeCharacter = characterRef.current;
       const ability = getAutoAttackAbility(activeCharacter.classId);
       const facing = Math.atan2(mouse.current.y - player.current.y, mouse.current.x - player.current.x);
       player.current.facing = facing;
+      player.current.attack = {
+        startedAt: now,
+        until: now + 280,
+        type: ability.type,
+        facing,
+        ranged: isRangedClass(activeCharacter.classId),
+        autoAttack: true,
+      };
+      nextAutoAttackAt.current = now + getAutoAttackCooldownMs(activeCharacter);
+
       const stats = getTotalStats(activeCharacter);
       const damage = ability.damage + Math.floor(((stats.strength ?? 0) + (stats.agility ?? 0) + (stats.intellect ?? 0)) / 12);
       const resourceConfig = getResourceConfig(activeCharacter);
@@ -2841,41 +5125,63 @@ function App() {
           fury: Math.min(resourceConfig.max, (vitalsRef.current.fury ?? 0) + WARRIOR_FURY_PER_ATTACK),
         });
       }
-      const room = colyseusRoomRef.current;
 
+      const room = colyseusRoomRef.current;
       if (room) {
+        pushAutoAttackEffect(ability, facing, now);
         room.send('ability', {
           ability,
           origin: { x: player.current.x, y: player.current.y },
           facing,
           damage,
         });
-      } else {
-        const damagedEnemies = enemies.current.map((enemy) => {
-          if (!abilityHitsEnemyClient(ability, player.current, facing, enemy)) return enemy;
-          lastCombatAt.current = now;
-          return { ...enemy, state: 'aggro', hp: enemy.hp - damage, hitAt: now };
-        });
-        const defeatedEnemies = damagedEnemies.filter((enemy) => enemy.hp <= 0);
-        enemies.current = damagedEnemies.filter((enemy) => enemy.hp > 0);
-
-        if (defeatedEnemies.length > 0) {
-          awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
-          defeatedEnemies
-            .filter((enemy) => enemy.type === 'boss')
-            .forEach(() => addLoot(rollBossLoot()));
-          setEnemyCount(enemies.current.length);
-        }
-
-        effects.current.push({
-          ...ability,
-          x: player.current.x,
-          y: player.current.y,
-          facing,
-          start: now,
-          duration: ability.duration,
-        });
+        return;
       }
+
+      const damagedEnemies = enemies.current.map((enemy) => {
+        if (!abilityHitsEnemyClient(ability, player.current, facing, enemy)) return enemy;
+        lastCombatAt.current = now;
+        return { ...enemy, state: 'aggro', hp: enemy.hp - damage, hitAt: now };
+      });
+      const defeatedEnemies = damagedEnemies.filter((enemy) => enemy.hp <= 0);
+      enemies.current = damagedEnemies.filter((enemy) => enemy.hp > 0);
+
+      if (defeatedEnemies.length > 0) {
+        awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
+        if (defeatedEnemies.some((enemy) => enemy.type === 'boss')) {
+          nextBossSpawnAt.current = performance.now() + BOSS_RESPAWN_DELAY;
+        }
+        defeatedEnemies
+          .filter((enemy) => enemy.type === 'enemy' && enemy.spawnId)
+          .forEach((enemy) => scheduleWorldSpawnRespawn(worldSpawnPacks.current, enemy.spawnId, now, enemy.spawnSlot));
+        defeatedEnemies
+          .filter((enemy) => enemy.type === 'boss')
+          .forEach(() => addLoot(rollBossLoot()));
+        setEnemyCount(enemies.current.length);
+      }
+
+      pushAutoAttackEffect(ability, facing, now);
+    };
+
+    const handlePointerDown = (event) => {
+      if (event.button !== 0) return;
+      updateMouse(event);
+      const clickedPlayer = [...displayedRemotePlayersRef.current]
+        .sort((a, b) => distance(a, mouse.current) - distance(b, mouse.current))
+        .find((remotePlayer) => distance(remotePlayer, mouse.current) <= 54);
+      if (clickedPlayer) {
+        setSelectedPlayerId(clickedPlayer.id);
+        if (startResurrection(clickedPlayer)) return;
+        return;
+      }
+
+      setSelectedPlayerId(null);
+      autoAttackHeld.current = true;
+      runAutoAttack(performance.now());
+    };
+
+    const stopAutoAttack = () => {
+      autoAttackHeld.current = false;
     };
 
     const drawTree = (x, y) => {
@@ -2914,6 +5220,9 @@ function App() {
     };
 
     const drawEffect = (effect, now) => {
+      drawPixelAbilityEffect(context, effect, now);
+      return;
+
       const progress = clamp((now - effect.start) / effect.duration, 0, 1);
       const alpha = 1 - progress;
       const fx = Math.cos(effect.facing);
@@ -3161,7 +5470,12 @@ function App() {
           if (remotePlayer.id === selectedPlayerIdRef.current) {
             drawSelectedPlayerRing(context, remotePlayer);
           }
-          drawPlayer(context, remotePlayer, remotePlayer.classId, remotePlayer.raceId, remotePlayer.appearance);
+          const remoteAttack = remoteAttackStatesRef.current.get(remotePlayer.id);
+          if (remoteAttack && now > remoteAttack.until) remoteAttackStatesRef.current.delete(remotePlayer.id);
+          const drawableRemotePlayer = remoteAttack && now <= remoteAttack.until
+            ? { ...remotePlayer, attack: remoteAttack }
+            : remotePlayer;
+          drawPlayer(context, drawableRemotePlayer, remotePlayer.classId, remotePlayer.raceId, remotePlayer.appearance);
           drawRemotePlayerMarker(context, remotePlayer);
         } catch (error) {
           console.error(error);
@@ -3193,20 +5507,56 @@ function App() {
           );
         }
 
-      if (!onlineRoom && selectedClassRef.current && now >= nextSpawnAt.current && enemies.current.length < ENEMY.maxCount) {
-        enemies.current.push(createEnemy(nextEnemyId.current, pickSpawn(tiledWorld.current?.enemySpawns ?? []), player.current));
-        nextEnemyId.current += 1;
-        nextSpawnAt.current = now + ENEMY.spawnEvery;
-        setEnemyCount(enemies.current.length);
+      if (
+        !onlineRoom
+        && selectedClassRef.current
+        && currentMapIdRef.current === 'world'
+        && worldSpawnPacks.current.size > 0
+      ) {
+        let spawnedAnyEnemy = false;
+        worldSpawnPacks.current.forEach((pack) => {
+          const aliveEnemies = enemies.current.filter((enemy) => (
+            enemy.type === 'enemy' && enemy.spawnId === pack.id
+          ));
+          let aliveCount = aliveEnemies.length;
+          const occupiedSlots = new Set(
+            aliveEnemies
+              .map((enemy) => enemy.spawnSlot)
+              .filter((slotIndex) => Number.isFinite(slotIndex)),
+          );
+
+          const readySlots = getReadyRespawnSlots(pack, now, occupiedSlots);
+          readySlots.forEach((slotIndex) => {
+            if (aliveCount >= pack.maxAlive) return;
+
+            enemies.current.push(createEnemy(nextEnemyId.current, pack.spawn, player.current, slotIndex, pack.maxAlive));
+            nextEnemyId.current += 1;
+            aliveCount += 1;
+            spawnedAnyEnemy = true;
+          });
+
+          while (aliveCount + pack.pendingRespawns.length < pack.maxAlive) {
+            let openSlot = 0;
+            while (occupiedSlots.has(openSlot) && openSlot < pack.maxAlive) openSlot += 1;
+            if (openSlot >= pack.maxAlive) break;
+            occupiedSlots.add(openSlot);
+            enemies.current.push(createEnemy(nextEnemyId.current, pack.spawn, player.current, openSlot, pack.maxAlive));
+            nextEnemyId.current += 1;
+            aliveCount += 1;
+            spawnedAnyEnemy = true;
+          }
+        });
+
+        if (spawnedAnyEnemy) setEnemyCount(enemies.current.length);
       }
 
       const bossAlive = enemies.current.some((enemy) => enemy.type === 'boss');
       if (!onlineRoom && selectedClassRef.current && !bossAlive && now >= nextBossSpawnAt.current) {
         enemies.current.push(createBoss(nextEnemyId.current, pickSpawn(tiledWorld.current?.bossSpawns ?? []), player.current));
         nextEnemyId.current += 1;
-        nextBossSpawnAt.current = now + nextBossDelay();
+        nextBossSpawnAt.current = Number.POSITIVE_INFINITY;
         setEnemyCount(enemies.current.length);
-        setLastCast('Boss spawned: Rift Brute');
+        setLastCast('Boss spawned: Elder Briarheart');
       }
 
       let dx = 0;
@@ -3222,6 +5572,8 @@ function App() {
         const length = Math.hypot(dx, dy);
         dx /= length;
         dy /= length;
+        player.current.vx = dx * PLAYER.speed;
+        player.current.vy = dy * PLAYER.speed;
         player.current.facing = Math.atan2(dy, dx);
         const activeMap = tiledWorld.current?.map;
         const activeWorldWidth = activeMap ? activeMap.width * activeMap.tilewidth : WORLD.width;
@@ -3235,6 +5587,9 @@ function App() {
         if (canMoveTo(tiledWorld.current, player.current.x, nextY, PLAYER.radius)) {
           player.current.y = nextY;
         }
+      } else {
+        player.current.vx = 0;
+        player.current.vy = 0;
       }
 
       if (!mapTransitioningRef.current && characterRef.current && !deadRef.current && tiledWorld.current) {
@@ -3283,36 +5638,9 @@ function App() {
 
       if (!onlineRoom) {
         enemies.current = enemies.current.map((enemy) => {
-        if (enemy.state !== 'aggro') {
-          const bounds = enemy.spawnBounds;
-          let target = enemy.wanderTarget;
-          const shouldPickNewTarget = !target || now >= enemy.nextWanderAt || distance(enemy, target) < 8;
-
-          if (shouldPickNewTarget) {
-            target = randomPointInBounds(bounds);
+          if (enemy.state !== 'aggro') {
+            return updateIdleEnemyMovement(enemy, now, delta, enemy.type === 'boss' || enemy.type?.includes?.('boss'));
           }
-
-          const toTargetX = target.x - enemy.x;
-          const toTargetY = target.y - enemy.y;
-          const length = Math.hypot(toTargetX, toTargetY) || 1;
-          const wanderSpeed = enemy.type === 'boss' ? ENEMY.wanderSpeed * 0.65 : ENEMY.wanderSpeed;
-
-          return {
-            ...enemy,
-            wanderTarget: target,
-            nextWanderAt: shouldPickNewTarget ? now + 900 + Math.random() * 2200 : enemy.nextWanderAt,
-            x: clamp(
-              enemy.x + (toTargetX / length) * wanderSpeed * delta,
-              bounds.x + (enemy.radius ?? ENEMY.radius),
-              bounds.x + bounds.width - (enemy.radius ?? ENEMY.radius),
-            ),
-            y: clamp(
-              enemy.y + (toTargetY / length) * wanderSpeed * delta,
-              bounds.y + (enemy.radius ?? ENEMY.radius),
-              bounds.y + bounds.height - (enemy.radius ?? ENEMY.radius),
-            ),
-          };
-        }
 
         const toPlayerX = player.current.x - enemy.x;
         const toPlayerY = player.current.y - enemy.y;
@@ -3355,6 +5683,10 @@ function App() {
         });
       }
 
+      if (autoAttackHeld.current) {
+        runAutoAttack(now);
+      }
+
       effects.current = effects.current
         .map((effect) => {
           if (effect.type !== 'channel' || deadRef.current) return effect;
@@ -3363,14 +5695,14 @@ function App() {
 
           const resourceConfig = getResourceConfig(characterRef.current);
           const resourceCost = getAbilityManaCost(effect, characterRef.current);
-          if (getCurrentResource(characterRef.current) < resourceCost) {
+          if (getCurrentResource(characterRef.current, vitalsRef.current) < resourceCost) {
             setLastCast(`Channel interrupted: no ${resourceConfig.label.toLowerCase()}`);
             return { ...effect, start: 0, duration: 0 };
           }
 
           setVitalsValue({
             ...vitalsRef.current,
-            [resourceConfig.key]: Math.max(0, getCurrentResource(characterRef.current) - resourceCost),
+            [resourceConfig.key]: Math.max(0, getCurrentResource(characterRef.current, vitalsRef.current) - resourceCost),
           });
 
           const fx = Math.cos(effect.facing);
@@ -3400,6 +5732,12 @@ function App() {
 
             if (defeatedEnemies.length > 0) {
               awardExperience(defeatedEnemies.reduce((total, enemy) => total + (enemy.xp ?? ENEMY_XP), 0));
+              if (defeatedEnemies.some((enemy) => enemy.type === 'boss')) {
+                nextBossSpawnAt.current = performance.now() + BOSS_RESPAWN_DELAY;
+              }
+        defeatedEnemies
+          .filter((enemy) => enemy.type === 'enemy' && enemy.spawnId)
+                .forEach((enemy) => scheduleWorldSpawnRespawn(worldSpawnPacks.current, enemy.spawnId, now, enemy.spawnSlot));
               defeatedEnemies
                 .filter((enemy) => enemy.type === 'boss')
                 .forEach(() => addLoot(rollBossLoot()));
@@ -3435,6 +5773,12 @@ function App() {
             fury: resourceConfig.max,
           };
         }
+        if (resourceConfig.key === 'energy' && (nextVitals.energy ?? 0) < resourceConfig.max) {
+          nextVitals = {
+            ...nextVitals,
+            energy: Math.min(resourceConfig.max, (nextVitals.energy ?? 0) + ROGUE_ENERGY_REGEN_PER_SECOND * delta),
+          };
+        }
         if (outOfCombat && nextVitals.hp < stats.health) {
           nextVitals = {
             ...nextVitals,
@@ -3461,14 +5805,22 @@ function App() {
     resize();
     window.addEventListener('resize', resize);
     canvas.addEventListener('mousemove', updateMouse);
-    canvas.addEventListener('click', selectPlayerAtMouse);
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerup', stopAutoAttack);
+    window.addEventListener('blur', stopAutoAttack);
+    canvas.addEventListener('pointerleave', stopAutoAttack);
+    canvas.addEventListener('contextmenu', stopAutoAttack);
     animationFrame = requestAnimationFrame(tick);
 
     return () => {
       cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousemove', updateMouse);
-      canvas.removeEventListener('click', selectPlayerAtMouse);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', stopAutoAttack);
+      window.removeEventListener('blur', stopAutoAttack);
+      canvas.removeEventListener('pointerleave', stopAutoAttack);
+      canvas.removeEventListener('contextmenu', stopAutoAttack);
     };
   }, [keys]);
 
@@ -3478,6 +5830,8 @@ function App() {
   const nextLevelXp = xpForLevel(currentLevel);
   const unlockedAbilities = character ? getCharacterAbilities(character) : [];
   const currentStats = character ? getTotalStats(character) : BASE_STATS;
+  const nowForCooldowns = performance.now();
+  const slottedAbilities = abilitySlots.map((abilityId) => resolveAbility(unlockedAbilities, abilityId));
   const equippedItems = getEquippedItems(character);
   const inventory = character?.inventory ?? [];
   const bagItems = inventory.filter((item) => !item.equippedSlot);
@@ -3490,8 +5844,19 @@ function App() {
   const nearShopkeeper = character && activeShopkeeper && distance(position, activeShopkeeper) <= activeShopkeeper.interactRange;
   const talentTree = character ? TALENTS[character.classId] : null;
   const selectedTalentSpec = character?.talents?.spec ?? null;
+  const availableTalentPoints = character ? getAvailableTalentPoints(character) : 0;
+  const spentTalentPoints = character ? getSpentTalentPoints(character) : 0;
+  const totalTalentPoints = character ? getEarnedTalentPoints(character) : 0;
   const selectedPlayer = displayedRemotePlayersRef.current.find((remotePlayer) => remotePlayer.id === selectedPlayerId) ?? null;
   const isLocalPartyLeader = partyMembers.some((member) => member.isSelf && member.isLeader);
+  const activeMap = tiledWorld.current?.map;
+  const minimapWorldWidth = activeMap ? activeMap.width * activeMap.tilewidth : WORLD.width;
+  const minimapWorldHeight = activeMap ? activeMap.height * activeMap.tileheight : WORLD.height;
+  const minimapEnemies = enemies.current.slice(0, 80);
+  const minimapPlayers = displayedRemotePlayersRef.current.slice(0, 12);
+  const selectedPlayerHpPercent = selectedPlayer
+    ? (clamp(selectedPlayer.hp ?? selectedPlayer.maxHp, 0, selectedPlayer.maxHp ?? 1) / Math.max(1, selectedPlayer.maxHp ?? 1)) * 100
+    : 0;
 
   return (
     <main className="app-shell">
@@ -3516,11 +5881,12 @@ function App() {
             onDelete={deleteCharacter}
             onEnter={enterCharacter}
             onLogout={logoutAuth}
+            spriteLoadVersion={spriteLoadVersion}
           />
         )}
         {character && (
           <div className="hud-actions">
-            <button className="menu-button" type="button" onClick={saveCurrentCharacter}>
+            <button className="menu-button" type="button" onClick={() => setGameMenuOpen(true)}>
               <DoorOpen size={18} />
               <span>Menu</span>
             </button>
@@ -3532,6 +5898,14 @@ function App() {
               <Sparkles size={18} />
               <span>Talents</span>
             </button>
+            <button className="talents-button" type="button" onClick={() => setAbilityBookOpen((open) => !open)}>
+              <BookOpen size={18} />
+              <span>Abilities</span>
+            </button>
+            <button className="talents-button" type="button" onClick={() => setSettingsOpen((open) => !open)}>
+              <Settings size={18} />
+              <span>Settings</span>
+            </button>
           </div>
         )}
         <div className="hud top-right">
@@ -3540,17 +5914,53 @@ function App() {
             {Math.round(position.x)}, {Math.round(position.y)} | {gold}g
           </span>
         </div>
+        {character && (
+          <div className="minimap-panel" onClick={() => setMapOpen(true)} role="button" tabIndex={0}>
+            <div className="minimap-grid">
+              {minimapEnemies.map((enemy) => (
+                <span
+                  className={`minimap-dot enemy ${enemy.type?.includes('boss') ? 'boss' : ''}`}
+                  key={enemy.id}
+                  style={{
+                    left: `${clamp((enemy.x / minimapWorldWidth) * 100, 0, 100)}%`,
+                    top: `${clamp((enemy.y / minimapWorldHeight) * 100, 0, 100)}%`,
+                  }}
+                />
+              ))}
+              {minimapPlayers.map((remotePlayer) => (
+                <span
+                  className="minimap-dot player"
+                  key={remotePlayer.id}
+                  style={{
+                    left: `${clamp((remotePlayer.x / minimapWorldWidth) * 100, 0, 100)}%`,
+                    top: `${clamp((remotePlayer.y / minimapWorldHeight) * 100, 0, 100)}%`,
+                  }}
+                />
+              ))}
+              <span
+                className="minimap-dot self"
+                style={{
+                  left: `${clamp((position.x / minimapWorldWidth) * 100, 0, 100)}%`,
+                  top: `${clamp((position.y / minimapWorldHeight) * 100, 0, 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
         {selectedPlayer && (
-          <div className="target-panel">
+          <div className="target-panel compact-target">
             <div>
               <strong>{selectedPlayer.name ?? 'Adventurer'}</strong>
               <span>Lv {selectedPlayer.level ?? 1}</span>
             </div>
             <div className="target-hp">
-              <span style={{ width: `${(clamp(selectedPlayer.hp ?? selectedPlayer.maxHp, 0, selectedPlayer.maxHp ?? 1) / Math.max(1, selectedPlayer.maxHp ?? 1)) * 100}%` }} />
+              <span style={{ width: `${selectedPlayerHpPercent}%` }} />
             </div>
             <button type="button" title="Party invite" onClick={inviteSelectedPlayer}>
               <User size={16} />
+            </button>
+            <button type="button" title="Add friend" onClick={addSelectedPlayerAsFriend}>
+              <UserPlus size={16} />
             </button>
           </div>
         )}
@@ -3648,6 +6058,17 @@ function App() {
             <button type="button" onClick={respawnPlayer}>Respawn</button>
           </div>
         )}
+        {character && gameMenuOpen && (
+          <aside className="game-menu-panel">
+            <div className="panel-heading">
+              <strong>Menu</strong>
+              <span>Esc</span>
+            </div>
+            <button type="button" onClick={() => setGameMenuOpen(false)}>Resume</button>
+            <button type="button" onClick={() => setSettingsOpen((open) => !open)}>Settings</button>
+            <button type="button" onClick={saveCurrentCharacter}>Character Menu</button>
+          </aside>
+        )}
         {character && inventoryOpen && (
           <aside className="inventory-panel">
             <div className="panel-heading">
@@ -3660,6 +6081,7 @@ function App() {
               <span>Strength <strong>{currentStats.strength}</strong></span>
               <span>Agility <strong>{currentStats.agility}</strong></span>
               <span>Intellect <strong>{currentStats.intellect}</strong></span>
+              <span>Attack Speed <strong>{Number(currentStats.attackSpeed ?? 1).toFixed(2)}x</strong></span>
             </div>
             <p className="inventory-label">Equipment</p>
             <div className="equipment-grid">
@@ -3679,26 +6101,33 @@ function App() {
                 );
               })}
             </div>
-            <p className="inventory-label">Bag</p>
-            <div className="loot-list">
-              {bagItems.length === 0 ? (
-                <p>No loot yet. Bosses drop items.</p>
-              ) : (
-                bagItems.map((item) => (
+            <p className="inventory-label">Bag {bagItems.length}/{INVENTORY_CAPACITY}</p>
+            <div className="inventory-grid">
+              {Array.from({ length: INVENTORY_CAPACITY }).map((_, index) => {
+                const item = bagItems[index];
+                const tooltip = item
+                  ? `${item.name}\n${item.rarity} ${EQUIPMENT_SLOTS.find((slot) => slot.id === item.slot)?.label ?? item.slot}\n${formatItemStats(item.stats)}\n${getItemComparison(item, equippedItems)}`
+                  : 'Empty';
+                return (
                   <button
-                    className={`loot-item ${item.rarity.toLowerCase()}`}
-                    key={item.id}
+                    className={`inventory-cell icon-only ${item ? item.rarity.toLowerCase() : 'empty'}`}
+                    disabled={!item}
+                    key={item?.id ?? `empty-${index}`}
+                    title={tooltip}
                     type="button"
-                    onClick={() => equipItem(item.id)}
+                    onClick={() => item && equipItem(item.id)}
                   >
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.rarity} | {EQUIPMENT_SLOTS.find((slot) => slot.id === item.slot)?.label ?? item.slot}
-                    </span>
-                    <small>{formatItemStats(item.stats)}</small>
+                    {item ? (
+                      <>
+                        <span className="item-icon">{getItemIconLabel(item)}</span>
+                        <em>{getItemComparison(item, equippedItems).startsWith('+') ? '+' : ''}</em>
+                      </>
+                    ) : (
+                      <span className="item-icon empty" />
+                    )}
                   </button>
-                ))
-              )}
+                );
+              })}
             </div>
           </aside>
         )}
@@ -3735,7 +6164,7 @@ function App() {
           <aside className="talent-panel">
             <div className="panel-heading">
               <strong>Talents</strong>
-              <span>N</span>
+              <span>{availableTalentPoints}</span>
             </div>
             {!talentTree ? (
               <p className="shop-copy">Talents for this class are not ready yet.</p>
@@ -3743,38 +6172,252 @@ function App() {
               <>
                 <p className="shop-copy">
                   {currentLevel >= talentTree.unlockLevel
-                    ? 'Choose one specialization.'
+                    ? `${availableTalentPoints} point available | ${spentTalentPoints}/${totalTalentPoints} spent`
                     : `Unlocks at level ${talentTree.unlockLevel}.`}
                 </p>
                 <div className="talent-tree">
-                  {Object.entries(talentTree.specs).map(([specId, spec]) => (
-                    <button
-                      className={`talent-card ${selectedTalentSpec === specId ? 'selected' : ''}`}
-                      disabled={currentLevel < talentTree.unlockLevel}
-                      key={specId}
-                      type="button"
-                      onClick={() => chooseTalentSpec(specId)}
-                    >
-                      <strong>{spec.name}</strong>
-                      <span>{spec.role}</span>
-                      <small>{spec.description}</small>
-                      <em>{formatItemStats(spec.bonuses)}</em>
-                    </button>
-                  ))}
+                  {Object.entries(talentTree.specs).map(([specId, spec]) => {
+                    const specRanks = getTalentRanks(character);
+                    const specSelected = selectedTalentSpec === specId;
+                    return (
+                      <section className={`talent-branch ${specSelected ? 'selected' : ''}`} key={specId}>
+                        <button
+                          className="talent-branch-header"
+                          disabled={currentLevel < talentTree.unlockLevel}
+                          type="button"
+                          onClick={() => chooseTalentSpec(specId)}
+                        >
+                          <strong>{spec.name}</strong>
+                          <span>{spec.role}</span>
+                          <small>{spec.description}</small>
+                        </button>
+                        <div className="talent-node-row">
+                          {TALENT_NODES.map((node) => {
+                            const nodeKey = getTalentNodeKey(specId, node.id);
+                            const rank = Number(specRanks[nodeKey] ?? 0);
+                            const locked = currentLevel < talentTree.unlockLevel
+                              || selectedTalentSpec !== specId
+                              || availableTalentPoints <= 0
+                              || rank >= node.maxRank
+                              || (node.requiresSpent && getSpecSpentPoints(character, specId) < node.requiresSpent);
+                            return (
+                              <button
+                                className={`talent-node ${rank > 0 ? 'ranked' : ''}`}
+                                disabled={locked}
+                                key={node.id}
+                                title={node.description}
+                                type="button"
+                                onClick={() => spendTalentPoint(specId, node.id)}
+                              >
+                                <strong>{node.name}</strong>
+                                <span>{rank}/{node.maxRank}</span>
+                                <small>{node.id === 'signature' ? 'Unlock ability' : node.description}</small>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
               </>
             )}
           </aside>
         )}
+        {character && settingsOpen && (
+          <aside className="settings-panel">
+            <div className="panel-heading">
+              <strong>Settings</strong>
+              <span>Display</span>
+            </div>
+            <div className="settings-buttons">
+              <button type="button" onClick={() => document.documentElement.requestFullscreen?.()}>
+                <Monitor size={16} />
+                Fullscreen
+              </button>
+              <button type="button" onClick={() => document.documentElement.requestFullscreen?.()}>
+                <Monitor size={16} />
+                Fullscreen windowed
+              </button>
+              <button type="button" onClick={() => document.exitFullscreen?.()}>
+                <Monitor size={16} />
+                Windowed
+              </button>
+            </div>
+          </aside>
+        )}
+        {character && friendsOpen && (
+          <aside className="friends-panel">
+            <div className="panel-heading">
+              <strong>Friends</strong>
+              <span>O</span>
+            </div>
+            <div className="friend-add-row">
+              <input
+                placeholder="Player name"
+                value={friendNameInput}
+                onChange={(event) => setFriendNameInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') addFriendByName(friendNameInput);
+                }}
+              />
+              <button type="button" onClick={() => addFriendByName(friendNameInput)}>Add</button>
+            </div>
+            <button className="wide-panel-button" type="button" onClick={addSelectedPlayerAsFriend}>
+              <UserPlus size={16} />
+              Add target
+            </button>
+            <div className="friends-list">
+              {friends.length === 0 ? (
+                <p>No friends yet.</p>
+              ) : friends.map((friend) => {
+                const onlineFriend = onlinePlayers.find((candidate) => (
+                  normalizeName(candidate.name) === normalizeName(friend.name)
+                  && candidate.id !== colyseusSessionIdRef.current
+                ));
+                const isOnline = Boolean(onlineFriend);
+                return (
+                  <div className={`friend-row ${isOnline ? 'online' : 'offline'}`} key={friend.id}>
+                    <Users size={16} />
+                    <strong>{friend.name}</strong>
+                    <span className={`friend-status ${isOnline ? 'online' : 'offline'}`}>
+                      {isOnline ? 'Online' : 'Offline'}
+                    </span>
+                    {isOnline && (
+                      <button type="button" onClick={() => inviteFriend(friend)}>Invite</button>
+                    )}
+                    <button type="button" onClick={() => removeFriend(friend.id)}>Remove</button>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+        )}
+        {character && abilityBookOpen && (
+          <aside className="ability-book-panel">
+            <div className="panel-heading">
+              <strong>Ability Book</strong>
+              <span>P</span>
+            </div>
+            <p className="shop-copy">Assign abilities to the 5-slot bar while this book is open.</p>
+            <div className="ability-book-list">
+              {unlockedAbilities.map((ability) => (
+                <div className="ability-book-row" key={getAbilityId(ability)}>
+                  <span className={`ability-icon ${ability.type}`}>{getAbilityIconLabel(ability)}</span>
+                  <div>
+                    <strong>{ability.name}</strong>
+                    <small>{describeAbility(ability, currentStats, character)}</small>
+                  </div>
+                  <div className="ability-slot-pickers">
+                    {Array.from({ length: ABILITY_BAR_SLOTS }).map((_, index) => (
+                      <button
+                        className={abilitySlots[index] === getAbilityId(ability) ? 'selected' : ''}
+                        key={index}
+                        type="button"
+                        onClick={() => assignAbilitySlot(index, ability)}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
+        {character && mapOpen && (
+          <aside className="world-map-panel">
+            <div className="panel-heading">
+              <strong>{currentMapId === 'dungeon_01' ? 'Dungeon Map' : 'World Map'}</strong>
+              <span>M</span>
+            </div>
+            <div className="world-map-canvas">
+              {minimapEnemies.map((enemy) => (
+                <span
+                  className={`map-dot enemy ${enemy.type?.includes('boss') ? 'boss' : ''}`}
+                  key={enemy.id}
+                  style={{
+                    left: `${clamp((enemy.x / minimapWorldWidth) * 100, 0, 100)}%`,
+                    top: `${clamp((enemy.y / minimapWorldHeight) * 100, 0, 100)}%`,
+                  }}
+                />
+              ))}
+              {minimapPlayers.map((remotePlayer) => (
+                <span
+                  className="map-dot player"
+                  key={remotePlayer.id}
+                  style={{
+                    left: `${clamp((remotePlayer.x / minimapWorldWidth) * 100, 0, 100)}%`,
+                    top: `${clamp((remotePlayer.y / minimapWorldHeight) * 100, 0, 100)}%`,
+                  }}
+                />
+              ))}
+              <span
+                className="map-dot self"
+                style={{
+                  left: `${clamp((position.x / minimapWorldWidth) * 100, 0, 100)}%`,
+                  top: `${clamp((position.y / minimapWorldHeight) * 100, 0, 100)}%`,
+                }}
+              />
+            </div>
+          </aside>
+        )}
+        {character && journalOpen && (
+          <aside className="journal-panel">
+            <div className="panel-heading">
+              <strong>Dungeon Journal</strong>
+              <span>J</span>
+            </div>
+            <section>
+              <h3>Forgotten Grove Depths</h3>
+              <p>Compact party dungeon with elite forest packs, a mini boss, and a ritual final boss.</p>
+              <strong>Bosses</strong>
+              <ul>
+                <li>Grove Warden: heavier melee hits and focused pressure.</li>
+                <li>Rift Heart: drops burning ground and fires a frontal laser.</li>
+              </ul>
+              <strong>Exit Rule</strong>
+              <p>The exit unlocks after the final boss dies. The instance resets after everyone leaves.</p>
+            </section>
+          </aside>
+        )}
+        {resurrectionCast && (
+          <div className="resurrection-cast">
+            <strong>Resurrection</strong>
+            <span>{resurrectionCast.targetName}</span>
+          </div>
+        )}
         {currentClass && (
           <div className="ability-bar">
-            {unlockedAbilities.map((ability) => (
-              <div className="ability-slot" key={ability.key}>
-                <kbd>{ability.key}</kbd>
-                <span>{ability.name}</span>
-                <small>{getAbilityManaCost(ability, character)} {resourceConfig.label.toLowerCase()}</small>
-              </div>
-            ))}
+            {slottedAbilities.map((ability, index) => {
+              const slot = index + 1;
+              const remainingMs = Math.max(0, (cooldowns.current[slot] ?? 0) - nowForCooldowns);
+              const cooldownMs = Math.max(1, ability ? getAbilityCooldownMs(ability) : 1);
+              const cooldownPercent = clamp((remainingMs / cooldownMs) * 100, 0, 100);
+              return (
+                <div
+                  className={`ability-slot ${ability ? '' : 'empty'} ${abilityBookOpen ? 'editable' : ''}`}
+                  key={slot}
+                  title={ability ? describeAbility(ability, currentStats, character) : 'Empty slot'}
+                >
+                  <kbd>{slot}</kbd>
+                  {ability ? (
+                    <>
+                      <span className={`ability-icon ${ability.type}`}>{getAbilityIconLabel(ability)}</span>
+                      <small>{getAbilityManaCost(ability, character)} {resourceConfig.label.toLowerCase()}</small>
+                      {remainingMs > 0 && (
+                        <>
+                          <span className="cooldown-sweep" style={{ height: `${cooldownPercent}%` }} />
+                          <em>{(remainingMs / 1000).toFixed(1)}</em>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <span className="empty-slot-mark" />
+                  )}
+                </div>
+              );
+            })}
             {lastCast && <div className="cast-toast">{lastCast}</div>}
           </div>
         )}
