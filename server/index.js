@@ -1323,8 +1323,7 @@ const gameServer = new Server({
         return;
       }
 
-      const isUpdateManifest = /^latest(?:-[a-z]+)?\.(?:ya?ml|json)$/i.test(fileName);
-      response.setHeader('Cache-Control', isUpdateManifest ? 'no-store' : 'public, max-age=3600');
+      response.setHeader('Cache-Control', fileName === 'latest.yml' ? 'no-store' : 'public, max-age=3600');
       response.sendFile(filePath);
     });
   },

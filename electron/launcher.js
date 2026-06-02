@@ -8,11 +8,6 @@ const versionLabel = document.querySelector('#version');
 const updateStatus = document.querySelector('#updateStatus');
 
 let pendingUpdate = null;
-let launcherConfig = null;
-
-function getPlatformManifestName(config = launcherConfig) {
-  return config?.platformManifestName || 'latest.yml';
-}
 
 function normalizeServerUrl(value) {
   const trimmed = value.trim();
@@ -23,21 +18,21 @@ function normalizeServerUrl(value) {
   return `ws://${trimmed}`;
 }
 
-function normalizeManifestUrl(value, manifestName = getPlatformManifestName()) {
+function normalizeManifestUrl(value) {
   const trimmed = value.trim();
   if (!trimmed) return '';
 
-  if (trimmed.endsWith('/')) return `${trimmed.replace(/\/+$/, '')}/${manifestName}`;
+  if (trimmed.endsWith('/')) return `${trimmed.replace(/\/+$/, '')}/latest.yml`;
   if (/\.(ya?ml|json)$/i.test(trimmed)) return trimmed;
 
-  return `${trimmed.replace(/\/+$/, '')}/${manifestName}`;
+  return `${trimmed.replace(/\/+$/, '')}/latest.yml`;
 }
 
-function getManifestUrlFromServerUrl(serverUrl, config = launcherConfig) {
+function getManifestUrlFromServerUrl(serverUrl) {
   try {
     const url = new URL(normalizeServerUrl(serverUrl));
     url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
-    url.pathname = `/updates/${getPlatformManifestName(config)}`;
+    url.pathname = '/updates/latest.yml';
     url.search = '';
     url.hash = '';
     return url.href;
@@ -61,12 +56,10 @@ function setNoUpdate(message) {
 }
 
 async function checkForUpdates() {
-  const config = launcherConfig || await window.mmoLauncher.getConfig();
-  launcherConfig = config;
+  const config = await window.mmoLauncher.getConfig();
   serverInput.value = normalizeServerUrl(serverInput.value || config.serverUrl || '');
   const manifestUrl = normalizeManifestUrl(
-    updateManifestInput.value || config.updateManifestUrl || getManifestUrlFromServerUrl(serverInput.value, config),
-    getPlatformManifestName(config),
+    updateManifestInput.value || config.updateManifestUrl || getManifestUrlFromServerUrl(serverInput.value),
   );
   if (!manifestUrl) {
     setNoUpdate('No update feed configured.');
@@ -92,7 +85,6 @@ async function checkForUpdates() {
 
 async function init() {
   const config = await window.mmoLauncher.getConfig();
-  launcherConfig = config;
   serverInput.value = config.serverUrl ?? 'ws://localhost:2567';
   updateManifestInput.value = config.updateManifestUrl ?? '';
   versionLabel.textContent = `v${config.appVersion ?? '0.1.0'}`;
@@ -108,7 +100,7 @@ document.querySelectorAll('[data-server]').forEach((button) => {
 saveServerButton.addEventListener('click', async () => {
   serverInput.value = normalizeServerUrl(serverInput.value);
   await window.mmoLauncher.setServerUrl(serverInput.value);
-  await window.mmoLauncher.setUpdateManifestUrl(normalizeManifestUrl(updateManifestInput.value, getPlatformManifestName()));
+  await window.mmoLauncher.setUpdateManifestUrl(normalizeManifestUrl(updateManifestInput.value));
 });
 
 checkUpdateButton.addEventListener('click', checkForUpdates);

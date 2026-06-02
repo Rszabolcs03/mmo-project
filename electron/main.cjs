@@ -8,10 +8,6 @@ const { pathToFileURL } = require('node:url');
 const isDev = !app.isPackaged;
 const settingsPath = path.join(app.getPath('userData'), 'launcher-settings.json');
 
-function getPlatformManifestName() {
-  return process.platform === 'darwin' ? 'latest-mac.yml' : 'latest.yml';
-}
-
 function readLauncherConfig() {
   try {
     return {
@@ -155,7 +151,7 @@ function parseSimpleYml(text) {
   return manifest;
 }
 
-function normalizeManifestUrl(manifestUrl, manifestName = getPlatformManifestName()) {
+function normalizeManifestUrl(manifestUrl) {
   const trimmedManifestUrl = String(manifestUrl ?? '').trim();
   if (!trimmedManifestUrl) return trimmedManifestUrl;
 
@@ -163,7 +159,7 @@ function normalizeManifestUrl(manifestUrl, manifestName = getPlatformManifestNam
     const parsedUrl = new URL(trimmedManifestUrl);
     if (/\.(ya?ml|json)$/i.test(parsedUrl.pathname)) return parsedUrl.href;
     const trimmedPath = parsedUrl.pathname.replace(/\/+$/, '');
-    parsedUrl.pathname = `${trimmedPath}/${manifestName}`;
+    parsedUrl.pathname = `${trimmedPath}/latest.yml`;
     return parsedUrl.href;
   } catch {
     return trimmedManifestUrl;
@@ -239,8 +235,6 @@ function createWindow() {
 ipcMain.handle('launcher:get-config', () => ({
   ...launcherConfig,
   appVersion: app.getVersion(),
-  appPlatform: process.platform,
-  platformManifestName: getPlatformManifestName(),
   isDev,
 }));
 
