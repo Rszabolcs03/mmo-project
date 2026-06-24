@@ -4,8 +4,9 @@ $Root = Split-Path -Parent $PSScriptRoot
 $PackagePath = Join-Path $Root "package.json"
 $PackageLockPath = Join-Path $Root "package-lock.json"
 $UpdatesDir = Join-Path $Root "updates"
+$ReleaseDir = Join-Path $Root "release"
 $LatestManifestPath = Join-Path $UpdatesDir "latest.yml"
-$KeepReleaseCount = 5
+$KeepReleaseCount = 0
 
 function Invoke-Step {
   param(
@@ -71,17 +72,29 @@ function Get-InstallerVersion {
   param([string]$FileName)
 
   $match = [regex]::Match($FileName, '^Top-Down MMO Prototype Setup (?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\.exe(?:\.blockmap)?$')
-  if (-not $match.Success) { return $null }
-  return $match.Groups["version"].Value
+  if ($match.Success) { return $match.Groups["version"].Value }
+
+  $match = [regex]::Match($FileName, '^Top-Down MMO Prototype-(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)-win-unpacked\.zip$')
+  if ($match.Success) { return $match.Groups["version"].Value }
+
+  $match = [regex]::Match($FileName, '^mmo-project-(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)-x64\.nsis\.7z$')
+  if ($match.Success) { return $match.Groups["version"].Value }
+
+  return $null
 }
 
-function Remove-OldUpdateInstallers {
-  if (-not (Test-Path $UpdatesDir)) {
+function Remove-OldInstallerFiles {
+  param(
+    [string]$Directory,
+    [string]$Label
+  )
+
+  if (-not (Test-Path $Directory)) {
     return
   }
 
-  $updateRoot = [System.IO.Path]::GetFullPath($UpdatesDir)
-  $installerFiles = Get-ChildItem -Path $UpdatesDir -File |
+  $directoryRoot = [System.IO.Path]::GetFullPath($Directory)
+  $installerFiles = Get-ChildItem -Path $Directory -File |
     Where-Object { Get-InstallerVersion $_.Name } |
     ForEach-Object {
       [pscustomobject]@{
@@ -90,14 +103,18 @@ function Remove-OldUpdateInstallers {
       }
     }
 
-  $versionsToKeep = $installerFiles |
-    Select-Object -ExpandProperty Version -Unique |
-    Sort-Object -Property @{ Expression = { [version]($_ -replace '[-+].*$', '') } } -Descending |
-    Select-Object -First $KeepReleaseCount
-
-  if (-not $versionsToKeep -or $versionsToKeep.Count -eq 0) {
-    Write-Host "No installer files found to clean."
+  if (-not $installerFiles -or $installerFiles.Count -eq 0) {
+    Write-Host "No installer files found to clean in $Label."
     return
+  }
+
+  if ($KeepReleaseCount -le 0) {
+    $versionsToKeep = @()
+  } else {
+    $versionsToKeep = $installerFiles |
+      Select-Object -ExpandProperty Version -Unique |
+      Sort-Object -Property @{ Expression = { [version]($_ -replace '[-+].*$', '') } } -Descending |
+      Select-Object -First $KeepReleaseCount
   }
 
   $removedCount = 0
@@ -107,16 +124,28 @@ function Remove-OldUpdateInstallers {
     }
 
     $targetPath = [System.IO.Path]::GetFullPath($entry.File.FullName)
-    if (-not $targetPath.StartsWith($updateRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-      throw "Refusing to delete a file outside updates/: $targetPath"
+    if (-not $targetPath.StartsWith($directoryRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Refusing to delete a file outside $Label`: $targetPath"
     }
 
     Remove-Item -LiteralPath $targetPath -Force
     $removedCount += 1
   }
 
-  Write-Host "Kept installer versions: $($versionsToKeep -join ', ')" -ForegroundColor Green
-  Write-Host "Removed old installer files: $removedCount" -ForegroundColor Green
+  if ($versionsToKeep.Count -gt 0) {
+    Write-Host "$Label kept installer versions: $($versionsToKeep -join ', ')" -ForegroundColor Green
+  } else {
+    Write-Host "$Label kept no old versioned installer files." -ForegroundColor Green
+  }
+  Write-Host "$Label removed old installer files: $removedCount" -ForegroundColor Green
+}
+
+function Remove-OldUpdateInstallers {
+  Remove-OldInstallerFiles -Directory $UpdatesDir -Label "updates"
+}
+
+function Remove-OldReleaseInstallers {
+  Remove-OldInstallerFiles -Directory $ReleaseDir -Label "release"
 }
 
 try {
@@ -181,24 +210,24 @@ try {
 
     $manifest = Get-Content $LatestManifestPath -Raw
     $manifestVersion = Get-ManifestValue $manifest "version"
-    $installerName = Get-ManifestValue $manifest "path"
+    $updatePackageName = Get-ManifestValue $manifest "path"
 
     if ($manifestVersion -ne $newVersion) {
       throw "latest.yml version is $manifestVersion, expected $newVersion."
     }
 
-    if (-not $installerName) {
+    if (-not $updatePackageName) {
       throw "latest.yml does not contain a path field."
     }
 
-    $installerPath = Join-Path $UpdatesDir $installerName
-    if (-not (Test-Path $installerPath)) {
-      throw "Installer referenced by latest.yml does not exist: $installerPath"
+    $updatePackagePath = Join-Path $UpdatesDir $updatePackageName
+    if (-not (Test-Path $updatePackagePath)) {
+      throw "Update package referenced by latest.yml does not exist: $updatePackagePath"
     }
 
     $latestJson = @{
       version = $newVersion
-      url = "http://localhost:2567/updates/$([uri]::EscapeDataString($installerName))"
+      url = "http://localhost:2567/updates/$([uri]::EscapeDataString($updatePackageName))"
       notes = "Version $newVersion"
     } | ConvertTo-Json -Depth 4
 
@@ -207,11 +236,12 @@ try {
     [System.IO.File]::WriteAllText((Join-Path $Root "release-update-example.json"), $latestJson + [Environment]::NewLine, $utf8NoBom)
 
     Write-Host "Manifest version: $manifestVersion" -ForegroundColor Green
-    Write-Host "Installer: $installerName" -ForegroundColor Green
+    Write-Host "Update package: $updatePackageName" -ForegroundColor Green
   }
 
-  Invoke-Step "[6/6] Cleaning old update installers" {
+  Invoke-Step "[6/6] Cleaning old installer archives" {
     Remove-OldUpdateInstallers
+    Remove-OldReleaseInstallers
   }
 
   Write-Host ""

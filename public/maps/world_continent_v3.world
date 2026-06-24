@@ -1,0 +1,182 @@
+{
+  "type": "world",
+  "maps": [
+    {
+      "fileName": "world_region_0_0_v3.tmj",
+      "x": 0,
+      "y": 0,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_1_0_v3.tmj",
+      "x": 25600,
+      "y": 0,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_2_0_v3.tmj",
+      "x": 51200,
+      "y": 0,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_3_0_v3.tmj",
+      "x": 76800,
+      "y": 0,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_4_0_v3.tmj",
+      "x": 102400,
+      "y": 0,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_0_1_v3.tmj",
+      "x": 0,
+      "y": 25600,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_1_1_v3.tmj",
+      "x": 25600,
+      "y": 25600,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_2_1_v3.tmj",
+      "x": 51200,
+      "y": 25600,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_3_1_v3.tmj",
+      "x": 76800,
+      "y": 25600,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_4_1_v3.tmj",
+      "x": 102400,
+      "y": 25600,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_0_2_v3.tmj",
+      "x": 0,
+      "y": 51200,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_1_2_v3.tmj",
+      "x": 25600,
+      "y": 51200,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_2_2_v3.tmj",
+      "x": 51200,
+      "y": 51200,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_3_2_v3.tmj",
+      "x": 76800,
+      "y": 51200,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_4_2_v3.tmj",
+      "x": 102400,
+      "y": 51200,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_0_3_v3.tmj",
+      "x": 0,
+      "y": 76800,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_1_3_v3.tmj",
+      "x": 25600,
+      "y": 76800,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_2_3_v3.tmj",
+      "x": 51200,
+      "y": 76800,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_3_3_v3.tmj",
+      "x": 76800,
+      "y": 76800,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_4_3_v3.tmj",
+      "x": 102400,
+      "y": 76800,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_0_4_v3.tmj",
+      "x": 0,
+      "y": 102400,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_1_4_v3.tmj",
+      "x": 25600,
+      "y": 102400,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_2_4_v3.tmj",
+      "x": 51200,
+      "y": 102400,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_3_4_v3.tmj",
+      "x": 76800,
+      "y": 102400,
+      "width": 25600,
+      "height": 25600
+    },
+    {
+      "fileName": "world_region_4_4_v3.tmj",
+      "x": 102400,
+      "y": 102400,
+      "width": 25600,
+      "height": 25600
+    }
+  ],
+  "onlyShowAdjacentMaps": false,
+  "patterns": []
+}

@@ -12,40 +12,27 @@
         <div>
           <p class="eyebrow">MMO Prototype</p>
           <h1>Top-Down MMO</h1>
-          <p class="subtitle">Connect to a local Colyseus server and launch the game client.</p>
+          <p class="subtitle">Check the client version and launch the game.</p>
         </div>
 
         <div class="status-grid">
           <div>
-            <span>Client</span>
+            <span>Client version</span>
             <strong id="version">v0.1.0</strong>
           </div>
           <div>
-            <span>Server</span>
-            <strong>Self-hosted</strong>
+            <span>Status</span>
+            <strong id="clientStatus">Checking...</strong>
           </div>
         </div>
 
-        <label class="server-field">
-          <span>Server address</span>
-          <input id="serverUrl" type="text" spellcheck="false" value="ws://localhost:2567" />
-        </label>
-
-        <label class="server-field">
-          <span>Update manifest URL</span>
-          <input id="updateManifestUrl" type="text" spellcheck="false" placeholder="https://your-site.web.app/updates/latest.yml" />
-        </label>
-
         <div class="quick-actions">
-          <button type="button" data-server="ws://localhost:2567">This PC</button>
-          <button type="button" id="saveServer">Save</button>
           <button type="button" id="checkUpdate">Check update</button>
         </div>
 
         <button class="play-button" id="playButton" type="button">Play</button>
         <button class="play-button update-button" id="updateButton" type="button" hidden>Update</button>
-        <p class="update-status" id="updateStatus">No update feed configured.</p>
-        <p class="hint">Friends should enter your LAN or Tailscale address, for example ws://100.x.x.x:2567.</p>
+        <p class="update-status" id="updateStatus">Checking for updates...</p>
       </section>
     </main>
 

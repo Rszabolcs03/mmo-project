@@ -5,7 +5,7 @@ import { join } from 'node:path';
 const OUT_DIR = join(process.cwd(), 'public', 'assets', 'characters');
 const LAYER_DIRS = ['base', 'hair', 'beard', 'outfits', 'weapons', 'capes'];
 const FRAME = 48;
-const COLS = 4;
+const COLS = 6;
 const ROWS = 4;
 const WIDTH = FRAME * COLS;
 const HEIGHT = FRAME * ROWS;
@@ -68,14 +68,15 @@ const CLASSES = {
     type: 'mage',
   },
   rogue: {
-    main: '#1f2937',
-    shade: '#0b1120',
-    trim: '#9ca3af',
-    trimLight: '#e5e7eb',
+    main: '#263241',
+    shade: '#0b1220',
+    trim: '#6b7280',
+    trimLight: '#f1f5f9',
     accent: '#7c2d12',
+    accent2: '#7c3aed',
     dark: '#020617',
     hair: '#111827',
-    weapon: '#e5e7eb',
+    weapon: '#f8fafc',
     weaponShade: '#94a3b8',
     type: 'rogue',
   },
@@ -174,6 +175,14 @@ function pixelDiamond(buffer, cx, cy, radius, color) {
     const half = radius - Math.abs(y);
     rect(buffer, cx - half, cy + y, half * 2 + 1, 1, color);
   }
+}
+
+function isAttackFrame(col) {
+  return col >= 4;
+}
+
+function attackPhase(col) {
+  return col === 5 ? 1 : 0;
 }
 
 function drawCross(buffer, cx, cy, color) {
@@ -285,8 +294,40 @@ function drawHoodBody(buffer, ox, oy, direction, col, cfg) {
   const bounce = col === 0 || col === 2 ? 0 : -1;
   const side = direction === 'left' ? -1 : 1;
   const sideView = direction === 'left' || direction === 'right';
+  const back = direction === 'up';
   const y = oy + bounce;
   const bodyX = sideView ? (side > 0 ? 16 : 11) : 12;
+
+  if (cfg.type === 'rogue') {
+    if (sideView) {
+      const cloakX = side > 0 ? 11 : 20;
+      const bodyStart = side > 0 ? 15 : 12;
+      rect(buffer, ox + cloakX, y + 16, 19, 26, OUTLINE);
+      rect(buffer, ox + cloakX + 2, y + 18, 15, 22, cfg.shade);
+      rect(buffer, ox + bodyStart, y + 19, 19, 21, OUTLINE);
+      rect(buffer, ox + bodyStart + 3, y + 21, 13, 17, cfg.main);
+      rect(buffer, ox + bodyStart + (side > 0 ? 11 : 3), y + 22, 4, 15, cfg.trim);
+      line(buffer, ox + bodyStart + (side > 0 ? 4 : 14), y + 22, ox + bodyStart + (side > 0 ? 15 : 4), y + 35, 2, cfg.accent);
+      rect(buffer, ox + bodyStart + 4, y + 34, 11, 4, cfg.dark);
+      rect(buffer, ox + bodyStart + (side > 0 ? 14 : 2), y + 28, 3, 5, cfg.accent2 ?? cfg.trim, 210);
+      return;
+    }
+
+    rect(buffer, ox + 10, y + 16, 28, 27, OUTLINE);
+    rect(buffer, ox + 12, y + 18, 24, 23, cfg.shade);
+    rect(buffer, ox + 14, y + 20, 20, 19, cfg.main);
+    line(buffer, ox + 15, y + 22, ox + 32, y + 36, 2, cfg.accent);
+    line(buffer, ox + 33, y + 22, ox + 16, y + 36, 1, cfg.dark);
+    rect(buffer, ox + 15, y + 33, 18, 5, cfg.dark);
+    rect(buffer, ox + 18, y + 27, 12, 4, cfg.trim, 210);
+    rect(buffer, ox + 22, y + 25, 4, 5, cfg.accent2 ?? cfg.trim, 220);
+    if (back) {
+      rect(buffer, ox + 13, y + 18, 22, 22, cfg.shade);
+      rect(buffer, ox + 16, y + 22, 16, 16, cfg.main);
+      line(buffer, ox + 15, y + 22, ox + 33, y + 37, 2, cfg.accent);
+    }
+    return;
+  }
 
   rect(buffer, ox + bodyX, y + 18, 24, 22, OUTLINE);
   rect(buffer, ox + bodyX + 3, y + 20, 18, 18, cfg.main);
@@ -301,6 +342,31 @@ function drawArms(buffer, ox, oy, direction, col, cfg, armored = false) {
   const sideView = direction === 'left' || direction === 'right';
   const y = oy + bounce;
   const armColor = armored ? cfg.trimLight : cfg.trim;
+  const attacking = isAttackFrame(col);
+  const phase = attackPhase(col);
+
+  if (attacking) {
+    if (sideView) {
+      const shoulderX = side > 0 ? 17 : 31;
+      const shoulderY = y + 23;
+      const reach = phase ? 21 : 13;
+      const handX = shoulderX + side * reach;
+      const handY = shoulderY + (phase ? -2 : 4);
+      line(buffer, ox + shoulderX, shoulderY, ox + handX, handY, 7, OUTLINE);
+      line(buffer, ox + shoulderX + side, shoulderY + 1, ox + handX, handY, 4, armColor);
+      line(buffer, ox + shoulderX - side * 3, shoulderY + 7, ox + shoulderX + side * 8, shoulderY + 12, 5, OUTLINE);
+      line(buffer, ox + shoulderX - side * 2, shoulderY + 7, ox + shoulderX + side * 7, shoulderY + 11, 3, armColor);
+      return;
+    }
+
+    const leftReach = direction === 'up' ? -phase * 2 : phase * 5;
+    const rightReach = direction === 'up' ? phase * 2 : -phase * 5;
+    line(buffer, ox + 12, y + 23, ox + 8 + leftReach, y + 33 - phase * 6, 7, OUTLINE);
+    line(buffer, ox + 36, y + 23, ox + 40 + rightReach, y + 33 - phase * 6, 7, OUTLINE);
+    line(buffer, ox + 13, y + 24, ox + 9 + leftReach, y + 32 - phase * 6, 4, armColor);
+    line(buffer, ox + 35, y + 24, ox + 39 + rightReach, y + 32 - phase * 6, 4, armColor);
+    return;
+  }
 
   if (sideView) {
     const x = side > 0 ? 12 : 32;
@@ -334,6 +400,37 @@ function drawClassHatOrHelmet(buffer, ox, oy, direction, cfg, bounce) {
   }
 
   if (cfg.type === 'hunter' || cfg.type === 'rogue') {
+    if (cfg.type === 'rogue') {
+      const side = direction === 'left' ? -1 : 1;
+      const sideView = direction === 'left' || direction === 'right';
+      if (direction === 'up') {
+        rect(buffer, ox + 12, y + 4, 24, 22, OUTLINE);
+        rect(buffer, ox + 14, y + 6, 20, 18, cfg.shade);
+        rect(buffer, ox + 16, y + 8, 16, 15, cfg.main);
+        rect(buffer, ox + 19, y + 20, 10, 3, cfg.accent2 ?? cfg.trim, 180);
+        return;
+      }
+      if (sideView) {
+        const hoodX = side > 0 ? 13 : 16;
+        rect(buffer, ox + hoodX, y + 4, 20, 20, OUTLINE);
+        rect(buffer, ox + hoodX + 2, y + 6, 16, 16, cfg.shade);
+        rect(buffer, ox + hoodX + (side > 0 ? 7 : 3), y + 10, 9, 8, SKIN);
+        rect(buffer, ox + hoodX + (side > 0 ? 8 : 4), y + 17, 10, 5, cfg.dark);
+        rect(buffer, ox + hoodX + (side > 0 ? 13 : 4), y + 13, 3, 3, EYE);
+        rect(buffer, ox + hoodX + (side > 0 ? 3 : 14), y + 8, 3, 12, cfg.accent2 ?? cfg.trim, 150);
+        return;
+      }
+      rect(buffer, ox + 11, y + 4, 26, 22, OUTLINE);
+      rect(buffer, ox + 13, y + 6, 22, 18, cfg.shade);
+      rect(buffer, ox + 16, y + 10, 16, 9, SKIN);
+      rect(buffer, ox + 15, y + 17, 18, 7, cfg.dark);
+      rect(buffer, ox + 19, y + 13, 3, 3, EYE);
+      rect(buffer, ox + 27, y + 13, 3, 3, EYE);
+      rect(buffer, ox + 14, y + 6, 3, 14, cfg.accent2 ?? cfg.trim, 150);
+      rect(buffer, ox + 31, y + 6, 3, 14, cfg.trim, 120);
+      return;
+    }
+
     rect(buffer, ox + 14, y + 5, 20, 12, OUTLINE);
     rect(buffer, ox + 16, y + 7, 16, 9, cfg.shade);
     if (cfg.type === 'hunter') {
@@ -351,6 +448,107 @@ function drawWeapon(buffer, ox, oy, direction, col, cfg) {
   const sideView = direction === 'left' || direction === 'right';
   const back = direction === 'up';
   const y = oy + bounce;
+  const attacking = isAttackFrame(col);
+  const phase = attackPhase(col);
+
+  if (attacking) {
+    if (cfg.type === 'priest' || cfg.type === 'mage') {
+      const glowColor = cfg.type === 'priest' ? cfg.trimLight : cfg.trimLight;
+      if (sideView) {
+        const handX = side > 0 ? 33 : 15;
+        const handY = y + 25;
+        const tipX = handX + side * (20 + phase * 11);
+        const tipY = handY - 7 - phase * 4;
+        line(buffer, ox + handX - side * 7, handY + 10, ox + tipX, tipY, 4, OUTLINE);
+        line(buffer, ox + handX - side * 6, handY + 9, ox + tipX, tipY, 2, cfg.weapon);
+        if (cfg.type === 'priest') drawCross(buffer, ox + tipX, tipY, glowColor);
+        else pixelDiamond(buffer, ox + tipX, tipY, 4 + phase, glowColor);
+        return;
+      }
+      const tipX = back ? 24 : 24;
+      const tipY = back ? y + 7 - phase * 5 : y + 11 - phase * 6;
+      line(buffer, ox + 17, y + 36, ox + tipX, tipY, 4, OUTLINE);
+      line(buffer, ox + 18, y + 35, ox + tipX, tipY, 2, cfg.weapon);
+      if (cfg.type === 'priest') drawCross(buffer, ox + tipX, tipY, glowColor);
+      else pixelDiamond(buffer, ox + tipX, tipY, 4 + phase, glowColor);
+      return;
+    }
+
+    if (cfg.type === 'hunter') {
+      if (sideView) {
+        const bowX = side > 0 ? 35 : 13;
+        const bowY = y + 25;
+        line(buffer, ox + bowX, bowY - 14, ox + bowX, bowY + 14, 4, OUTLINE);
+        line(buffer, ox + bowX, bowY - 13, ox + bowX, bowY + 13, 2, cfg.weapon);
+        const stringX = bowX - side * (9 + phase * 4);
+        line(buffer, ox + bowX, bowY - 13, ox + stringX, bowY, 1, cfg.trimLight);
+        line(buffer, ox + bowX, bowY + 13, ox + stringX, bowY, 1, cfg.trimLight);
+        line(buffer, ox + stringX, bowY, ox + bowX + side * (21 + phase * 8), bowY, 2, '#fef3c7');
+        rect(buffer, ox + bowX + side * (20 + phase * 8) - 2, bowY - 2, 5, 5, cfg.trimLight);
+        return;
+      }
+      const bowY = back ? y + 19 : y + 24;
+      line(buffer, ox + 12, bowY, ox + 36, bowY, 4, OUTLINE);
+      line(buffer, ox + 13, bowY, ox + 35, bowY, 2, cfg.weapon);
+      line(buffer, ox + 15, bowY - 6, ox + 33, bowY + 6, 1, cfg.trimLight);
+      line(buffer, ox + 24, bowY - 9, ox + 24, bowY + 14 + phase * 5, 2, '#fef3c7');
+      rect(buffer, ox + 22, bowY - 11, 5, 5, cfg.trimLight);
+      return;
+    }
+
+    if (cfg.type === 'rogue') {
+      if (sideView) {
+        const handX = side > 0 ? 33 : 15;
+        const handY = y + 25;
+        const reach = 16 + phase * 12;
+        line(buffer, ox + handX, handY, ox + handX + side * reach, handY - 2, 5, OUTLINE);
+        line(buffer, ox + handX, handY, ox + handX + side * reach, handY - 2, 3, cfg.weapon);
+        line(buffer, ox + handX - side * 12, handY + 8, ox + handX + side * (7 + phase * 7), handY + 10, 4, OUTLINE);
+        line(buffer, ox + handX - side * 12, handY + 8, ox + handX + side * (7 + phase * 7), handY + 10, 2, cfg.weaponShade);
+        rect(buffer, ox + handX + side * reach - 2, handY - 4, 5, 5, cfg.accent2 ?? cfg.trim);
+        return;
+      }
+      const low = back ? y + 24 : y + 31;
+      line(buffer, ox + 12, y + 28, ox + 5 - phase * 3, low + phase * 2, 5, OUTLINE);
+      line(buffer, ox + 36, y + 28, ox + 43 + phase * 3, low + phase * 2, 5, OUTLINE);
+      line(buffer, ox + 12, y + 28, ox + 5 - phase * 3, low + phase * 2, 3, cfg.weapon);
+      line(buffer, ox + 36, y + 28, ox + 43 + phase * 3, low + phase * 2, 3, cfg.weapon);
+      rect(buffer, ox + 22, y + 26, 5, 3, cfg.accent2 ?? cfg.trim);
+      return;
+    }
+
+    if (cfg.type === 'paladin') {
+      const shieldX = sideView ? (side > 0 ? 9 : 30) : 8;
+      rect(buffer, ox + shieldX, y + 24, 11, 14, OUTLINE);
+      rect(buffer, ox + shieldX + 2, y + 26, 7, 10, cfg.trim);
+      drawCross(buffer, ox + shieldX + 5, y + 31, cfg.trimLight);
+      if (sideView) {
+        const handX = side > 0 ? 35 : 13;
+        const handY = y + 24;
+        line(buffer, ox + handX - side * 8, handY + 9, ox + handX + side * (17 + phase * 9), handY - 4, 5, cfg.weaponShade);
+        rect(buffer, ox + handX + side * (18 + phase * 9) - 5, handY - 8, 11, 9, cfg.weapon);
+        return;
+      }
+      line(buffer, ox + 34, y + 33, ox + 40 + phase * 3, y + 15 - phase * 4, 5, cfg.weaponShade);
+      rect(buffer, ox + 36 + phase * 3, y + 10 - phase * 4, 11, 9, cfg.weapon);
+      return;
+    }
+
+    if (cfg.type === 'warrior') {
+      if (sideView) {
+        const handX = side > 0 ? 34 : 14;
+        const handY = y + 25;
+        line(buffer, ox + handX - side * 9, handY + 9, ox + handX + side * (21 + phase * 12), handY - 8, 6, OUTLINE);
+        line(buffer, ox + handX - side * 8, handY + 8, ox + handX + side * (20 + phase * 12), handY - 8, 3, cfg.weapon);
+        rect(buffer, ox + handX - 4, handY + 2, 9, 4, cfg.trimLight);
+        return;
+      }
+      line(buffer, ox + 13, y + 36, ox + 39 + phase * 4, y + 14 - phase * 5, 6, OUTLINE);
+      line(buffer, ox + 14, y + 35, ox + 39 + phase * 4, y + 14 - phase * 5, 3, cfg.weapon);
+      rect(buffer, ox + 21, y + 26, 9, 4, cfg.trimLight);
+      return;
+    }
+  }
 
   if (cfg.type === 'priest' || cfg.type === 'mage') {
     const staffX = sideView ? (side > 0 ? 36 : 10) : 37;
@@ -388,14 +586,25 @@ function drawWeapon(buffer, ox, oy, direction, col, cfg) {
 
   if (cfg.type === 'rogue') {
     if (sideView) {
-      const daggerX = side > 0 ? 37 : 11;
-      line(buffer, ox + daggerX, y + 29 + swing, ox + daggerX + side * 8, y + 37 + swing, 3, OUTLINE);
-      line(buffer, ox + daggerX, y + 29 + swing, ox + daggerX + side * 8, y + 37 + swing, 1, cfg.weapon);
+      const daggerX = side > 0 ? 35 : 13;
+      const secondX = side > 0 ? 16 : 32;
+      line(buffer, ox + daggerX, y + 25 + swing, ox + daggerX + side * 10, y + 35 + swing, 4, OUTLINE);
+      line(buffer, ox + daggerX, y + 25 + swing, ox + daggerX + side * 10, y + 35 + swing, 2, cfg.weapon);
+      line(buffer, ox + secondX, y + 30 - swing, ox + secondX - side * 7, y + 39 - swing, 3, OUTLINE);
+      line(buffer, ox + secondX, y + 30 - swing, ox + secondX - side * 7, y + 39 - swing, 1, cfg.weaponShade);
+      rect(buffer, ox + daggerX - 1, y + 25 + swing, 4, 3, cfg.accent2 ?? cfg.trim);
     } else {
-      line(buffer, ox + 10, y + 29 + swing, ox + 4, y + 38 + swing, 3, OUTLINE);
-      line(buffer, ox + 38, y + 29 - swing, ox + 44, y + 38 - swing, 3, OUTLINE);
-      line(buffer, ox + 10, y + 29 + swing, ox + 4, y + 38 + swing, 1, cfg.weapon);
-      line(buffer, ox + 38, y + 29 - swing, ox + 44, y + 38 - swing, 1, cfg.weapon);
+      const leftSwing = back ? -swing : swing;
+      const rightSwing = back ? swing : -swing;
+      line(buffer, ox + 11, y + 27 + leftSwing, ox + 4, y + 38 + leftSwing, 4, OUTLINE);
+      line(buffer, ox + 37, y + 27 + rightSwing, ox + 44, y + 38 + rightSwing, 4, OUTLINE);
+      line(buffer, ox + 11, y + 27 + leftSwing, ox + 4, y + 38 + leftSwing, 2, cfg.weapon);
+      line(buffer, ox + 37, y + 27 + rightSwing, ox + 44, y + 38 + rightSwing, 2, cfg.weapon);
+      rect(buffer, ox + 9, y + 27 + leftSwing, 4, 3, cfg.accent2 ?? cfg.trim);
+      rect(buffer, ox + 35, y + 27 + rightSwing, 4, 3, cfg.accent2 ?? cfg.trim);
+      if (col !== 0) {
+        line(buffer, ox + 8, y + 32, ox + 40, y + 32, 1, cfg.accent2 ?? cfg.trim);
+      }
     }
     return;
   }
@@ -439,7 +648,11 @@ function drawFrame(buffer, cfg, row, col) {
   if (cfg.type === 'priest') drawSpark(buffer, ox + 20, oy + 28 + bounce, cfg.trimLight);
   if (cfg.type === 'mage') drawSpark(buffer, ox + 19, oy + 29 + bounce, cfg.trimLight);
   if (cfg.type === 'hunter') rect(buffer, ox + 15, oy + 27 + bounce, 17, 3, cfg.trim, 220);
-  if (cfg.type === 'rogue') rect(buffer, ox + 17, oy + 27 + bounce, 14, 4, cfg.accent, 230);
+  if (cfg.type === 'rogue') {
+    rect(buffer, ox + 17, oy + 27 + bounce, 14, 4, cfg.accent, 230);
+    rect(buffer, ox + 20, oy + 24 + bounce, 8, 2, cfg.accent2 ?? cfg.trim, 210);
+    if (col !== 0) drawSpark(buffer, ox + (col === 1 ? 12 : 36), oy + 35 + bounce, cfg.weaponShade);
+  }
 
   drawWeapon(buffer, ox, oy, direction, col, cfg);
 }

@@ -1,0 +1,193 @@
+﻿@media (max-width: 640px) {
+  .hud {
+    min-height: 34px;
+    max-width: calc(100vw - 32px);
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .bottom-left {
+    right: 16px;
+  }
+
+  .selection-panel {
+    height: calc(100vh - 32px);
+    padding: 16px;
+  }
+
+  .character-menu-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .character-menu-actions {
+    justify-content: stretch;
+  }
+
+  .character-menu-actions .auth-button {
+    flex: 1;
+  }
+
+  .character-menu-layout,
+  .character-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .creation-stepper {
+    grid-template-columns: 1fr;
+  }
+
+  .character-list,
+  .character-preview-panel,
+  .character-builder {
+    overflow: visible;
+  }
+
+  .selection-panel {
+    overflow-y: auto;
+  }
+
+  .builder-preview {
+    position: static;
+  }
+
+  .class-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .race-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .saved-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .class-card {
+    min-height: 154px;
+    padding: 14px;
+  }
+
+  .ability-bar {
+    right: 16px;
+    bottom: 62px;
+    left: 16px;
+    justify-content: center;
+    overflow-x: auto;
+    width: auto;
+    transform: none;
+  }
+
+  .ability-slot {
+    flex: 0 0 auto;
+    grid-template-columns: 18px 34px;
+    width: 68px;
+    height: 62px;
+    font-size: 12px;
+  }
+
+  .cast-toast {
+    bottom: calc(100% + 8px);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .target-panel {
+    top: 242px;
+    left: 16px;
+    width: min(230px, calc(100vw - 32px));
+  }
+
+  .world-map-panel {
+    inset: 66px 16px auto 16px;
+    height: min(560px, calc(100vh - 116px));
+  }
+
+  .world-map-panel.full-world-panel {
+    inset: 66px 16px auto 16px;
+    width: auto;
+    height: min(680px, calc(100vh - 116px));
+    transform: none;
+  }
+
+  .quest-dialog-panel,
+  .quest-log-panel {
+    inset: 66px 16px auto 16px;
+    width: auto;
+    max-height: calc(100vh - 120px);
+    transform: none;
+  }
+
+  .admin-players-panel {
+    inset: 66px 16px auto 16px;
+    width: auto;
+    max-height: calc(100vh - 120px);
+    transform: none;
+  }
+
+  .admin-player-row,
+  .admin-account-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-account-actions {
+    justify-content: stretch;
+  }
+
+  .admin-account-actions button,
+  .admin-player-row button {
+    width: 100%;
+  }
+
+  .item-compare-tooltip {
+    top: auto;
+    right: 16px;
+    bottom: 142px;
+    left: 16px;
+    width: auto;
+  }
+
+  .quest-dialog-body {
+    grid-template-columns: 1fr;
+  }
+
+  .quest-tracker {
+    top: 254px;
+    left: auto;
+    right: 16px;
+  }
+
+  .world-map-tools {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .party-invite-panel {
+    top: 18%;
+    width: min(300px, calc(100vw - 32px));
+  }
+
+  .friends-panel {
+    left: 16px;
+    top: 250px;
+  }
+
+  .talent-panel {
+    inset: 66px 16px auto 16px;
+    max-height: calc(100vh - 120px);
+  }
+
+  .talent-tree {
+    grid-template-columns: 1fr;
+  }
+
+  .talent-node-row {
+    grid-template-columns: 1fr;
+  }
+}

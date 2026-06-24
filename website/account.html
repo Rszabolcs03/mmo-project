@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Login to your Wayworn account and view your saved characters." />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>Wayworn Account | Bridgeward Studio</title>
+    <link rel="stylesheet" href="./styles.css?v=20260621-6" />
+  </head>
+  <body class="account-site">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Bridgeward Studio home">
+        <span class="brand-mark">B</span>
+        <span>
+          <strong>Bridgeward Studio</strong>
+          <small>Creators of Wayworn</small>
+        </span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="./">Home</a>
+        <a href="./download">Download</a>
+        <a class="nav-cta nav-active" href="./account" aria-current="page">Account</a>
+      </nav>
+    </header>
+
+    <main class="subpage account-page">
+      <section class="account-shell">
+        <div class="account-intro">
+          <p class="eyebrow">Wayworn account</p>
+          <h1>Account</h1>
+          <p>
+            Sign in with the same account you use in Wayworn to view your saved
+            characters and basic account settings.
+          </p>
+          <div class="account-link-row">
+            <a href="./download">Download latest build</a>
+            <a href="./">Back to studio site</a>
+          </div>
+        </div>
+
+        <section class="account-panel" id="auth-panel">
+          <form class="auth-form" id="auth-form">
+            <h2 id="auth-title">Login</h2>
+            <label>
+              <span>Email</span>
+              <input id="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              <span>Password</span>
+              <input id="password" type="password" autocomplete="current-password" minlength="6" required />
+            </label>
+            <div class="account-actions">
+              <button class="button primary" type="submit">Login</button>
+              <button class="button secondary" id="register-button" type="button">Create Account</button>
+            </div>
+            <p class="status-text" id="auth-status">Checking session...</p>
+          </form>
+
+          <div class="account-dashboard hidden" id="account-dashboard">
+            <div class="dashboard-head">
+              <div>
+                <p class="eyebrow">Signed in</p>
+                <h2 id="account-email">Account</h2>
+                <p class="status-text" id="account-meta"></p>
+              </div>
+              <button class="button secondary" id="logout-button" type="button">Logout</button>
+            </div>
+
+            <div class="settings-grid">
+              <article>
+                <h3>Account Settings</h3>
+                <p id="verification-status">Email verification status is loading.</p>
+                <div class="account-actions">
+                  <button class="button secondary" id="verify-button" type="button">Send Verification Email</button>
+                  <button class="button secondary" id="reset-button" type="button">Send Password Reset</button>
+                </div>
+              </article>
+              <article>
+                <h3>Saved Characters</h3>
+                <div class="character-list" id="character-list">
+                  <p class="status-text">Loading characters...</p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Bridgeward Studio</span>
+      <span>Wayworn is in development.</span>
+    </footer>
+
+    <script type="module" src="./account.js"></script>
+  </body>
+</html>

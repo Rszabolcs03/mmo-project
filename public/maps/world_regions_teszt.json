@@ -1,0 +1,361 @@
+{
+  "tileSize": 32,
+  "worldTiles": {
+    "width": 4000,
+    "height": 4000
+  },
+  "regionTiles": {
+    "width": 800,
+    "height": 800
+  },
+  "regions": [
+    {
+      "id": "world_region_0_0",
+      "file": "world_region_0_0_teszt.tmj",
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_1_0",
+      "file": "world_region_1_0_teszt.tmj",
+      "x": 800,
+      "y": 0,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_2_0",
+      "file": "world_region_2_0_teszt.tmj",
+      "x": 1600,
+      "y": 0,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_3_0",
+      "file": "world_region_3_0_teszt.tmj",
+      "x": 2400,
+      "y": 0,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_4_0",
+      "file": "world_region_4_0_teszt.tmj",
+      "x": 3200,
+      "y": 0,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_0_1",
+      "file": "world_region_0_1_teszt.tmj",
+      "x": 0,
+      "y": 800,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_1_1",
+      "file": "world_region_1_1_teszt.tmj",
+      "x": 800,
+      "y": 800,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_2_1",
+      "file": "world_region_2_1_teszt.tmj",
+      "x": 1600,
+      "y": 800,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_3_1",
+      "file": "world_region_3_1_teszt.tmj",
+      "x": 2400,
+      "y": 800,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_4_1",
+      "file": "world_region_4_1_teszt.tmj",
+      "x": 3200,
+      "y": 800,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_0_2",
+      "file": "world_region_0_2_teszt.tmj",
+      "x": 0,
+      "y": 1600,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_1_2",
+      "file": "world_region_1_2_teszt.tmj",
+      "x": 800,
+      "y": 1600,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_2_2",
+      "file": "world_region_2_2_teszt.tmj",
+      "x": 1600,
+      "y": 1600,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_3_2",
+      "file": "world_region_3_2_teszt.tmj",
+      "x": 2400,
+      "y": 1600,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_4_2",
+      "file": "world_region_4_2_teszt.tmj",
+      "x": 3200,
+      "y": 1600,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_0_3",
+      "file": "world_region_0_3_teszt.tmj",
+      "x": 0,
+      "y": 2400,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_1_3",
+      "file": "world_region_1_3_teszt.tmj",
+      "x": 800,
+      "y": 2400,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_2_3",
+      "file": "world_region_2_3_teszt.tmj",
+      "x": 1600,
+      "y": 2400,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_3_3",
+      "file": "world_region_3_3_teszt.tmj",
+      "x": 2400,
+      "y": 2400,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_4_3",
+      "file": "world_region_4_3_teszt.tmj",
+      "x": 3200,
+      "y": 2400,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_0_4",
+      "file": "world_region_0_4_teszt.tmj",
+      "x": 0,
+      "y": 3200,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_1_4",
+      "file": "world_region_1_4_teszt.tmj",
+      "x": 800,
+      "y": 3200,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_2_4",
+      "file": "world_region_2_4_teszt.tmj",
+      "x": 1600,
+      "y": 3200,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_3_4",
+      "file": "world_region_3_4_teszt.tmj",
+      "x": 2400,
+      "y": 3200,
+      "width": 800,
+      "height": 800
+    },
+    {
+      "id": "world_region_4_4",
+      "file": "world_region_4_4_teszt.tmj",
+      "x": 3200,
+      "y": 3200,
+      "width": 800,
+      "height": 800
+    }
+  ],
+  "zones": [
+    {
+      "id": "greenvale",
+      "name": "Greenvale Lowlands",
+      "recommendedLevel": 10,
+      "enemyType": "plainstrider"
+    },
+    {
+      "id": "westreach",
+      "name": "Westreach Coast",
+      "recommendedLevel": 12,
+      "enemyType": "road-bandit"
+    },
+    {
+      "id": "spinebreak",
+      "name": "Spinebreak Highlands",
+      "recommendedLevel": 16,
+      "enemyType": "stone-gnoll"
+    },
+    {
+      "id": "verdant",
+      "name": "Verdant Reach",
+      "recommendedLevel": 18,
+      "enemyType": "forest-sprite"
+    },
+    {
+      "id": "silverpeak",
+      "name": "Silverpeak Crown",
+      "recommendedLevel": 21,
+      "enemyType": "snow-wolf"
+    },
+    {
+      "id": "bogmire",
+      "name": "Bogmire Fen",
+      "recommendedLevel": 22,
+      "enemyType": "plaguehound"
+    },
+    {
+      "id": "sunbreak",
+      "name": "Sunbreak Expanse",
+      "recommendedLevel": 24,
+      "enemyType": "scorpion"
+    },
+    {
+      "id": "stormroot",
+      "name": "Stormroot Basin",
+      "recommendedLevel": 26,
+      "enemyType": "corrupted-treant"
+    },
+    {
+      "id": "ashen",
+      "name": "Ashen Frontier",
+      "recommendedLevel": 28,
+      "enemyType": "ember-wraith"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "stoneford_city",
+      "name": "Stoneford City",
+      "kind": "city",
+      "x": 1960,
+      "y": 1880,
+      "biome": "greenvale",
+      "radius": 120
+    },
+    {
+      "id": "westwatch",
+      "name": "Westwatch",
+      "kind": "village",
+      "x": 660,
+      "y": 1450,
+      "biome": "westreach",
+      "radius": 70
+    },
+    {
+      "id": "pineharbor",
+      "name": "Pineharbor",
+      "kind": "village",
+      "x": 880,
+      "y": 2420,
+      "biome": "westreach",
+      "radius": 64
+    },
+    {
+      "id": "ironpass_hold",
+      "name": "Ironpass Hold",
+      "kind": "fort",
+      "x": 1120,
+      "y": 760,
+      "biome": "spinebreak",
+      "radius": 80
+    },
+    {
+      "id": "moonwell_grove",
+      "name": "Moonwell Grove",
+      "kind": "village",
+      "x": 2720,
+      "y": 720,
+      "biome": "verdant",
+      "radius": 76
+    },
+    {
+      "id": "snowcap_watch",
+      "name": "Snowcap Watch",
+      "kind": "fort",
+      "x": 2420,
+      "y": 1060,
+      "biome": "silverpeak",
+      "radius": 72
+    },
+    {
+      "id": "fenwick_crossing",
+      "name": "Fenwick Crossing",
+      "kind": "village",
+      "x": 3320,
+      "y": 1660,
+      "biome": "bogmire",
+      "radius": 64
+    },
+    {
+      "id": "sunspire_camp",
+      "name": "Sunspire Camp",
+      "kind": "camp",
+      "x": 1700,
+      "y": 3070,
+      "biome": "sunbreak",
+      "radius": 62
+    },
+    {
+      "id": "stormroot_refuge",
+      "name": "Stormroot Refuge",
+      "kind": "village",
+      "x": 2940,
+      "y": 2920,
+      "biome": "stormroot",
+      "radius": 78
+    },
+    {
+      "id": "emberfall_ruins",
+      "name": "Emberfall Ruins",
+      "kind": "ruins",
+      "x": 560,
+      "y": 3200,
+      "biome": "ashen",
+      "radius": 88
+    }
+  ]
+}

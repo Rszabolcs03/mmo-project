@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDocs,
@@ -22,13 +23,31 @@ export async function loadCloudCharacters(uid) {
   }));
 }
 
-export async function saveCloudCharacter(uid, character) {
+export async function loadAllCloudCharactersForAdmin() {
+  if (!db) return [];
+
+  const snapshot = await getDocs(collectionGroup(db, 'characters'));
+  return snapshot.docs.map((characterDoc) => {
+    const data = characterDoc.data();
+    const ownerDoc = characterDoc.ref.parent.parent;
+    return {
+      ...data,
+      id: characterDoc.id,
+      ownerUid: data.ownerUid ?? ownerDoc?.id ?? null,
+      ownerEmail: data.ownerEmail ?? data.accountEmail ?? null,
+    };
+  });
+}
+
+export async function saveCloudCharacter(uid, character, ownerEmail = '') {
   if (!db || !uid || !character?.id) return;
 
   await setDoc(
     doc(db, 'users', uid, 'characters', character.id),
     {
       ...character,
+      ownerUid: uid,
+      ownerEmail: ownerEmail || character.ownerEmail || '',
       cloudUpdatedAt: serverTimestamp(),
     },
     { merge: true },

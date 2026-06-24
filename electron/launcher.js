@@ -1,107 +1,92 @@
-const serverInput = document.querySelector('#serverUrl');
-const updateManifestInput = document.querySelector('#updateManifestUrl');
 const playButton = document.querySelector('#playButton');
 const updateButton = document.querySelector('#updateButton');
-const saveServerButton = document.querySelector('#saveServer');
 const checkUpdateButton = document.querySelector('#checkUpdate');
 const versionLabel = document.querySelector('#version');
+const clientStatus = document.querySelector('#clientStatus');
 const updateStatus = document.querySelector('#updateStatus');
 
 let pendingUpdate = null;
+let appVersion = '0.1.0';
+let serverOnline = false;
 
-function normalizeServerUrl(value) {
-  const trimmed = value.trim();
-  if (!trimmed) return 'ws://localhost:2567';
-  if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) return trimmed;
-  if (trimmed.startsWith('http://')) return `ws://${trimmed.slice('http://'.length)}`;
-  if (trimmed.startsWith('https://')) return `wss://${trimmed.slice('https://'.length)}`;
-  return `ws://${trimmed}`;
-}
-
-function normalizeManifestUrl(value) {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-
-  if (trimmed.endsWith('/')) return `${trimmed.replace(/\/+$/, '')}/latest.yml`;
-  if (/\.(ya?ml|json)$/i.test(trimmed)) return trimmed;
-
-  return `${trimmed.replace(/\/+$/, '')}/latest.yml`;
-}
-
-function getManifestUrlFromServerUrl(serverUrl) {
-  try {
-    const url = new URL(normalizeServerUrl(serverUrl));
-    url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
-    url.pathname = '/updates/latest.yml';
-    url.search = '';
-    url.hash = '';
-    return url.href;
-  } catch {
-    return '';
-  }
+function syncPlayState() {
+  playButton.disabled = Boolean(pendingUpdate) || !serverOnline;
 }
 
 function setUpdateAvailable(update) {
   pendingUpdate = update;
   playButton.hidden = true;
   updateButton.hidden = false;
-  updateStatus.textContent = `Update available: v${update.version}`;
+  clientStatus.textContent = 'Update needed';
+  updateStatus.textContent = `Update needed: v${appVersion} -> v${update.version}`;
+  syncPlayState();
 }
 
 function setNoUpdate(message) {
   pendingUpdate = null;
   playButton.hidden = false;
   updateButton.hidden = true;
+  clientStatus.textContent = 'Up to date';
   updateStatus.textContent = message;
+  syncPlayState();
+}
+
+async function checkServer() {
+  serverOnline = false;
+  syncPlayState();
+  try {
+    const result = await window.mmoLauncher.checkServer();
+    serverOnline = Boolean(result.online);
+    if (!serverOnline) {
+      clientStatus.textContent = 'Server offline';
+      updateStatus.textContent = `Server offline${result.error ? `: ${result.error}` : ''}`;
+    } else if (!pendingUpdate) {
+      clientStatus.textContent = 'Ready';
+      updateStatus.textContent = `Client is up to date: v${appVersion} | Server online`;
+    }
+    return result;
+  } catch (error) {
+    serverOnline = false;
+    clientStatus.textContent = 'Server offline';
+    updateStatus.textContent = error.message || 'Server check failed.';
+    return { online: false, error: error.message };
+  } finally {
+    syncPlayState();
+  }
 }
 
 async function checkForUpdates() {
-  const config = await window.mmoLauncher.getConfig();
-  serverInput.value = normalizeServerUrl(serverInput.value || config.serverUrl || '');
-  const manifestUrl = normalizeManifestUrl(
-    updateManifestInput.value || config.updateManifestUrl || getManifestUrlFromServerUrl(serverInput.value),
-  );
-  if (!manifestUrl) {
-    setNoUpdate('No update feed configured.');
-    return;
-  }
-
   updateStatus.textContent = 'Checking for update...';
+  clientStatus.textContent = 'Checking...';
   checkUpdateButton.disabled = true;
+  serverOnline = false;
+  syncPlayState();
+
   try {
-    updateManifestInput.value = manifestUrl;
-    const result = await window.mmoLauncher.checkUpdate(manifestUrl);
+    const result = await window.mmoLauncher.checkUpdate();
     if (result.hasUpdate) {
       setUpdateAvailable(result.update);
     } else {
-      setNoUpdate(`Client is up to date: v${result.currentVersion ?? config.appVersion}`);
+      setNoUpdate(`Client is up to date: v${result.currentVersion ?? appVersion}`);
     }
   } catch (error) {
-    setNoUpdate(error.message || 'Update check failed.');
+    pendingUpdate = null;
+    playButton.hidden = false;
+    updateButton.hidden = true;
+    clientStatus.textContent = 'Check failed';
+    updateStatus.textContent = error.message || 'Update check failed.';
   } finally {
     checkUpdateButton.disabled = false;
+    if (!pendingUpdate) await checkServer();
   }
 }
 
 async function init() {
   const config = await window.mmoLauncher.getConfig();
-  serverInput.value = config.serverUrl ?? 'ws://localhost:2567';
-  updateManifestInput.value = config.updateManifestUrl ?? '';
-  versionLabel.textContent = `v${config.appVersion ?? '0.1.0'}`;
+  appVersion = config.appVersion ?? '0.1.0';
+  versionLabel.textContent = `v${appVersion}`;
   await checkForUpdates();
 }
-
-document.querySelectorAll('[data-server]').forEach((button) => {
-  button.addEventListener('click', () => {
-    serverInput.value = button.dataset.server;
-  });
-});
-
-saveServerButton.addEventListener('click', async () => {
-  serverInput.value = normalizeServerUrl(serverInput.value);
-  await window.mmoLauncher.setServerUrl(serverInput.value);
-  await window.mmoLauncher.setUpdateManifestUrl(normalizeManifestUrl(updateManifestInput.value));
-});
 
 checkUpdateButton.addEventListener('click', checkForUpdates);
 
@@ -110,9 +95,16 @@ updateButton.addEventListener('click', async () => {
   updateButton.disabled = true;
   updateButton.textContent = 'Downloading...';
   updateStatus.textContent = `Downloading v${pendingUpdate.version}...`;
+
   try {
     const result = await window.mmoLauncher.downloadUpdate(pendingUpdate.url);
-    updateStatus.textContent = `Installer opened from ${result.destination}`;
+    if (result.mode === 'installer') {
+      updateStatus.textContent = result.closing
+        ? 'Installer opened. Closing launcher so the update can install...'
+        : `Installer opened from ${result.destination}`;
+    } else {
+      updateStatus.textContent = 'Update downloaded. Closing launcher to replace client files...';
+    }
     updateButton.textContent = 'Update';
   } catch (error) {
     updateStatus.textContent = error.message || 'Update download failed.';
@@ -123,10 +115,23 @@ updateButton.addEventListener('click', async () => {
 });
 
 playButton.addEventListener('click', async () => {
-  serverInput.value = normalizeServerUrl(serverInput.value);
   playButton.disabled = true;
   playButton.textContent = 'Launching...';
-  await window.mmoLauncher.play(serverInput.value);
+
+  try {
+    const server = await checkServer();
+    if (!server.online) {
+      playButton.textContent = 'Play';
+      return;
+    }
+    await window.mmoLauncher.play();
+  } catch (error) {
+    playButton.disabled = false;
+    playButton.textContent = 'Play';
+    updateStatus.textContent = error.message || 'Launch failed.';
+  } finally {
+    syncPlayState();
+  }
 });
 
 init();

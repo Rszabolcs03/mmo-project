@@ -1,7 +1,7 @@
 {
   "name": "mmo-project",
   "private": true,
-  "version": "0.1.22",
+  "version": "0.3.21",
   "type": "module",
   "engines": {
     "node": "22.x",
@@ -18,8 +18,24 @@
     "electron:pack": "npm run build && set ELECTRON_BUILDER_CACHE=.cache\\electron-builder&& electron-builder --dir",
     "electron:dist": "npm run build && set ELECTRON_BUILDER_CACHE=.cache\\electron-builder&& electron-builder",
     "update:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\prepare-update.ps1",
-    "generate:sprites": "node scripts/generate-character-sprites.mjs && node scripts/generate-game-assets.mjs",
-    "generate:game-assets": "node scripts/generate-game-assets.mjs"
+    "generate:sprites": "node scripts/generate-character-sprites.mjs && node scripts/generate-game-assets.mjs && node scripts/generate-ability-assets.mjs",
+    "generate:game-assets": "node scripts/generate-game-assets.mjs",
+    "generate:ability-assets": "node scripts/generate-ability-assets.mjs",
+    "generate:human-zone": "node scripts/generate-human-starting-zone.mjs",
+    "generate:human-zone:v2": "node scripts/improveHumanStartingZone.js",
+    "generate:human-buildings:v1": "node scripts/generateHumanBuildingsV1.js",
+    "generate:human-zone:v4": "node scripts/improveHumanStartingZoneV4.js",
+    "generate:race-zones": "node scripts/generate-race-starting-zones.mjs",
+    "generate:world": "node scripts/generate-world-map.mjs",
+    "generate:world:v2-chunks": "node scripts/generate-world-v2-chunks.mjs",
+    "generate:world:v3": "node scripts/generate-world-map-v3.mjs",
+    "generate:world:v3-overview": "node scripts/generate-world-v3-overview.mjs",
+    "generate:world:v3-chunks": "node scripts/generate-world-v3-chunks.mjs",
+    "generate:world-box-teszt": "node scripts/generate-world-box-teszt.mjs",
+    "generate:world:v4-buildings": "node scripts/generate-world-v4-buildings.mjs",
+    "generate:dungeon:01": "node scripts/generate-dungeon-01.mjs",
+    "generate:dungeon-enemies": "node scripts/generate-dungeon-enemy-sprites.mjs",
+    "resize:dungeon:01": "node scripts/expand-dungeon-01.mjs"
   },
   "main": "electron/main.cjs",
   "dependencies": {
@@ -35,7 +51,8 @@
   },
   "devDependencies": {
     "electron": "^42.3.0",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "pngjs": "^7.0.0"
   },
   "build": {
     "appId": "com.mmo.project",
@@ -53,9 +70,15 @@
       "buildResources": "public",
       "output": "release"
     },
+    "artifactName": "${productName} Setup.${ext}",
     "win": {
       "target": "nsis",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
     }
   }
 }

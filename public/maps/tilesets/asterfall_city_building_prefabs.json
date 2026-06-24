@@ -1,0 +1,1221 @@
+{
+  "version": 2,
+  "tileSize": 32,
+  "tileset": {
+    "name": "asterfall_city_buildings",
+    "image": "../../assets/tilesets/asterfall_city_buildings.png",
+    "tsx": "../../tilesets/asterfall_city_buildings.tsx",
+    "columns": 128,
+    "tileCount": 7040
+  },
+  "placement": {
+    "rule": "Place detailed large Asterfall prefabs on CityRoofs. Use interiorRegion and roofHideRegion for roof fade/hide workflows.",
+    "noAutoPlacement": true
+  },
+  "prefabs": [
+    {
+      "id": "asterfall_town_hall",
+      "displayName": "Asterfall Town Hall",
+      "category": "civic",
+      "widthTiles": 18,
+      "heightTiles": 14,
+      "startTile": 0,
+      "sheetTileX": 0,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 9,
+        "y": 13
+      },
+      "recommendedInteriorWidth": 16,
+      "recommendedInteriorHeight": 10,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 18,
+        "height": 5
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 18,
+        "height": 10
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 18,
+        "height": 10
+      },
+      "footprintType": "civic",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_bank",
+      "displayName": "Asterfall Bank",
+      "category": "service",
+      "widthTiles": 14,
+      "heightTiles": 12,
+      "startTile": 20,
+      "sheetTileX": 20,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 7,
+        "y": 11
+      },
+      "recommendedInteriorWidth": 12,
+      "recommendedInteriorHeight": 8,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 14,
+        "height": 5
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 14,
+        "height": 8
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 14,
+        "height": 8
+      },
+      "footprintType": "service",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_auction_house",
+      "displayName": "Asterfall Auction House",
+      "category": "service",
+      "widthTiles": 18,
+      "heightTiles": 12,
+      "startTile": 36,
+      "sheetTileX": 36,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 9,
+        "y": 11
+      },
+      "recommendedInteriorWidth": 16,
+      "recommendedInteriorHeight": 8,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 18,
+        "height": 5
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 18,
+        "height": 8
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 18,
+        "height": 8
+      },
+      "footprintType": "service",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_inn",
+      "displayName": "Asterfall Inn",
+      "category": "social",
+      "widthTiles": 16,
+      "heightTiles": 12,
+      "startTile": 56,
+      "sheetTileX": 56,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 8,
+        "y": 11
+      },
+      "recommendedInteriorWidth": 14,
+      "recommendedInteriorHeight": 8,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 5
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 16,
+        "height": 8
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 16,
+        "height": 8
+      },
+      "footprintType": "social",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_market_hall",
+      "displayName": "Asterfall Market Hall",
+      "category": "market",
+      "widthTiles": 18,
+      "heightTiles": 10,
+      "startTile": 74,
+      "sheetTileX": 74,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 9,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 16,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 18,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 18,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 18,
+        "height": 7
+      },
+      "footprintType": "market",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_general_goods",
+      "displayName": "General Goods Shop",
+      "category": "merchant",
+      "widthTiles": 10,
+      "heightTiles": 8,
+      "startTile": 94,
+      "sheetTileX": 94,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "footprintType": "merchant",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_weaponsmith",
+      "displayName": "Weaponsmith",
+      "category": "crafting",
+      "widthTiles": 12,
+      "heightTiles": 8,
+      "startTile": 106,
+      "sheetTileX": 106,
+      "sheetTileY": 0,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "footprintType": "crafting",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_armorer",
+      "displayName": "Armorer",
+      "category": "crafting",
+      "widthTiles": 12,
+      "heightTiles": 8,
+      "startTile": 2048,
+      "sheetTileX": 0,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "footprintType": "crafting",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_blacksmith_repair",
+      "displayName": "Blacksmith / Repair Shop",
+      "category": "crafting",
+      "widthTiles": 12,
+      "heightTiles": 10,
+      "startTile": 2062,
+      "sheetTileX": 14,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 7
+      },
+      "footprintType": "crafting",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_arcane_shop",
+      "displayName": "Arcane Shop",
+      "category": "magic",
+      "widthTiles": 10,
+      "heightTiles": 10,
+      "startTile": 2076,
+      "sheetTileX": 28,
+      "sheetTileY": 16,
+      "orientation": "plaza",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 7
+      },
+      "footprintType": "magic",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_alchemy_shop",
+      "displayName": "Alchemy / Potion Shop",
+      "category": "magic",
+      "widthTiles": 10,
+      "heightTiles": 8,
+      "startTile": 2088,
+      "sheetTileX": 40,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "footprintType": "magic",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_tailor",
+      "displayName": "Tailor",
+      "category": "profession",
+      "widthTiles": 10,
+      "heightTiles": 8,
+      "startTile": 2100,
+      "sheetTileX": 52,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "footprintType": "profession",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_leatherworker",
+      "displayName": "Leatherworker",
+      "category": "profession",
+      "widthTiles": 10,
+      "heightTiles": 8,
+      "startTile": 2112,
+      "sheetTileX": 64,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "footprintType": "profession",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_profession_hall",
+      "displayName": "Profession Hall",
+      "category": "profession",
+      "widthTiles": 16,
+      "heightTiles": 10,
+      "startTile": 2124,
+      "sheetTileX": 76,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 8,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 14,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 16,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 16,
+        "height": 7
+      },
+      "footprintType": "profession",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_fishing_lodge",
+      "displayName": "Fishing Lodge",
+      "category": "profession",
+      "widthTiles": 12,
+      "heightTiles": 8,
+      "startTile": 2142,
+      "sheetTileX": 94,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "footprintType": "profession",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_mining_office",
+      "displayName": "Mining Office",
+      "category": "profession",
+      "widthTiles": 12,
+      "heightTiles": 8,
+      "startTile": 2156,
+      "sheetTileX": 108,
+      "sheetTileY": 16,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "footprintType": "profession",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_stable",
+      "displayName": "Stable",
+      "category": "travel",
+      "widthTiles": 16,
+      "heightTiles": 8,
+      "startTile": 3584,
+      "sheetTileX": 0,
+      "sheetTileY": 28,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 8,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 14,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 16,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 16,
+        "height": 5
+      },
+      "footprintType": "travel",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_chapel",
+      "displayName": "Chapel",
+      "category": "civic",
+      "widthTiles": 12,
+      "heightTiles": 14,
+      "startTile": 3602,
+      "sheetTileX": 18,
+      "sheetTileY": 28,
+      "orientation": "vertical",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 13
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 10,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 5
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 12,
+        "height": 10
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 12,
+        "height": 10
+      },
+      "footprintType": "civic",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_guardhouse",
+      "displayName": "Guardhouse",
+      "category": "guard",
+      "widthTiles": 12,
+      "heightTiles": 10,
+      "startTile": 3616,
+      "sheetTileX": 32,
+      "sheetTileY": 28,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 7
+      },
+      "footprintType": "guard",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_gatehouse_watchtower",
+      "displayName": "Gatehouse / Watchtower",
+      "category": "guard",
+      "widthTiles": 18,
+      "heightTiles": 14,
+      "startTile": 3630,
+      "sheetTileX": 46,
+      "sheetTileY": 28,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 9,
+        "y": 13
+      },
+      "recommendedInteriorWidth": 16,
+      "recommendedInteriorHeight": 10,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 18,
+        "height": 5
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 18,
+        "height": 10
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 4,
+        "width": 18,
+        "height": 10
+      },
+      "footprintType": "guard",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_warehouse_storage",
+      "displayName": "Warehouse / Storage",
+      "category": "service",
+      "widthTiles": 16,
+      "heightTiles": 10,
+      "startTile": 3650,
+      "sheetTileX": 66,
+      "sheetTileY": 28,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 8,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 14,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 16,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 16,
+        "height": 7
+      },
+      "footprintType": "service",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_townhouse_blue",
+      "displayName": "Blue Slate Townhouse",
+      "category": "residential",
+      "widthTiles": 8,
+      "heightTiles": 10,
+      "startTile": 3668,
+      "sheetTileX": 84,
+      "sheetTileY": 28,
+      "orientation": "vertical",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 4,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 6,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 8,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 8,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 8,
+        "height": 7
+      },
+      "footprintType": "residential",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_townhouse_red",
+      "displayName": "Red Gable Townhouse",
+      "category": "residential",
+      "widthTiles": 10,
+      "heightTiles": 8,
+      "startTile": 3678,
+      "sheetTileX": 94,
+      "sheetTileY": 28,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "footprintType": "residential",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_townhouse_green",
+      "displayName": "Green Corner Townhouse",
+      "category": "residential",
+      "widthTiles": 10,
+      "heightTiles": 10,
+      "startTile": 3690,
+      "sheetTileX": 106,
+      "sheetTileY": 28,
+      "orientation": "plaza",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 7
+      },
+      "footprintType": "residential",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_townhouse_ivory",
+      "displayName": "Ivory Courtyard House",
+      "category": "residential",
+      "widthTiles": 12,
+      "heightTiles": 10,
+      "startTile": 5632,
+      "sheetTileX": 0,
+      "sheetTileY": 44,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 7
+      },
+      "footprintType": "residential",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_merchant_house_spice",
+      "displayName": "Spice Merchant House",
+      "category": "merchant",
+      "widthTiles": 12,
+      "heightTiles": 8,
+      "startTile": 5646,
+      "sheetTileX": 14,
+      "sheetTileY": 44,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 6,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 10,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 5
+      },
+      "footprintType": "merchant",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_merchant_house_jewel",
+      "displayName": "Jewel Merchant House",
+      "category": "merchant",
+      "widthTiles": 10,
+      "heightTiles": 10,
+      "startTile": 5660,
+      "sheetTileX": 28,
+      "sheetTileY": 44,
+      "orientation": "plaza",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 9
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 7,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 7
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 7
+      },
+      "footprintType": "merchant",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    },
+    {
+      "id": "asterfall_merchant_house_books",
+      "displayName": "Book Merchant House",
+      "category": "merchant",
+      "widthTiles": 10,
+      "heightTiles": 8,
+      "startTile": 5672,
+      "sheetTileX": 40,
+      "sheetTileY": 44,
+      "orientation": "horizontal",
+      "entranceSide": "south",
+      "entranceTile": {
+        "x": 5,
+        "y": 7
+      },
+      "recommendedInteriorWidth": 8,
+      "recommendedInteriorHeight": 5,
+      "roofHideRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 4
+      },
+      "interiorRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "collisionRegion": {
+        "x": 0,
+        "y": 3,
+        "width": 10,
+        "height": 5
+      },
+      "footprintType": "merchant",
+      "placementHints": {
+        "alignDoorToRoad": true,
+        "roadFacing": "south",
+        "supportsRoofFade": true,
+        "supportsInteriorReveal": true
+      }
+    }
+  ]
+}
