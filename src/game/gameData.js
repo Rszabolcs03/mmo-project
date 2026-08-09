@@ -20,11 +20,11 @@ const PLAYER = {
 };
 
 const ENEMY = {
-  maxCount: 12,
+  maxCount: 18,
   radius: 17,
-  speed: 105,
-  spawnEvery: 1800,
-  wanderSpeed: 48,
+  speed: 155,
+  spawnEvery: 1200,
+  wanderSpeed: 72,
 };
 
 const SAVE_KEY = 'mmo-project.characters.v1';
@@ -795,7 +795,7 @@ const CLASSES = {
     colors: {
       robe: '#4263eb',
       trim: '#8be9fd',
-      hair: '#f6d365',
+      hair: '#8b5e34',
       weapon: '#d7f9ff',
     },
     abilities: [
@@ -812,8 +812,8 @@ const CLASSES = {
     icon: Crosshair,
     colors: {
       robe: '#2f9e44',
-      trim: '#d8b46a',
-      hair: '#5f3dc4',
+      trim: '#facc15',
+      hair: '#8b5e34',
       weapon: '#8d6e45',
     },
     abilities: [
@@ -867,7 +867,7 @@ const CLASSES = {
     colors: {
       robe: '#f8fafc',
       trim: '#facc15',
-      hair: '#d8b4fe',
+      hair: '#8b5e34',
       weapon: '#fde68a',
     },
     abilities: [
@@ -885,7 +885,7 @@ const CLASSES = {
     colors: {
       robe: '#312e81',
       trim: '#c084fc',
-      hair: '#1f2937',
+      hair: '#2f221d',
       weapon: '#e5e7eb',
     },
     abilities: [
@@ -913,7 +913,14 @@ const CHARACTER_SPRITE_DRAW_SIZE = 72;
 const CHARACTER_SPRITE_COLUMNS = 6;
 const CHARACTER_SPRITE_EXPECTED_WIDTH = CHARACTER_SPRITE_SIZE * CHARACTER_SPRITE_COLUMNS;
 const CHARACTER_SPRITE_EXPECTED_HEIGHT = CHARACTER_SPRITE_SIZE * 4;
-const CHARACTER_SPRITE_VERSION = 'attack-v3';
+const CHARACTER_SPRITE_EIGHT_DIRECTION_HEIGHT = CHARACTER_SPRITE_SIZE * 8;
+const HUMAN_CHARACTER_SPRITE_COLUMNS = 9;
+const HUMAN_CHARACTER_SPRITE_SIZE = 96;
+const HUMAN_CHARACTER_SPRITE_EXPECTED_WIDTH = HUMAN_CHARACTER_SPRITE_SIZE * HUMAN_CHARACTER_SPRITE_COLUMNS;
+const HUMAN_CHARACTER_SPRITE_EXPECTED_HEIGHT = HUMAN_CHARACTER_SPRITE_SIZE * 8;
+const HUMAN_CHARACTER_WALK_COLUMNS = Object.freeze([1, 2, 3, 4]);
+const HUMAN_CHARACTER_ATTACK_COLUMNS = Object.freeze([5, 6, 7, 8]);
+const CHARACTER_SPRITE_VERSION = 'adventurer-fresh-v6';
 const CHARACTER_SPRITE_VARIANTS = ['male', 'female'];
 const CHARACTER_SPRITE_ROWS = {
   down: 0,
@@ -921,26 +928,58 @@ const CHARACTER_SPRITE_ROWS = {
   right: 2,
   up: 3,
 };
+const CHARACTER_SPRITE_ROWS_8 = {
+  down: 0,
+  'down-right': 1,
+  right: 2,
+  'up-right': 3,
+  up: 4,
+  'up-left': 5,
+  left: 6,
+  'down-left': 7,
+};
 const CHARACTER_SPRITES = new globalThis.Map();
 const CHARACTER_SPRITE_LOADS = new globalThis.Map();
 const CHARACTER_TINTED_SPRITES = new globalThis.Map();
 const CHARACTER_SPRITE_SOURCE_PALETTES = {
-  priest: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#b794f4', robe: '#f8fafc', trim: '#facc15' },
-  paladin: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#facc15', robe: '#f8fafc', trim: '#facc15' },
-  hunter: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#2f221d', robe: '#365c2d', trim: '#d6a354' },
-  mage: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#2563eb', robe: '#1d4ed8', trim: '#facc15' },
-  rogue: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#111827', robe: '#1f2937', trim: '#9ca3af' },
-  warrior: { skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5a2b', robe: '#7f1d1d', trim: '#cbd5e1' },
+  priest: {
+    skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5e34',
+    robeDeep: '#64748b', robe: '#f8fafc', trim: '#facc15', trimLight: '#fef08a',
+  },
+  paladin: {
+    skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5e34',
+    robeDeep: '#475569', robe: '#f8fafc', trim: '#facc15', trimLight: '#fef08a',
+  },
+  hunter: {
+    skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5e34',
+    robeDeep: '#152b18', robe: '#365c2d', trim: '#172554',
+  },
+  mage: {
+    skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5e34',
+    robeDeep: '#172554', robeMid: '#312e81', robe: '#1d4ed8', robeLight: '#4263eb',
+    trimDark: '#0e7490', trim: '#67e8f9', trimLight: '#8be9fd',
+  },
+  rogue: {
+    skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5e34',
+    robeDeep: '#090f1a', robe: '#1f2937', trim: '#9ca3af', trimLight: '#8b5cf6',
+  },
+  warrior: {
+    skin: '#f2c7a4', skinShade: '#d99a72', hair: '#8b5e34',
+    robeDeep: '#3f1210', robe: '#7f1d1d', trim: '#cbd5e1', trimLight: '#94a3b8',
+  },
 };
-const CHARACTER_LAYER_ORDER = ['cape', 'base', 'hair', 'beard', 'outfit', 'weapon'];
-const CHARACTER_LAYER_DIRS = {
-  base: 'base',
-  hair: 'hair',
-  beard: 'beard',
-  outfit: 'outfits',
-  weapon: 'weapons',
-  cape: 'capes',
-};
+const CHARACTER_LAYER_ORDER = [
+  'cape',
+  'base',
+  'hair',
+  'outfit',
+  'face',
+  'heritage',
+  'beard',
+  'headwear',
+  'offhand',
+  'weapon',
+];
 const CHARACTER_LAYER_IMAGES = new globalThis.Map();
 const CHARACTER_LAYER_LOADS = new globalThis.Map();
 const ENEMY_SPRITES = new globalThis.Map();
@@ -948,18 +987,92 @@ const ENEMY_SPRITE_LOADS = new globalThis.Map();
 const PET_SPRITES = new globalThis.Map();
 const PET_SPRITE_LOADS = new globalThis.Map();
 const PET_SPRITE_VERSION = 'pet-attack-v2';
-const ENEMY_SPRITE_VERSION = 'tamzia-mobs-v1';
+const ENEMY_SPRITE_VERSION = 'saltspine-up-attack-v16';
 const SHOW_MAP_ENEMY_DOTS = false;
 const MAP_CANVAS_REDRAW_MS = 520;
-function enemySpriteConfig(id, boss = false) {
+const WORLD_BOSS_MECHANICS = Object.freeze({
+  'tideglass-matriarch': Object.freeze({
+    type: 'tidal-volley',
+    damage: 78,
+    initialDelay: 2200,
+    telegraphDuration: 520,
+    recoveryDuration: 320,
+    cooldown: 5600,
+    activationRange: 500,
+    maxTravelDistance: 680,
+    projectileSpeed: 540,
+    projectileRadius: 24,
+    projectileCountMin: 3,
+    projectileCountMax: 4,
+    projectileSpread: 0.14,
+    targetLeadMs: 140,
+    targetLeadMaxDistance: 56,
+    slowDuration: 2400,
+    slowMultiplier: 0.58,
+    rangedAttack: Object.freeze({
+      type: 'water-bolt',
+      range: 620,
+      attackStartRange: 445,
+      preferredRange: 335,
+      projectileSpeed: 680,
+      projectileRadius: 22,
+      launchDelay: 180,
+      recoveryDuration: 180,
+      cooldown: 1150,
+      targetLeadMs: 180,
+      targetLeadMaxDistance: 72,
+      slowDuration: 1800,
+      slowMultiplier: 0.68,
+    }),
+  }),
+  'old-quarry-giant': Object.freeze({
+    type: 'ground-slam',
+    radius: 175,
+    damage: 96,
+    initialDelay: 2400,
+    telegraphDuration: 900,
+    totalDuration: 1200,
+    cooldown: 7000,
+    secondary: Object.freeze({
+      type: 'boulder-toss',
+      damage: 72,
+      initialDelay: 3400,
+      telegraphDuration: 650,
+      recoveryDuration: 380,
+      cooldown: 6100,
+      activationRange: 760,
+      minRange: 105,
+      maxTravelDistance: 700,
+      projectileSpeed: 430,
+      projectileRadius: 42,
+      projectileCountMin: 3,
+      projectileCountMax: 4,
+      projectileSpread: 0.22,
+      slowDuration: 3000,
+      slowMultiplier: 0.52,
+    }),
+  }),
+});
+const FOUR_DIRECTION_ENEMY_SPRITE = Object.freeze({
+  directional: true,
+  directionRows: Object.freeze({ down: 0, left: 1, right: 2, up: 3 }),
+  walkStartColumn: 0,
+  attackStartColumn: 4,
+});
+function enemySpriteConfig(id, boss = false, attackFrameCount = 0, options = {}) {
   return {
     path: `assets/enemies/${id}.png`,
     frameWidth: boss ? 96 : 64,
     frameHeight: boss ? 96 : 64,
     frameCount: 4,
+    attackFrameCount,
+    attackRow: attackFrameCount > 0 ? 1 : 0,
+    attackDuration: 420,
+    walkFrameDuration: boss ? 210 : 170,
     drawWidth: boss ? 148 : 76,
     drawHeight: boss ? 148 : 76,
     yOffset: boss ? -112 : -50,
+    ...options,
   };
 }
 
@@ -982,7 +1095,7 @@ function dungeonBossSpriteConfig(id) {
 }
 
 const ENEMY_SPRITE_CONFIG = {
-  wolf: enemySpriteConfig('wolf'),
+  wolf: enemySpriteConfig('wolf', false, 4),
   kobold: enemySpriteConfig('kobold'),
   bandit: enemySpriteConfig('bandit'),
   undead: enemySpriteConfig('undead'),
@@ -1011,21 +1124,60 @@ const ENEMY_SPRITE_CONFIG = {
   'thornmaw-alpha': enemySpriteConfig('thornmaw-alpha', true),
   'granite-ogre': enemySpriteConfig('granite-ogre', true),
   'ash-witch': enemySpriteConfig('ash-witch', true),
+  'redscar-captain': enemySpriteConfig('redscar-captain', true, 4, {
+    ...FOUR_DIRECTION_ENEMY_SPRITE,
+    walkFrameDuration: 205,
+  }),
   'cave-stalker': dungeonEnemySpriteConfig('cave-stalker'),
   'magma-crawler': dungeonEnemySpriteConfig('magma-crawler'),
   'deep-burrower': dungeonEnemySpriteConfig('deep-burrower'),
   'obsidian-sentinel': dungeonEnemySpriteConfig('obsidian-sentinel'),
-  'reedwater-marauder': enemySpriteConfig('reedwater-marauder'),
-  'bramblehide-bear': enemySpriteConfig('bramblehide-bear'),
-  'moonbrook-prowler': enemySpriteConfig('moonbrook-prowler'),
-  'redscar-highwayman': enemySpriteConfig('redscar-highwayman'),
-  'saltspine-crawler': enemySpriteConfig('saltspine-crawler'),
+  'reedwater-marauder': enemySpriteConfig('reedwater-marauder', false, 4, {
+    ...FOUR_DIRECTION_ENEMY_SPRITE,
+    frameWidth: 96,
+    frameHeight: 96,
+    drawWidth: 114,
+    drawHeight: 114,
+    yOffset: -88,
+    walkFrameDuration: 180,
+  }),
+  'bramblehide-bear': enemySpriteConfig('bramblehide-bear', false, 4),
+  'moonbrook-prowler': enemySpriteConfig('moonbrook-prowler', false, 4),
+  'redscar-highwayman': enemySpriteConfig('redscar-highwayman', false, 4, {
+    ...FOUR_DIRECTION_ENEMY_SPRITE,
+    walkFrameDuration: 175,
+  }),
+  'saltspine-crawler': enemySpriteConfig('saltspine-crawler', false, 4, {
+    ...FOUR_DIRECTION_ENEMY_SPRITE,
+    frameWidth: 96,
+    frameHeight: 96,
+    drawWidth: 114,
+    drawHeight: 114,
+    yOffset: -88,
+    walkFrameDuration: 195,
+  }),
   'gloomfang-matriarch': dungeonBossSpriteConfig('gloomfang-matriarch'),
   'lava-forged-warden': dungeonBossSpriteConfig('lava-forged-warden'),
   'crystal-horror': dungeonBossSpriteConfig('crystal-horror'),
   'rift-heart': dungeonBossSpriteConfig('rift-heart'),
-  'old-quarry-giant': enemySpriteConfig('old-quarry-giant', true),
-  'tideglass-matriarch': enemySpriteConfig('tideglass-matriarch', true),
+  'old-quarry-giant': enemySpriteConfig('old-quarry-giant', true, 4, {
+    ...FOUR_DIRECTION_ENEMY_SPRITE,
+    boulderThrowStartColumn: 8,
+    boulderThrowFrameCount: 8,
+    drawWidth: 224,
+    drawHeight: 224,
+    yOffset: -172,
+    walkFrameDuration: 255,
+  }),
+  'tideglass-matriarch': enemySpriteConfig('tideglass-matriarch', true, 8, {
+    ...FOUR_DIRECTION_ENEMY_SPRITE,
+    frameWidth: 128,
+    frameHeight: 128,
+    drawWidth: 245,
+    drawHeight: 245,
+    yOffset: -201,
+    walkFrameDuration: 225,
+  }),
 };
 
 const PET_SPRITE_CONFIG = {
@@ -1042,6 +1194,62 @@ const CUSTOMIZATION = {
   trim: ['#8be9fd', '#f8fafc', '#facc15', '#64748b', '#c084fc'],
 };
 
+const HUMAN_MAGE_CUSTOMIZATION = {
+  skin: ['#f2c7a4', '#d6a06f', '#f0d6ad', '#b77952', '#8f5a3c', '#e7b58f', '#c98f6f', '#f4d3b8'],
+  eyes: ['#3b2416', '#090d14', '#2563eb', '#15803d', '#7e22ce', '#d97706'],
+  hair: ['#8b5e34', '#f6d365', '#2f221d', '#b45309', '#991b1b', '#6d28d9', '#475569', '#d8dee9'],
+  hat: ['#4263eb', '#1d4ed8', '#312e81', '#0f766e', '#166534', '#7e22ce', '#9f1239', '#374151'],
+  robe: ['#4263eb', '#1d4ed8', '#312e81', '#0f766e', '#166534', '#7e22ce', '#9f1239', '#92400e'],
+  trim: ['#8be9fd', '#f8fafc', '#facc15', '#67e8f9', '#a7f3d0', '#c084fc', '#fda4af', '#fdba74'],
+  staff: ['#7c4a22', '#5f4329', '#92400e', '#713f12', '#374151', '#3f2a56'],
+  crystal: ['#67e8f9', '#38bdf8', '#a7f3d0', '#facc15', '#c084fc', '#f472b6', '#fb7185', '#f8fafc'],
+};
+
+const HUMAN_CUSTOMIZATION = {
+  skin: HUMAN_MAGE_CUSTOMIZATION.skin,
+  eyes: HUMAN_MAGE_CUSTOMIZATION.eyes,
+  hair: HUMAN_MAGE_CUSTOMIZATION.hair,
+  robe: [...CUSTOMIZATION.robe, '#312e81'],
+  trim: CUSTOMIZATION.trim,
+  weaponColor: ['#94a3b8', '#d6b25e', '#60a5fa', '#dc2626', '#7c3aed', '#374151'],
+};
+
+const FRESH_RACE_CUSTOMIZATION = {
+  human: HUMAN_CUSTOMIZATION,
+  elf: {
+    skin: ['#f0d6ad', '#e8c79a', '#dcb88c', '#f4dfbd', '#cfa77d', '#ead2b4'],
+    eyes: ['#2563eb', '#15803d', '#7e22ce', '#0f766e', '#d97706', '#94a3b8'],
+    hair: ['#e9d66b', '#f3e5ab', '#8b5e34', '#b45309', '#2f221d', '#d8dee9', '#7e5bef', '#5f7c62'],
+    robe: ['#315c47', '#376b75', '#59408c', '#78663a', '#d6d3c4', '#233748'],
+    trim: ['#b8e3cf', '#cbd5e1', '#d6b25e', '#7dd3fc', '#c4b5fd', '#94a3b8'],
+    weaponColor: ['#cbd5e1', '#d6b25e', '#8dd7c1', '#a5b4fc', '#6b7280', '#334155'],
+  },
+  dwarf: {
+    skin: ['#d6a06f', '#c4895e', '#e0b087', '#b7754d', '#efc59f', '#9f6543'],
+    eyes: ['#3b2416', '#15803d', '#2563eb', '#d97706', '#475569', '#090d14'],
+    hair: ['#9a4f2f', '#b45309', '#6b351f', '#2f221d', '#d6b25e', '#9ca3af', '#d8dee9', '#7f1d1d'],
+    robe: ['#7c2d24', '#854d0e', '#475569', '#3f3f46', '#14532d', '#312e81'],
+    trim: ['#d6b25e', '#e2e8f0', '#fb923c', '#94a3b8', '#facc15', '#a16207'],
+    weaponColor: ['#64748b', '#d6b25e', '#b45309', '#475569', '#9ca3af', '#27272a'],
+  },
+  orc: {
+    skin: ['#74a85a', '#5f914b', '#86b76a', '#4f7f3f', '#94a85a', '#667a48'],
+    eyes: ['#d97706', '#facc15', '#dc2626', '#090d14', '#67e8f9', '#a7f3d0'],
+    hair: ['#20251f', '#374151', '#4b2c15', '#6b351f', '#9ca3af', '#d8dee9'],
+    robe: ['#365c2d', '#7f1d1d', '#78350f', '#374151', '#3f6212', '#292524'],
+    trim: ['#d6b25e', '#e2e8f0', '#f97316', '#a3e635', '#dc2626', '#78716c'],
+    weaponColor: ['#64748b', '#b45309', '#78716c', '#7f1d1d', '#365314', '#1c1917'],
+  },
+  undead: {
+    skin: ['#cbd5c0', '#aebdaa', '#d8ddd0', '#9aa79a', '#c6bea9', '#87978c'],
+    eyes: ['#67e8f9', '#7e22ce', '#15803d', '#facc15', '#dc2626', '#d8dee9'],
+    hair: ['#d8dee9', '#9ca3af', '#475569', '#2f221d', '#6d5b73', '#cbd5c0'],
+    robe: ['#3f3f46', '#4c1d95', '#334155', '#3f6212', '#701a75', '#1f2937'],
+    trim: ['#a7f3d0', '#c4b5fd', '#94a3b8', '#d8dee9', '#67e8f9', '#a3e635'],
+    weaponColor: ['#64748b', '#6b5b53', '#a78bfa', '#475569', '#84cc16', '#292524'],
+  },
+};
+
 const APPEARANCE_CHOICES = {
   gender: [
     { id: 'male', label: 'Male' },
@@ -1054,8 +1262,8 @@ const APPEARANCE_CHOICES = {
   ],
   beard: [
     { id: 'none', label: 'None' },
-    { id: 'short', label: 'Short' },
-    { id: 'full', label: 'Full' },
+    { id: 'short', label: 'Neat Stubble' },
+    { id: 'full', label: 'Trimmed Beard' },
   ],
   outfitVariant: [
     { id: 'classic', label: 'Classic' },
@@ -1072,6 +1280,358 @@ const APPEARANCE_CHOICES = {
     { id: 'short', label: 'Short' },
     { id: 'long', label: 'Long' },
   ],
+};
+
+const HUMAN_FACE_STYLE_CHOICES = [
+  { id: 'male-natural', label: 'Natural', gender: 'male' },
+  { id: 'male-focused', label: 'Focused', gender: 'male' },
+  { id: 'male-scarred', label: 'Scarred', gender: 'male' },
+  { id: 'male-cheerful', label: 'Cheerful', gender: 'male' },
+  { id: 'female-natural', label: 'Natural', gender: 'female' },
+  { id: 'female-focused', label: 'Focused', gender: 'female' },
+  { id: 'female-freckled', label: 'Freckled', gender: 'female' },
+  { id: 'female-cheerful', label: 'Cheerful', gender: 'female' },
+];
+
+const HUMAN_MAGE_APPEARANCE_CHOICES = {
+  gender: APPEARANCE_CHOICES.gender,
+  faceVariant: HUMAN_FACE_STYLE_CHOICES,
+  hairStyle: [
+    { id: 'male-cropped', label: 'Cropped', gender: 'male' },
+    { id: 'male-windswept', label: 'Side Part', gender: 'male' },
+    { id: 'male-tousled', label: 'Layered Crop', gender: 'male' },
+    { id: 'male-tied', label: 'Low Tie', gender: 'male' },
+    { id: 'female-long', label: 'Long Straight', gender: 'female' },
+    { id: 'female-side-bangs', label: 'Side Bangs', gender: 'female' },
+    { id: 'female-bun', label: 'High Bun', gender: 'female' },
+    { id: 'female-ponytail', label: 'Low Ponytail', gender: 'female' },
+  ],
+  hatVariant: [
+    { id: 'none', label: 'No Hat' },
+    { id: 'wanderer', label: 'Wanderer Hat' },
+    { id: 'wide', label: 'Broad Brim' },
+    { id: 'high-crown', label: 'Scholar Crown' },
+    { id: 'starcaller', label: 'Starcaller Hood' },
+  ],
+  outfitVariant: [
+    { id: 'classic', label: 'Apprentice Coat' },
+    { id: 'veteran', label: 'Veteran Robe' },
+    { id: 'runed', label: 'Runed Scholar' },
+    { id: 'dark', label: 'Duskwave Robe' },
+  ],
+  weaponVariant: [
+    { id: 'classic', label: 'Crystal Staff' },
+    { id: 'veteran', label: 'Forked Battlestaff' },
+    { id: 'runed', label: 'Runic Crook' },
+    { id: 'ornate', label: 'Sunfork Staff' },
+    { id: 'shadow', label: 'Void Orb Staff' },
+  ],
+};
+
+const HUMAN_HAIR_STYLE_CHOICES = [
+  { id: 'male-cropped', label: 'Cropped', gender: 'male' },
+  { id: 'male-windswept', label: 'Side Part', gender: 'male' },
+  { id: 'male-tousled', label: 'Layered Crop', gender: 'male' },
+  { id: 'male-tied', label: 'Low Tie', gender: 'male' },
+  { id: 'female-long', label: 'Long Straight', gender: 'female' },
+  { id: 'female-side-bangs', label: 'Side Bangs', gender: 'female' },
+  { id: 'female-bun', label: 'High Bun', gender: 'female' },
+  { id: 'female-ponytail', label: 'Low Ponytail', gender: 'female' },
+];
+
+const FRESH_RACE_FACE_STYLE_CHOICES = {
+  human: HUMAN_FACE_STYLE_CHOICES,
+  elf: [
+    { id: 'male-natural', label: 'Serene', gender: 'male' },
+    { id: 'male-focused', label: 'Keen', gender: 'male' },
+    { id: 'male-scarred', label: 'Waymarked', gender: 'male' },
+    { id: 'male-cheerful', label: 'Bright', gender: 'male' },
+    { id: 'female-natural', label: 'Serene', gender: 'female' },
+    { id: 'female-focused', label: 'Keen', gender: 'female' },
+    { id: 'female-freckled', label: 'Sunmarked', gender: 'female' },
+    { id: 'female-cheerful', label: 'Bright', gender: 'female' },
+  ],
+  dwarf: [
+    { id: 'male-natural', label: 'Stout', gender: 'male' },
+    { id: 'male-focused', label: 'Stern', gender: 'male' },
+    { id: 'male-scarred', label: 'Battle Scar', gender: 'male' },
+    { id: 'male-cheerful', label: 'Hearty', gender: 'male' },
+    { id: 'female-natural', label: 'Stout', gender: 'female' },
+    { id: 'female-focused', label: 'Stern', gender: 'female' },
+    { id: 'female-freckled', label: 'Forge Freckles', gender: 'female' },
+    { id: 'female-cheerful', label: 'Hearty', gender: 'female' },
+  ],
+  orc: [
+    { id: 'male-natural', label: 'Steady', gender: 'male' },
+    { id: 'male-focused', label: 'Fierce', gender: 'male' },
+    { id: 'male-scarred', label: 'War Scar', gender: 'male' },
+    { id: 'male-cheerful', label: 'Tusked Grin', gender: 'male' },
+    { id: 'female-natural', label: 'Steady', gender: 'female' },
+    { id: 'female-focused', label: 'Fierce', gender: 'female' },
+    { id: 'female-freckled', label: 'War Paint', gender: 'female' },
+    { id: 'female-cheerful', label: 'Tusked Grin', gender: 'female' },
+  ],
+  undead: [
+    { id: 'male-natural', label: 'Hollow', gender: 'male' },
+    { id: 'male-focused', label: 'Grim', gender: 'male' },
+    { id: 'male-scarred', label: 'Cracked', gender: 'male' },
+    { id: 'male-cheerful', label: 'Ember Grin', gender: 'male' },
+    { id: 'female-natural', label: 'Hollow', gender: 'female' },
+    { id: 'female-focused', label: 'Grim', gender: 'female' },
+    { id: 'female-freckled', label: 'Mottled', gender: 'female' },
+    { id: 'female-cheerful', label: 'Ember Grin', gender: 'female' },
+  ],
+};
+
+const FRESH_RACE_HAIR_STYLE_CHOICES = {
+  human: HUMAN_HAIR_STYLE_CHOICES,
+  elf: [
+    { id: 'male-cropped', label: 'Court Crop', gender: 'male' },
+    { id: 'male-windswept', label: 'Swept Part', gender: 'male' },
+    { id: 'male-tousled', label: 'Layered Silken', gender: 'male' },
+    { id: 'male-tied', label: 'Bound Length', gender: 'male' },
+    { id: 'female-long', label: 'Silken Length', gender: 'female' },
+    { id: 'female-side-bangs', label: 'Temple Bangs', gender: 'female' },
+    { id: 'female-bun', label: 'Crown Bun', gender: 'female' },
+    { id: 'female-ponytail', label: 'Braided Tie', gender: 'female' },
+  ],
+  dwarf: [
+    { id: 'male-cropped', label: 'Forge Crop', gender: 'male' },
+    { id: 'male-windswept', label: 'Stone Part', gender: 'male' },
+    { id: 'male-tousled', label: 'Rough Layered', gender: 'male' },
+    { id: 'male-tied', label: 'Low Braid', gender: 'male' },
+    { id: 'female-long', label: 'Shoulder Length', gender: 'female' },
+    { id: 'female-side-bangs', label: 'Braided Fringe', gender: 'female' },
+    { id: 'female-bun', label: 'Forge Bun', gender: 'female' },
+    { id: 'female-ponytail', label: 'Low Braid', gender: 'female' },
+  ],
+  orc: [
+    { id: 'male-cropped', label: 'War Crop', gender: 'male' },
+    { id: 'male-windswept', label: 'Swept Mane', gender: 'male' },
+    { id: 'male-tousled', label: 'Rough Mane', gender: 'male' },
+    { id: 'male-tied', label: 'Bound Mane', gender: 'male' },
+    { id: 'female-long', label: 'Long Mane', gender: 'female' },
+    { id: 'female-side-bangs', label: 'Side Lock', gender: 'female' },
+    { id: 'female-bun', label: 'War Knot', gender: 'female' },
+    { id: 'female-ponytail', label: 'Bound Braid', gender: 'female' },
+  ],
+  undead: [
+    { id: 'male-cropped', label: 'Close Shorn', gender: 'male' },
+    { id: 'male-windswept', label: 'Faded Part', gender: 'male' },
+    { id: 'male-tousled', label: 'Tattered Layer', gender: 'male' },
+    { id: 'male-tied', label: 'Grave Tie', gender: 'male' },
+    { id: 'female-long', label: 'Faded Length', gender: 'female' },
+    { id: 'female-side-bangs', label: 'Tattered Bangs', gender: 'female' },
+    { id: 'female-bun', label: 'Grave Bun', gender: 'female' },
+    { id: 'female-ponytail', label: 'Faded Tie', gender: 'female' },
+  ],
+};
+
+const FRESH_RACE_HERITAGE_STYLE_CHOICES = {
+  human: [
+    { id: 'none', label: 'Unmarked' },
+    { id: 'road-freckles', label: 'Road Freckles' },
+    { id: 'temple-scar', label: 'Temple Scar' },
+    { id: 'guild-mark', label: 'Guild Mark' },
+  ],
+  elf: [
+    { id: 'none', label: 'Unadorned' },
+    { id: 'moon-sigil', label: 'Moon Sigil' },
+    { id: 'leaf-filigree', label: 'Leaf Filigree' },
+    { id: 'star-circlet', label: 'Star Circlet' },
+  ],
+  dwarf: [
+    { id: 'none', label: 'Unmarked' },
+    { id: 'forge-smudge', label: 'Forge Smudge' },
+    { id: 'clan-rune', label: 'Clan Rune' },
+    { id: 'brass-studs', label: 'Brass Studs' },
+  ],
+  orc: [
+    { id: 'none', label: 'Unmarked' },
+    { id: 'war-paint', label: 'War Paint' },
+    { id: 'fang-stripe', label: 'Fang Stripe' },
+    { id: 'bone-studs', label: 'Bone Studs' },
+  ],
+  undead: [
+    { id: 'none', label: 'Unmarked' },
+    { id: 'grave-cracks', label: 'Grave Cracks' },
+    { id: 'ritual-stitches', label: 'Ritual Stitches' },
+    { id: 'spectral-veins', label: 'Spectral Veins' },
+  ],
+};
+
+const FRESH_RACE_DEFAULT_HERITAGE = {
+  human: 'road-freckles',
+  elf: 'moon-sigil',
+  dwarf: 'clan-rune',
+  orc: 'war-paint',
+  undead: 'grave-cracks',
+};
+
+const HUMAN_CLASS_APPEARANCE_CHOICES = {
+  warrior: {
+    outfitVariant: [
+      { id: 'classic', label: 'Sentinel Plate' },
+      { id: 'veteran', label: 'Veteran Bulwark' },
+      { id: 'runed', label: 'Runebound Plate' },
+      { id: 'dark', label: 'Blackiron Guard' },
+    ],
+    weaponVariant: [
+      { id: 'classic', label: 'Sentinel Sword' },
+      { id: 'veteran', label: 'Veteran Blade' },
+      { id: 'runed', label: 'Runeblade' },
+      { id: 'ornate', label: 'Dawnforged Sword' },
+      { id: 'shadow', label: 'Blackiron Sword' },
+    ],
+  },
+  hunter: {
+    outfitVariant: [
+      { id: 'classic', label: 'Trailwarden Leathers' },
+      { id: 'veteran', label: 'Veteran Tracker' },
+      { id: 'runed', label: 'Runebough Scout' },
+      { id: 'dark', label: 'Nightwood Stalker' },
+    ],
+    weaponVariant: [
+      { id: 'classic', label: 'Longbow' },
+      { id: 'veteran', label: 'Ranger Recurve' },
+      { id: 'runed', label: 'Runebough Bow' },
+      { id: 'ornate', label: 'Sunbranch Recurve' },
+      { id: 'shadow', label: 'Nightwood Bow' },
+    ],
+  },
+  paladin: {
+    outfitVariant: [
+      { id: 'classic', label: 'Dawnshield Plate' },
+      { id: 'veteran', label: 'High Templar Plate' },
+      { id: 'runed', label: 'Runed Crusader' },
+      { id: 'dark', label: 'Ashen Vindicator' },
+    ],
+    weaponVariant: [
+      { id: 'classic', label: 'Dawnforged Sword' },
+      { id: 'veteran', label: 'Templar Blade' },
+      { id: 'runed', label: 'Runed Crusader Sword' },
+      { id: 'ornate', label: 'Sunforged Sword' },
+      { id: 'shadow', label: 'Ashen Vindicator Blade' },
+    ],
+  },
+  priest: {
+    outfitVariant: [
+      { id: 'classic', label: 'Acolyte Vestments' },
+      { id: 'veteran', label: 'High Cleric Mantle' },
+      { id: 'runed', label: 'Runed Vestments' },
+      { id: 'dark', label: 'Moonlit Vestments' },
+    ],
+    weaponVariant: [
+      { id: 'classic', label: 'Pilgrim Staff' },
+      { id: 'veteran', label: 'Shepherd Crook' },
+      { id: 'runed', label: 'Runic Reliquary' },
+      { id: 'ornate', label: 'Reliquary Staff' },
+      { id: 'shadow', label: 'Moonlit Staff' },
+    ],
+  },
+  rogue: {
+    outfitVariant: [
+      { id: 'classic', label: 'Cutpurse Leathers' },
+      { id: 'veteran', label: 'Veteran Nightblade' },
+      { id: 'runed', label: 'Runemark Leathers' },
+      { id: 'dark', label: 'Shadowmantle' },
+    ],
+    weaponVariant: [
+      { id: 'classic', label: 'Twin Knives' },
+      { id: 'veteran', label: 'Ranger Kukri' },
+      { id: 'runed', label: 'Runed Stilettos' },
+      { id: 'ornate', label: 'Moonsteel Blades' },
+      { id: 'shadow', label: 'Shadow Hooks' },
+    ],
+  },
+};
+
+function makeFreshClassAppearanceChoices(outfitNames, weaponNames) {
+  const outfitIds = ['classic', 'veteran', 'runed', 'dark'];
+  const weaponIds = ['classic', 'veteran', 'runed', 'ornate', 'shadow'];
+  return {
+    outfitVariant: outfitIds.map((id, index) => ({ id, label: outfitNames[index] })),
+    weaponVariant: weaponIds.map((id, index) => ({ id, label: weaponNames[index] })),
+  };
+}
+
+const FRESH_RACE_CLASS_APPEARANCE_CHOICES = {
+  human: {
+    mage: HUMAN_MAGE_APPEARANCE_CHOICES,
+    ...HUMAN_CLASS_APPEARANCE_CHOICES,
+  },
+  elf: {
+    mage: makeFreshClassAppearanceChoices(
+      ['Moonweave Coat', 'Starbough Robe', 'Moonsigil Regalia', 'Gloamweave Robe'],
+      ['Moonbranch Staff', 'Starwood Battlestaff', 'Moonsigil Crook', 'Sunleaf Staff', 'Gloamglass Staff'],
+    ),
+    hunter: makeFreshClassAppearanceChoices(
+      ['Verdant Wayfarer', 'Silverleaf Ranger', 'Moonsigil Stalker', 'Gloamleaf Leathers'],
+      ['Ashwood Recurve', 'Silverleaf Longbow', 'Moonstring Bow', 'Sunbranch Recurve', 'Gloamthorn Bow'],
+    ),
+    priest: makeFreshClassAppearanceChoices(
+      ['Moonwell Vestments', 'High Warden Mantle', 'Moonsigil Vestments', 'Gloamveil Robes'],
+      ['Moonwell Crook', 'Silver Reliquary', 'Moonsigil Staff', 'Sunwell Staff', 'Gloamstaff'],
+    ),
+    rogue: makeFreshClassAppearanceChoices(
+      ['Shadowleaf Leathers', 'Silverblade Harness', 'Moonsigil Leathers', 'Gloamrunner Garb'],
+      ['Leaf Knives', 'Silverleaf Kukri', 'Moonrune Blades', 'Sunsteel Blades', 'Gloam Hooks'],
+    ),
+  },
+  dwarf: {
+    paladin: makeFreshClassAppearanceChoices(
+      ['Forgeguard Plate', 'Oathsteel Bulwark', 'Runeforge Plate', 'Deepiron Guard'],
+      ['Hammered Sword', 'Oathsteel Blade', 'Runeblade', 'Sunforged Sword', 'Deepiron Sword'],
+    ),
+    warrior: makeFreshClassAppearanceChoices(
+      ['Hearthguard Plate', 'Clan Champion Plate', 'Runeforge Harness', 'Blackiron Guard'],
+      ['Forge Sword', 'Clan Blade', 'Rune Cleaver', 'Gilded Forgeblade', 'Blackiron Sword'],
+    ),
+    hunter: makeFreshClassAppearanceChoices(
+      ['Stonepath Leathers', 'Deepdelver Scout', 'Runetrack Harness', 'Nightmine Stalker'],
+      ['Crossgrain Shortbow', 'Deepwood Recurve', 'Runewood Bow', 'Goldbranch Bow', 'Blackwood Bow'],
+    ),
+    priest: makeFreshClassAppearanceChoices(
+      ['Anvil Shrine Robes', 'High Thane Mantle', 'Runesmith Vestments', 'Deep Shrine Robes'],
+      ['Runestone Staff', 'Anvil Crook', 'Rune Reliquary', 'Goldspire Staff', 'Deepstone Staff'],
+    ),
+    rogue: makeFreshClassAppearanceChoices(
+      ['Deeproad Leathers', 'Mine Scout Harness', 'Runecut Leathers', 'Nightdelver Garb'],
+      ['Mine Knives', 'Forge Kukri', 'Rune Picks', 'Goldsteel Blades', 'Blackiron Hooks'],
+    ),
+  },
+  orc: {
+    warrior: makeFreshClassAppearanceChoices(
+      ['Warhide Harness', 'Clan Champion Plate', 'Bloodrune Armor', 'Nightfang Guard'],
+      ['Iron Cleaver', 'Clan Blade', 'Bloodrune Sword', 'Sunfang Blade', 'Nightfang Cleaver'],
+    ),
+    hunter: makeFreshClassAppearanceChoices(
+      ['Beaststalker Hide', 'Warcamp Tracker', 'Bloodrune Hunter', 'Nightfang Stalker'],
+      ['Hornbow', 'War Recurve', 'Bloodstring Bow', 'Sunbone Bow', 'Nightfang Bow'],
+    ),
+    rogue: makeFreshClassAppearanceChoices(
+      ['Raid Leathers', 'Clan Shadow Garb', 'Bloodrune Harness', 'Nightfang Leathers'],
+      ['Raid Knives', 'Hooked Kukri', 'Bloodrune Blades', 'Goldfang Blades', 'Nightfang Hooks'],
+    ),
+  },
+  undead: {
+    mage: makeFreshClassAppearanceChoices(
+      ['Graveweave Coat', 'Crypt Scholar Robe', 'Deathsigil Regalia', 'Nightshroud Robe'],
+      ['Bone Staff', 'Crypt Spire', 'Deathsigil Crook', 'Soul Lantern Staff', 'Graveglass Staff'],
+    ),
+    warrior: makeFreshClassAppearanceChoices(
+      ['Cryptguard Plate', 'Deathwatch Armor', 'Graverune Harness', 'Night Crypt Guard'],
+      ['Rusted Sword', 'Deathwatch Blade', 'Graverune Sword', 'Gilded Relic Blade', 'Nightbone Sword'],
+    ),
+    priest: makeFreshClassAppearanceChoices(
+      ['Pallid Acolyte Robes', 'Sepulcher Mantle', 'Cryptsigil Vestments', 'Veil Robes'],
+      ['Grave Crook', 'Sepulcher Staff', 'Cryptsigil Staff', 'Soul Reliquary', 'Veilstaff'],
+    ),
+    rogue: makeFreshClassAppearanceChoices(
+      ['Gravecut Leathers', 'Deathstalker Harness', 'Cryptsigil Garb', 'Nightveil Leathers'],
+      ['Bone Knives', 'Rust Kukri', 'Cryptfang Blades', 'Soulsteel Blades', 'Nightbone Hooks'],
+    ),
+  },
 };
 
 const TREES = [
@@ -1159,15 +1719,22 @@ export {
   CHARACTER_SPRITE_COLUMNS,
   CHARACTER_SPRITE_EXPECTED_WIDTH,
   CHARACTER_SPRITE_EXPECTED_HEIGHT,
+  CHARACTER_SPRITE_EIGHT_DIRECTION_HEIGHT,
+  HUMAN_CHARACTER_SPRITE_COLUMNS,
+  HUMAN_CHARACTER_SPRITE_SIZE,
+  HUMAN_CHARACTER_SPRITE_EXPECTED_WIDTH,
+  HUMAN_CHARACTER_SPRITE_EXPECTED_HEIGHT,
+  HUMAN_CHARACTER_WALK_COLUMNS,
+  HUMAN_CHARACTER_ATTACK_COLUMNS,
   CHARACTER_SPRITE_VERSION,
   CHARACTER_SPRITE_VARIANTS,
   CHARACTER_SPRITE_ROWS,
+  CHARACTER_SPRITE_ROWS_8,
   CHARACTER_SPRITES,
   CHARACTER_SPRITE_LOADS,
   CHARACTER_TINTED_SPRITES,
   CHARACTER_SPRITE_SOURCE_PALETTES,
   CHARACTER_LAYER_ORDER,
-  CHARACTER_LAYER_DIRS,
   CHARACTER_LAYER_IMAGES,
   CHARACTER_LAYER_LOADS,
   ENEMY_SPRITES,
@@ -1178,13 +1745,26 @@ export {
   ENEMY_SPRITE_VERSION,
   SHOW_MAP_ENEMY_DOTS,
   MAP_CANVAS_REDRAW_MS,
+  WORLD_BOSS_MECHANICS,
   enemySpriteConfig,
   dungeonEnemySpriteConfig,
   dungeonBossSpriteConfig,
   ENEMY_SPRITE_CONFIG,
   PET_SPRITE_CONFIG,
   CUSTOMIZATION,
+  HUMAN_CUSTOMIZATION,
+  HUMAN_MAGE_CUSTOMIZATION,
+  FRESH_RACE_CUSTOMIZATION,
   APPEARANCE_CHOICES,
+  HUMAN_FACE_STYLE_CHOICES,
+  FRESH_RACE_FACE_STYLE_CHOICES,
+  HUMAN_MAGE_APPEARANCE_CHOICES,
+  HUMAN_HAIR_STYLE_CHOICES,
+  FRESH_RACE_HAIR_STYLE_CHOICES,
+  FRESH_RACE_HERITAGE_STYLE_CHOICES,
+  FRESH_RACE_DEFAULT_HERITAGE,
+  HUMAN_CLASS_APPEARANCE_CHOICES,
+  FRESH_RACE_CLASS_APPEARANCE_CHOICES,
   TREES,
   ROCKS,
   NPCS,

@@ -13,3 +13,6 @@ firebase-debug.log
 *.backup-*
 .firebase/
 .cache/
+.tmp/
+.codex-logs/
+vite-runtime*.log

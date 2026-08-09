@@ -1,0 +1,142 @@
+{
+  "exteriorTileset": "tamzia_buildings_v2.tsx",
+  "exteriorImage": "tamzia_buildings_v2.png",
+  "interiorTileset": "tamzia_building_interiors_v1.tsx",
+  "interiorImage": "tamzia_building_interiors_v1.png",
+  "columns": 43,
+  "rows": 88,
+  "firstgids": {
+    "exterior": 17186,
+    "interior": 20970
+  },
+  "prefabs": [
+    {
+      "id": "tamzia_tailor_and_leatherworker",
+      "displayName": "Tamzia Tailor and Leatherworker",
+      "category": "artisan_workshop",
+      "interiorId": "tamzia_tailor_and_leatherworker_interior",
+      "widthTiles": 31,
+      "heightTiles": 19,
+      "entranceTile": {
+        "x": 16,
+        "y": 18
+      },
+      "entranceSide": "south",
+      "footprint": {
+        "x": 419,
+        "y": 425,
+        "widthTiles": 31,
+        "heightTiles": 19
+      },
+      "roofHideRegion": {
+        "x": 419,
+        "y": 425,
+        "widthTiles": 31,
+        "heightTiles": 19
+      },
+      "interiorCompatible": true,
+      "sheetRect": {
+        "x": 0,
+        "y": 0,
+        "widthTiles": 31,
+        "heightTiles": 19
+      }
+    },
+    {
+      "id": "tamzia_alchemist",
+      "displayName": "Tamzia Alchemist",
+      "category": "alchemy_shop",
+      "interiorId": "tamzia_alchemist_interior",
+      "widthTiles": 29,
+      "heightTiles": 14,
+      "entranceTile": {
+        "x": 14,
+        "y": 13
+      },
+      "entranceSide": "south",
+      "footprint": {
+        "x": 423,
+        "y": 454,
+        "widthTiles": 29,
+        "heightTiles": 14
+      },
+      "roofHideRegion": {
+        "x": 423,
+        "y": 454,
+        "widthTiles": 29,
+        "heightTiles": 14
+      },
+      "interiorCompatible": true,
+      "sheetRect": {
+        "x": 0,
+        "y": 20,
+        "widthTiles": 29,
+        "heightTiles": 14
+      }
+    },
+    {
+      "id": "tamzia_inn",
+      "displayName": "Tamzia Inn",
+      "category": "inn",
+      "interiorId": "tamzia_inn_interior",
+      "widthTiles": 26,
+      "heightTiles": 29,
+      "entranceTile": {
+        "x": 13,
+        "y": 28
+      },
+      "entranceSide": "south",
+      "footprint": {
+        "x": 416,
+        "y": 481,
+        "widthTiles": 26,
+        "heightTiles": 29
+      },
+      "roofHideRegion": {
+        "x": 416,
+        "y": 481,
+        "widthTiles": 26,
+        "heightTiles": 29
+      },
+      "interiorCompatible": true,
+      "sheetRect": {
+        "x": 0,
+        "y": 35,
+        "widthTiles": 26,
+        "heightTiles": 29
+      }
+    },
+    {
+      "id": "tamzia_blacksmith",
+      "displayName": "Tamzia Blacksmith",
+      "category": "blacksmith",
+      "interiorId": "tamzia_blacksmith_interior",
+      "widthTiles": 43,
+      "heightTiles": 23,
+      "entranceTile": {
+        "x": 0,
+        "y": 11
+      },
+      "entranceSide": "west",
+      "footprint": {
+        "x": 510,
+        "y": 488,
+        "widthTiles": 43,
+        "heightTiles": 23
+      },
+      "roofHideRegion": {
+        "x": 510,
+        "y": 488,
+        "widthTiles": 43,
+        "heightTiles": 23
+      },
+      "interiorCompatible": true,
+      "sheetRect": {
+        "x": 0,
+        "y": 65,
+        "widthTiles": 43,
+        "heightTiles": 23
+      }
+    }
+  ]
+}

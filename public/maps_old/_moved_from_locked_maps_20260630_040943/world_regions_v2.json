@@ -1,0 +1,1472 @@
+{
+  "version": "v2",
+  "tileSize": 32,
+  "worldTiles": {
+    "width": 4000,
+    "height": 4000
+  },
+  "regionTiles": {
+    "width": 800,
+    "height": 800
+  },
+  "regions": [
+    {
+      "id": "world_region_0_0",
+      "zoneId": "region_0_0",
+      "file": "world_region_0_0_v2.tmj",
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Western Wildwood",
+      "biomeId": "starter_forest",
+      "biomeType": "starter_forest",
+      "description": "small hunting lodge and old trees",
+      "role": "small hunting lodge and old trees",
+      "recommendedLevel": 1
+    },
+    {
+      "id": "world_region_1_0",
+      "zoneId": "region_1_0",
+      "file": "world_region_1_0_v2.tmj",
+      "x": 800,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Miller River Crossing",
+      "biomeId": "riverlands",
+      "biomeType": "riverlands",
+      "description": "bridge village and riverside farms",
+      "role": "bridge village and riverside farms",
+      "recommendedLevel": 1
+    },
+    {
+      "id": "world_region_2_0",
+      "zoneId": "region_2_0",
+      "file": "world_region_2_0_v2.tmj",
+      "x": 1600,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Greyspur Foothills",
+      "biomeId": "hills",
+      "biomeType": "hills",
+      "description": "foothills below the mountain road",
+      "role": "foothills below the mountain road",
+      "recommendedLevel": 2
+    },
+    {
+      "id": "world_region_3_0",
+      "zoneId": "region_3_0",
+      "file": "world_region_3_0_v2.tmj",
+      "x": 2400,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Northgate Trade Road",
+      "biomeId": "countryside",
+      "biomeType": "countryside",
+      "description": "northern market city and trade fields",
+      "role": "northern market city and trade fields",
+      "recommendedLevel": 2
+    },
+    {
+      "id": "world_region_4_0",
+      "zoneId": "region_4_0",
+      "file": "world_region_4_0_v2.tmj",
+      "x": 3200,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Saltcliff Harbor",
+      "biomeId": "coastal",
+      "biomeType": "coastal",
+      "description": "coastal cliffs and a working harbor",
+      "role": "coastal cliffs and a working harbor",
+      "recommendedLevel": 3
+    },
+    {
+      "id": "world_region_0_1",
+      "zoneId": "region_0_1",
+      "file": "world_region_0_1_v2.tmj",
+      "x": 0,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Deepbough Forest",
+      "biomeId": "old_forest",
+      "biomeType": "old_forest",
+      "description": "dense forest and hidden clearings",
+      "role": "dense forest and hidden clearings",
+      "recommendedLevel": 4
+    },
+    {
+      "id": "world_region_1_1",
+      "zoneId": "region_1_1",
+      "file": "world_region_1_1_v2.tmj",
+      "x": 800,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Hearthfield Farms",
+      "biomeId": "countryside",
+      "biomeType": "countryside",
+      "description": "human farms and windbreak fences",
+      "role": "human farms and windbreak fences",
+      "recommendedLevel": 4
+    },
+    {
+      "id": "world_region_2_1",
+      "zoneId": "region_2_1",
+      "file": "world_region_2_1_v2.tmj",
+      "x": 1600,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Stonebridge Heartlands",
+      "biomeId": "countryside",
+      "biomeType": "countryside",
+      "description": "main hub approach and river road",
+      "role": "main hub approach and river road",
+      "recommendedLevel": 5
+    },
+    {
+      "id": "world_region_3_1",
+      "zoneId": "region_3_1",
+      "file": "world_region_3_1_v2.tmj",
+      "x": 2400,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Eldergate Ruins",
+      "biomeId": "ancient_ruins",
+      "biomeType": "ancient_ruins",
+      "description": "old ruined road and broken towers",
+      "role": "old ruined road and broken towers",
+      "recommendedLevel": 5
+    },
+    {
+      "id": "world_region_4_1",
+      "zoneId": "region_4_1",
+      "file": "world_region_4_1_v2.tmj",
+      "x": 3200,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Eastpine Wood",
+      "biomeId": "old_forest",
+      "biomeType": "old_forest",
+      "description": "eastern forest and hunter trails",
+      "role": "eastern forest and hunter trails",
+      "recommendedLevel": 6
+    },
+    {
+      "id": "world_region_0_2",
+      "zoneId": "region_0_2",
+      "file": "world_region_0_2_v2.tmj",
+      "x": 0,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Mirrorlake Shores",
+      "biomeId": "riverlands",
+      "biomeType": "riverlands",
+      "description": "large lake region and fishing spots",
+      "role": "large lake region and fishing spots",
+      "recommendedLevel": 7
+    },
+    {
+      "id": "world_region_1_2",
+      "zoneId": "region_1_2",
+      "file": "world_region_1_2_v2.tmj",
+      "x": 800,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Redbanner Fields",
+      "biomeId": "hills",
+      "biomeType": "hills",
+      "description": "old battlefield and memorial hills",
+      "role": "old battlefield and memorial hills",
+      "recommendedLevel": 7
+    },
+    {
+      "id": "world_region_2_2",
+      "zoneId": "region_2_2",
+      "file": "world_region_2_2_v2.tmj",
+      "x": 1600,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Stonebridge City",
+      "biomeId": "countryside",
+      "biomeType": "countryside",
+      "description": "large central city and crossroads",
+      "role": "large central city and crossroads",
+      "recommendedLevel": 8
+    },
+    {
+      "id": "world_region_3_2",
+      "zoneId": "region_3_2",
+      "file": "world_region_3_2_v2.tmj",
+      "x": 2400,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Mirewatch Border",
+      "biomeId": "swamp",
+      "biomeType": "swamp",
+      "description": "swamp edge and raised road",
+      "role": "swamp edge and raised road",
+      "recommendedLevel": 8
+    },
+    {
+      "id": "world_region_4_2",
+      "zoneId": "region_4_2",
+      "file": "world_region_4_2_v2.tmj",
+      "x": 3200,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Seabright Road",
+      "biomeId": "coastal",
+      "biomeType": "coastal",
+      "description": "coastal road and cliffside lookout",
+      "role": "coastal road and cliffside lookout",
+      "recommendedLevel": 9
+    },
+    {
+      "id": "world_region_0_3",
+      "zoneId": "region_0_3",
+      "file": "world_region_0_3_v2.tmj",
+      "x": 0,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Westwall Mountains",
+      "biomeId": "mountain_pass",
+      "biomeType": "mountain_pass",
+      "description": "western mountains and high passes",
+      "role": "western mountains and high passes",
+      "recommendedLevel": 10
+    },
+    {
+      "id": "world_region_1_3",
+      "zoneId": "region_1_3",
+      "file": "world_region_1_3_v2.tmj",
+      "x": 800,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Coppervein Mining Town",
+      "biomeId": "rocky_highlands",
+      "biomeType": "rocky_highlands",
+      "description": "mining town and quarry roads",
+      "role": "mining town and quarry roads",
+      "recommendedLevel": 10
+    },
+    {
+      "id": "world_region_2_3",
+      "zoneId": "region_2_3",
+      "file": "world_region_2_3_v2.tmj",
+      "x": 1600,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Highpass Ridge",
+      "biomeId": "mountain_pass",
+      "biomeType": "mountain_pass",
+      "description": "major highland pass and bridges",
+      "role": "major highland pass and bridges",
+      "recommendedLevel": 11
+    },
+    {
+      "id": "world_region_3_3",
+      "zoneId": "region_3_3",
+      "file": "world_region_3_3_v2.tmj",
+      "x": 2400,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Blackfen Marsh",
+      "biomeId": "swamp",
+      "biomeType": "swamp",
+      "description": "marshland and dark forest pools",
+      "role": "marshland and dark forest pools",
+      "recommendedLevel": 11
+    },
+    {
+      "id": "world_region_4_3",
+      "zoneId": "region_4_3",
+      "file": "world_region_4_3_v2.tmj",
+      "x": 3200,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Drowned Coast",
+      "biomeId": "ancient_ruins",
+      "biomeType": "ancient_ruins",
+      "description": "ruined coast and old docks",
+      "role": "ruined coast and old docks",
+      "recommendedLevel": 12
+    },
+    {
+      "id": "world_region_0_4",
+      "zoneId": "region_0_4",
+      "file": "world_region_0_4_v2.tmj",
+      "x": 0,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Farwatch Isles",
+      "biomeId": "coastal",
+      "biomeType": "coastal",
+      "description": "remote islands and sea road",
+      "role": "remote islands and sea road",
+      "recommendedLevel": 13
+    },
+    {
+      "id": "world_region_1_4",
+      "zoneId": "region_1_4",
+      "file": "world_region_1_4_v2.tmj",
+      "x": 800,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Southbarley Farms",
+      "biomeId": "dry_grassland",
+      "biomeType": "dry_grassland",
+      "description": "southern farms and dry fields",
+      "role": "southern farms and dry fields",
+      "recommendedLevel": 13
+    },
+    {
+      "id": "world_region_2_4",
+      "zoneId": "region_2_4",
+      "file": "world_region_2_4_v2.tmj",
+      "x": 1600,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Sunward Fortress",
+      "biomeId": "dry_grassland",
+      "biomeType": "dry_grassland",
+      "description": "southern fortress and road camp",
+      "role": "southern fortress and road camp",
+      "recommendedLevel": 14
+    },
+    {
+      "id": "world_region_3_4",
+      "zoneId": "region_3_4",
+      "file": "world_region_3_4_v2.tmj",
+      "x": 2400,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Oldstone Expanse",
+      "biomeId": "ancient_ruins",
+      "biomeType": "ancient_ruins",
+      "description": "ancient temples and broken causeways",
+      "role": "ancient temples and broken causeways",
+      "recommendedLevel": 14
+    },
+    {
+      "id": "world_region_4_4",
+      "zoneId": "region_4_4",
+      "file": "world_region_4_4_v2.tmj",
+      "x": 3200,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Thornwild End",
+      "biomeId": "wild_end",
+      "biomeType": "wild_end",
+      "description": "dangerous wild biome and final frontier",
+      "role": "dangerous wild biome and final frontier",
+      "recommendedLevel": 15
+    }
+  ],
+  "biomes": [
+    {
+      "id": "starter_forest",
+      "name": "Lush Starter Forest",
+      "firstgid": 1,
+      "density": 0.62
+    },
+    {
+      "id": "countryside",
+      "name": "Human Countryside",
+      "firstgid": 257,
+      "density": 0.36
+    },
+    {
+      "id": "old_forest",
+      "name": "Dense Old Forest",
+      "firstgid": 513,
+      "density": 0.82
+    },
+    {
+      "id": "riverlands",
+      "name": "Riverlands",
+      "firstgid": 769,
+      "density": 0.48
+    },
+    {
+      "id": "hills",
+      "name": "Rolling Hills",
+      "firstgid": 1025,
+      "density": 0.42
+    },
+    {
+      "id": "mountain_pass",
+      "name": "Mountain Pass",
+      "firstgid": 1281,
+      "density": 0.28
+    },
+    {
+      "id": "rocky_highlands",
+      "name": "Rocky Highlands",
+      "firstgid": 1537,
+      "density": 0.24
+    },
+    {
+      "id": "swamp",
+      "name": "Swamp Marsh",
+      "firstgid": 1793,
+      "density": 0.58
+    },
+    {
+      "id": "ancient_ruins",
+      "name": "Ancient Ruined Zone",
+      "firstgid": 2049,
+      "density": 0.35
+    },
+    {
+      "id": "coastal",
+      "name": "Coastal Harbor Zone",
+      "firstgid": 2305,
+      "density": 0.38
+    },
+    {
+      "id": "dry_grassland",
+      "name": "Dry Grassland Edge",
+      "firstgid": 2561,
+      "density": 0.3
+    },
+    {
+      "id": "wild_end",
+      "name": "Wild End Zone",
+      "firstgid": 2817,
+      "density": 0.68
+    }
+  ],
+  "roads": [
+    {
+      "id": "main_west_road",
+      "kind": "main",
+      "width": 10,
+      "points": [
+        [
+          370,
+          360
+        ],
+        [
+          640,
+          520
+        ],
+        [
+          1080,
+          520
+        ],
+        [
+          1480,
+          760
+        ],
+        [
+          1940,
+          1180
+        ],
+        [
+          2010,
+          1940
+        ]
+      ]
+    },
+    {
+      "id": "main_north_trade",
+      "kind": "main",
+      "width": 10,
+      "points": [
+        [
+          2010,
+          1940
+        ],
+        [
+          2180,
+          1500
+        ],
+        [
+          2420,
+          960
+        ],
+        [
+          2820,
+          430
+        ],
+        [
+          3570,
+          600
+        ]
+      ]
+    },
+    {
+      "id": "main_east_road",
+      "kind": "main",
+      "width": 10,
+      "points": [
+        [
+          2010,
+          1940
+        ],
+        [
+          2440,
+          1900
+        ],
+        [
+          2880,
+          2010
+        ],
+        [
+          3320,
+          2040
+        ],
+        [
+          3620,
+          2050
+        ]
+      ]
+    },
+    {
+      "id": "main_south_road",
+      "kind": "main",
+      "width": 10,
+      "points": [
+        [
+          2010,
+          1940
+        ],
+        [
+          2020,
+          2390
+        ],
+        [
+          2020,
+          2790
+        ],
+        [
+          2000,
+          3400
+        ],
+        [
+          2870,
+          3460
+        ],
+        [
+          3550,
+          3520
+        ]
+      ]
+    },
+    {
+      "id": "forest_trail",
+      "kind": "trail",
+      "width": 5,
+      "points": [
+        [
+          370,
+          360
+        ],
+        [
+          500,
+          760
+        ],
+        [
+          510,
+          1040
+        ],
+        [
+          790,
+          1320
+        ],
+        [
+          1160,
+          1210
+        ]
+      ]
+    },
+    {
+      "id": "farmland_loop",
+      "kind": "secondary",
+      "width": 7,
+      "points": [
+        [
+          1080,
+          520
+        ],
+        [
+          1160,
+          1210
+        ],
+        [
+          1250,
+          2030
+        ],
+        [
+          2010,
+          1940
+        ]
+      ]
+    },
+    {
+      "id": "mirrorlake_road",
+      "kind": "secondary",
+      "width": 7,
+      "points": [
+        [
+          510,
+          1040
+        ],
+        [
+          620,
+          1860
+        ],
+        [
+          1250,
+          2030
+        ],
+        [
+          2010,
+          1940
+        ]
+      ]
+    },
+    {
+      "id": "westwall_pass",
+      "kind": "pass",
+      "width": 7,
+      "points": [
+        [
+          620,
+          1860
+        ],
+        [
+          510,
+          2710
+        ],
+        [
+          1210,
+          2840
+        ],
+        [
+          2020,
+          2790
+        ]
+      ]
+    },
+    {
+      "id": "copper_road",
+      "kind": "secondary",
+      "width": 7,
+      "points": [
+        [
+          510,
+          2710
+        ],
+        [
+          1210,
+          2840
+        ],
+        [
+          1540,
+          2890
+        ],
+        [
+          2020,
+          2790
+        ]
+      ]
+    },
+    {
+      "id": "southern_farm_road",
+      "kind": "secondary",
+      "width": 7,
+      "points": [
+        [
+          1210,
+          2840
+        ],
+        [
+          1180,
+          3470
+        ],
+        [
+          2000,
+          3400
+        ]
+      ]
+    },
+    {
+      "id": "oldstone_causeway",
+      "kind": "secondary",
+      "width": 8,
+      "points": [
+        [
+          2000,
+          3400
+        ],
+        [
+          2450,
+          3380
+        ],
+        [
+          2870,
+          3460
+        ],
+        [
+          3550,
+          3520
+        ]
+      ]
+    },
+    {
+      "id": "marsh_raised_road",
+      "kind": "secondary",
+      "width": 7,
+      "points": [
+        [
+          2880,
+          2010
+        ],
+        [
+          2920,
+          2920
+        ],
+        [
+          2870,
+          3460
+        ]
+      ]
+    },
+    {
+      "id": "coastal_road",
+      "kind": "secondary",
+      "width": 7,
+      "points": [
+        [
+          3570,
+          600
+        ],
+        [
+          3500,
+          1180
+        ],
+        [
+          3620,
+          2050
+        ],
+        [
+          3500,
+          2870
+        ],
+        [
+          3550,
+          3520
+        ]
+      ]
+    },
+    {
+      "id": "saltcliff_dock_road",
+      "kind": "trail",
+      "width": 5,
+      "points": [
+        [
+          3570,
+          600
+        ],
+        [
+          3720,
+          680
+        ],
+        [
+          3840,
+          740
+        ]
+      ]
+    },
+    {
+      "id": "farwatch_coast_track",
+      "kind": "trail",
+      "width": 5,
+      "points": [
+        [
+          520,
+          3530
+        ],
+        [
+          820,
+          3640
+        ],
+        [
+          1180,
+          3470
+        ]
+      ]
+    }
+  ],
+  "rivers": [
+    {
+      "id": "miller_river",
+      "width": 13,
+      "points": [
+        [
+          1040,
+          0
+        ],
+        [
+          1060,
+          520
+        ],
+        [
+          930,
+          880
+        ],
+        [
+          990,
+          1380
+        ],
+        [
+          760,
+          1780
+        ],
+        [
+          620,
+          1860
+        ],
+        [
+          520,
+          2240
+        ],
+        [
+          450,
+          2600
+        ],
+        [
+          510,
+          3200
+        ],
+        [
+          520,
+          4000
+        ]
+      ]
+    },
+    {
+      "id": "stonebridge_river",
+      "width": 16,
+      "points": [
+        [
+          2400,
+          0
+        ],
+        [
+          2420,
+          520
+        ],
+        [
+          2320,
+          980
+        ],
+        [
+          2140,
+          1420
+        ],
+        [
+          2010,
+          1940
+        ],
+        [
+          2030,
+          2360
+        ],
+        [
+          2020,
+          2790
+        ],
+        [
+          2070,
+          3300
+        ],
+        [
+          2100,
+          4000
+        ]
+      ]
+    },
+    {
+      "id": "eastfen_river",
+      "width": 14,
+      "points": [
+        [
+          3300,
+          880
+        ],
+        [
+          3220,
+          1320
+        ],
+        [
+          3150,
+          1700
+        ],
+        [
+          2880,
+          2010
+        ],
+        [
+          2920,
+          2500
+        ],
+        [
+          2920,
+          2920
+        ],
+        [
+          3000,
+          3400
+        ],
+        [
+          3120,
+          4000
+        ]
+      ]
+    }
+  ],
+  "lakes": [
+    {
+      "id": "mirrorlake",
+      "x": 520,
+      "y": 1900,
+      "rx": 260,
+      "ry": 180,
+      "biome": "riverlands"
+    },
+    {
+      "id": "north_mill_pond",
+      "x": 1180,
+      "y": 590,
+      "rx": 110,
+      "ry": 75,
+      "biome": "riverlands"
+    },
+    {
+      "id": "blackfen_pool",
+      "x": 3060,
+      "y": 2460,
+      "rx": 210,
+      "ry": 170,
+      "biome": "swamp"
+    },
+    {
+      "id": "drowned_bay",
+      "x": 3680,
+      "y": 2920,
+      "rx": 210,
+      "ry": 210,
+      "biome": "coastal"
+    },
+    {
+      "id": "thornwild_lake",
+      "x": 3520,
+      "y": 3480,
+      "rx": 160,
+      "ry": 130,
+      "biome": "wild_end"
+    }
+  ],
+  "bridges": [
+    {
+      "id": "miller_bridge",
+      "x": 1080,
+      "y": 520,
+      "w": 8,
+      "h": 5,
+      "orientation": "horizontal",
+      "roadId": "main_west_road"
+    },
+    {
+      "id": "mirrorlake_bridge",
+      "x": 620,
+      "y": 1860,
+      "w": 9,
+      "h": 5,
+      "orientation": "horizontal",
+      "roadId": "mirrorlake_road"
+    },
+    {
+      "id": "stonebridge_main_bridge",
+      "x": 2010,
+      "y": 1940,
+      "w": 7,
+      "h": 10,
+      "orientation": "vertical",
+      "roadId": "main_south_road"
+    },
+    {
+      "id": "highpass_bridge",
+      "x": 2020,
+      "y": 2790,
+      "w": 8,
+      "h": 5,
+      "orientation": "horizontal",
+      "roadId": "westwall_pass"
+    },
+    {
+      "id": "fen_raised_bridge",
+      "x": 2880,
+      "y": 2010,
+      "w": 8,
+      "h": 5,
+      "orientation": "horizontal",
+      "roadId": "main_east_road"
+    },
+    {
+      "id": "blackfen_bridge",
+      "x": 2920,
+      "y": 2920,
+      "w": 5,
+      "h": 9,
+      "orientation": "vertical",
+      "roadId": "marsh_raised_road"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "hollowpine_lodge",
+      "displayName": "Hollowpine Lodge",
+      "kind": "lodge",
+      "x": 370,
+      "y": 360,
+      "radius": 70,
+      "biome": "starter_forest",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "miller_crossing",
+      "displayName": "Miller Crossing",
+      "kind": "village",
+      "x": 1080,
+      "y": 520,
+      "radius": 90,
+      "biome": "riverlands",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "greyspur_watch",
+      "displayName": "Greyspur Watch",
+      "kind": "fort",
+      "x": 1860,
+      "y": 520,
+      "radius": 82,
+      "biome": "hills",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "northgate",
+      "displayName": "Northgate",
+      "kind": "town",
+      "x": 2820,
+      "y": 430,
+      "radius": 120,
+      "biome": "countryside",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "saltcliff_harbor",
+      "displayName": "Saltcliff Harbor",
+      "kind": "harbor",
+      "x": 3570,
+      "y": 600,
+      "radius": 130,
+      "biome": "coastal",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "deepbough_grove",
+      "displayName": "Deepbough Grove",
+      "kind": "grove",
+      "x": 510,
+      "y": 1040,
+      "radius": 80,
+      "biome": "old_forest",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "hearthfield",
+      "displayName": "Hearthfield",
+      "kind": "farmstead",
+      "x": 1160,
+      "y": 1210,
+      "radius": 115,
+      "biome": "countryside",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "riverwatch_mill",
+      "displayName": "Riverwatch Mill",
+      "kind": "mill",
+      "x": 1940,
+      "y": 1180,
+      "radius": 90,
+      "biome": "riverlands",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "eldergate_ruins",
+      "displayName": "Eldergate Ruins",
+      "kind": "ruins",
+      "x": 2740,
+      "y": 1130,
+      "radius": 120,
+      "biome": "ancient_ruins",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "eastpine_camp",
+      "displayName": "Eastpine Camp",
+      "kind": "camp",
+      "x": 3500,
+      "y": 1180,
+      "radius": 75,
+      "biome": "old_forest",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "mirrorlake_ferry",
+      "displayName": "Mirrorlake Ferry",
+      "kind": "dock",
+      "x": 620,
+      "y": 1860,
+      "radius": 80,
+      "biome": "riverlands",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "redbanner_memorial",
+      "displayName": "Redbanner Memorial",
+      "kind": "battlefield",
+      "x": 1250,
+      "y": 2030,
+      "radius": 115,
+      "biome": "hills",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "stonebridge_city",
+      "displayName": "Stonebridge City",
+      "kind": "city",
+      "x": 2010,
+      "y": 1940,
+      "radius": 190,
+      "biome": "countryside",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "mirewatch",
+      "displayName": "Mirewatch",
+      "kind": "village",
+      "x": 2880,
+      "y": 2010,
+      "radius": 90,
+      "biome": "swamp",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "seabright_lookout",
+      "displayName": "Seabright Lookout",
+      "kind": "watchtower",
+      "x": 3620,
+      "y": 2050,
+      "radius": 70,
+      "biome": "coastal",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "westwall_gate",
+      "displayName": "Westwall Gate",
+      "kind": "fort",
+      "x": 510,
+      "y": 2710,
+      "radius": 90,
+      "biome": "mountain_pass",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "coppervein",
+      "displayName": "Coppervein",
+      "kind": "mining_town",
+      "x": 1210,
+      "y": 2840,
+      "radius": 115,
+      "biome": "rocky_highlands",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "highpass_bridge",
+      "displayName": "Highpass Bridge",
+      "kind": "bridge_landmark",
+      "x": 2020,
+      "y": 2790,
+      "radius": 80,
+      "biome": "mountain_pass",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "blackfen_crossing",
+      "displayName": "Blackfen Crossing",
+      "kind": "marsh_camp",
+      "x": 2920,
+      "y": 2920,
+      "radius": 90,
+      "biome": "swamp",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "drowned_abbey",
+      "displayName": "Drowned Abbey",
+      "kind": "ruins",
+      "x": 3500,
+      "y": 2870,
+      "radius": 100,
+      "biome": "ancient_ruins",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "farwatch_landing",
+      "displayName": "Farwatch Landing",
+      "kind": "harbor",
+      "x": 520,
+      "y": 3530,
+      "radius": 95,
+      "biome": "coastal",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "southbarley",
+      "displayName": "Southbarley",
+      "kind": "farmstead",
+      "x": 1180,
+      "y": 3470,
+      "radius": 115,
+      "biome": "dry_grassland",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "sunward_keep",
+      "displayName": "Sunward Keep",
+      "kind": "fortress",
+      "x": 2000,
+      "y": 3400,
+      "radius": 145,
+      "biome": "dry_grassland",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "oldstone_temple",
+      "displayName": "Oldstone Temple",
+      "kind": "temple_ruins",
+      "x": 2870,
+      "y": 3460,
+      "radius": 135,
+      "biome": "ancient_ruins",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "thornwild_edge",
+      "displayName": "Thornwild Edge",
+      "kind": "wild_camp",
+      "x": 3550,
+      "y": 3520,
+      "radius": 100,
+      "biome": "wild_end",
+      "showOnMap": true,
+      "transitionTarget": null
+    },
+    {
+      "id": "cave_emberdeep",
+      "displayName": "Emberdeep Cave",
+      "kind": "cave_entrance",
+      "x": 1540,
+      "y": 2890,
+      "radius": 44,
+      "biome": "rocky_highlands",
+      "showOnMap": false,
+      "transitionTarget": "emberdeep_cave"
+    },
+    {
+      "id": "dungeon_oldstone",
+      "displayName": "Oldstone Depths",
+      "kind": "dungeon_entrance",
+      "x": 2890,
+      "y": 3540,
+      "radius": 52,
+      "biome": "ancient_ruins",
+      "showOnMap": false,
+      "transitionTarget": "oldstone_depths"
+    },
+    {
+      "id": "boat_farwatch_saltcliff",
+      "displayName": "Farwatch Ferry",
+      "kind": "boat_route",
+      "x": 560,
+      "y": 3575,
+      "radius": 48,
+      "biome": "coastal",
+      "showOnMap": false,
+      "transitionTarget": "saltcliff_harbor"
+    },
+    {
+      "id": "whispering_hideaway",
+      "displayName": "Whispering Hideaway",
+      "kind": "hidden_cabin",
+      "x": 720,
+      "y": 735,
+      "radius": 36,
+      "biome": "starter_forest",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "moonwell_garden",
+      "displayName": "Moonwell Garden",
+      "kind": "hidden_garden",
+      "x": 740,
+      "y": 1320,
+      "radius": 42,
+      "biome": "old_forest",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "willowbend_camp",
+      "displayName": "Willowbend Camp",
+      "kind": "forest_camp",
+      "x": 1460,
+      "y": 1540,
+      "radius": 48,
+      "biome": "countryside",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "crooked_cart",
+      "displayName": "Crooked Cart",
+      "kind": "roadside_camp",
+      "x": 1560,
+      "y": 2200,
+      "radius": 34,
+      "biome": "hills",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "mossgate_shrine",
+      "displayName": "Mossgate Shrine",
+      "kind": "shrine",
+      "x": 2630,
+      "y": 1510,
+      "radius": 44,
+      "biome": "ancient_ruins",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "reedhook_fishing_spot",
+      "displayName": "Reedhook Fishing Spot",
+      "kind": "fishing_spot",
+      "x": 3060,
+      "y": 2240,
+      "radius": 38,
+      "biome": "swamp",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "old_watch_underpass",
+      "displayName": "Old Watch Underpass",
+      "kind": "watchtower_ruin",
+      "x": 1890,
+      "y": 2660,
+      "radius": 46,
+      "biome": "mountain_pass",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "emberdeep_overlook",
+      "displayName": "Emberdeep Overlook",
+      "kind": "cave_mouth",
+      "x": 1680,
+      "y": 3090,
+      "radius": 42,
+      "biome": "rocky_highlands",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "sunken_garden",
+      "displayName": "Sunken Garden",
+      "kind": "hidden_garden",
+      "x": 3220,
+      "y": 3200,
+      "radius": 46,
+      "biome": "ancient_ruins",
+      "showOnMap": false,
+      "transitionTarget": null
+    },
+    {
+      "id": "thornroot_cache",
+      "displayName": "Thornroot Cache",
+      "kind": "forest_camp",
+      "x": 3750,
+      "y": 3740,
+      "radius": 42,
+      "biome": "wild_end",
+      "showOnMap": false,
+      "transitionTarget": null
+    }
+  ]
+}

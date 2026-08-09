@@ -39,6 +39,10 @@ import {
   safePoint,
 } from './game/math';
 import {
+  MAGE_CAST_DURATION_MS,
+  MAGE_WAND_RELEASE_DELAY_MS,
+} from './game/mageStaffGeometry';
+import {
   OFFLINE_DEMO,
   OFFLINE_USER,
   WORLD,
@@ -117,6 +121,7 @@ import {
   CLASSES,
   SHOW_MAP_ENEMY_DOTS,
   MAP_CANVAS_REDRAW_MS,
+  WORLD_BOSS_MECHANICS,
   TREES,
   ROCKS,
   NPCS,
@@ -131,6 +136,7 @@ import {
   samePartyMembers,
   sameOnlinePlayers,
   distance,
+  getMovementStateFromDisplacement,
   lerpAngle,
   xpForLevel,
   getAbilityId,
@@ -209,6 +215,21 @@ import {
   resolveAssetUrl,
 } from './game/mapAssets';
 import {
+  clearForcedPhase,
+  getDayNightDebugState,
+  getLightingForPhase,
+  setForcedPhase,
+  setTimeSpeed,
+} from './systems/dayNightSystem';
+import {
+  clearForcedWeather,
+  getPrecipitationState,
+  getWeatherDebugState,
+  getWeatherLightingModifier,
+  setForcedWeather,
+  setWeatherSpeed,
+} from './systems/weatherSystem';
+import {
   normalizeCharacter,
   normalizeName,
   isNameTaken,
@@ -238,7 +259,9 @@ import {
   isDungeonEnemyKill,
   rollDungeonMobLoot,
   getReadyRespawnSlots,
+  getEnemySeparationVector,
   updateIdleEnemyMovement,
+  resetEnemyAggro,
   createWorldSpawnPacks,
   scheduleWorldSpawnRespawn,
   getRaceStartPosition,
@@ -256,10 +279,15 @@ import {
   isServiceNpc,
   isNpcVisibleForInterior,
   getNearbyServiceNpc,
+  normalizeInteriorId,
+  getInteriorZoneId,
+  getCaveInteriorZone,
+  getCaveEntranceZones,
+  getCaveEntranceZone,
+  isPointInCaveInteriorSpace,
   getOpenInteriorZone,
   getObjectPosition,
   pointInObject,
-  getTransition,
   getTransitionRawTarget,
   normalizeTransitionTargetKey,
   getTransitionTargetMapId,
@@ -287,6 +315,8 @@ import {
   preloadAbilityVisual,
   drawPixelAbilityEffect,
   drawTiledWorld,
+  drawStreetLamps,
+  drawTamziaFountains,
   drawInteriorFocusOverlay,
   getTiledWorldPixelWidth,
   getTiledWorldPixelHeight,
@@ -306,7 +336,373 @@ const WORLD_MAP_INITIAL_ZOOM = 4;
 const WORLD_MAP_MAX_ZOOM = 10;
 const WORLD_MAP_REGISTRY_TILE_SCALE = 4;
 const WORLD_MAP_FALLBACK_COLOR = '#4c8547';
-const WORLD_MAP_OVERVIEW_VERSION = 'v3-tmj-overview-1';
+const WORLD_MAP_OVERVIEW_VERSION = 'v4-continent-01-overview-4';
+const DAY_NIGHT_PHASES = ['auto', 'dawn', 'day', 'evening', 'night'];
+const DAY_NIGHT_SPEEDS = [1, 10, 60, 300];
+const WEATHER_PHASES = ['auto', 'clear', 'cloudy', 'rain', 'storm'];
+const WEATHER_SPEEDS = [1, 10, 60, 300];
+const LOCAL_ENEMY_LEASH_GRACE_MS = 4200;
+const LOCAL_ENEMY_LEASH_DISTANCE = 760;
+const LOCAL_BOSS_LEASH_DISTANCE = 980;
+const LOCAL_ENEMY_ATTACK_ANIMATION_MS = 420;
+const LOCAL_ENEMY_ATTACK_IMPACT_MS = 210;
+
+function getLocalWorldBossMechanicConfig(enemy) {
+  const kind = normalizeEnemyKind(enemy?.bossType ?? enemy?.enemyKind ?? enemy?.spriteId ?? enemy?.name);
+  return WORLD_BOSS_MECHANICS[kind] ?? null;
+}
+
+function getActiveLocalWorldBossMechanicConfig(mechanicConfig, mechanicType) {
+  if (!mechanicConfig || !mechanicType) return null;
+  if (mechanicConfig.type === mechanicType) return mechanicConfig;
+  return mechanicConfig.secondary?.type === mechanicType ? mechanicConfig.secondary : null;
+}
+
+function createLocalBossProjectilePattern(source, target, config, now) {
+  const originX = safeNumber(source?.x, 0);
+  const originY = safeNumber(source?.y, 0);
+  const targetLeadSeconds = Math.max(0, safeNumber(config?.targetLeadMs, 0)) / 1000;
+  const targetLeadMaxDistance = Math.max(0, safeNumber(config?.targetLeadMaxDistance, 0));
+  const rawLeadX = safeNumber(target?.vx, 0) * targetLeadSeconds;
+  const rawLeadY = safeNumber(target?.vy, 0) * targetLeadSeconds;
+  const rawLeadDistance = Math.hypot(rawLeadX, rawLeadY);
+  const leadScale = rawLeadDistance > targetLeadMaxDistance && rawLeadDistance > 0
+    ? targetLeadMaxDistance / rawLeadDistance
+    : 1;
+  const targetX = safeNumber(target?.x, originX + 1) + rawLeadX * leadScale;
+  const targetY = safeNumber(target?.y, originY) + rawLeadY * leadScale;
+  const baseAngle = Math.atan2(targetY - originY, targetX - originX);
+  const targetDistance = Math.hypot(targetX - originX, targetY - originY);
+  const maxTravelDistance = Math.max(96, safeNumber(config?.maxTravelDistance, config?.activationRange ?? 720));
+  const travelDistance = clamp(targetDistance, 96, maxTravelDistance);
+  const projectileSpeed = Math.max(80, safeNumber(config?.projectileSpeed, 420));
+  const projectileCountMin = clamp(Math.floor(safeNumber(config?.projectileCountMin, config?.projectileCount ?? 1)), 1, 7);
+  const projectileCountMax = clamp(Math.floor(safeNumber(config?.projectileCountMax, projectileCountMin)), projectileCountMin, 7);
+  const projectileCount = projectileCountMin + Math.floor(Math.random() * (projectileCountMax - projectileCountMin + 1));
+  const projectileSpread = safeNumber(config?.projectileSpread, 0);
+  const launchAt = now + Math.max(0, safeNumber(config?.telegraphDuration, config?.launchDelay ?? 0));
+
+  return Array.from({ length: projectileCount }, (_, index) => {
+    const offset = index - (projectileCount - 1) / 2;
+    const angle = baseAngle + offset * projectileSpread;
+    const projectileTargetX = originX + Math.cos(angle) * travelDistance;
+    const projectileTargetY = originY + Math.sin(angle) * travelDistance;
+    return {
+      id: `${String(config?.type ?? 'projectile')}-${index}`,
+      type: String(config?.type ?? 'projectile'),
+      originX,
+      originY,
+      targetX: projectileTargetX,
+      targetY: projectileTargetY,
+      launchAt,
+      impactAt: launchAt + (travelDistance / projectileSpeed) * 1000,
+      radius: Math.max(4, safeNumber(config?.projectileRadius, 18)),
+    };
+  });
+}
+
+function getLocalBossProjectilePoint(projectile, at) {
+  const launchAt = safeNumber(projectile?.launchAt, 0);
+  const impactAt = Math.max(launchAt + 1, safeNumber(projectile?.impactAt, launchAt + 1));
+  const progress = clamp((at - launchAt) / (impactAt - launchAt), 0, 1);
+  return {
+    x: safeNumber(projectile?.originX, 0) + (safeNumber(projectile?.targetX, 0) - safeNumber(projectile?.originX, 0)) * progress,
+    y: safeNumber(projectile?.originY, 0) + (safeNumber(projectile?.targetY, 0) - safeNumber(projectile?.originY, 0)) * progress,
+  };
+}
+
+function localBossProjectileSweptHit(projectile, target, previousTime, now, extraRadius = 0) {
+  const launchAt = safeNumber(projectile?.launchAt, 0);
+  const impactAt = safeNumber(projectile?.impactAt, launchAt);
+  if (now < launchAt || previousTime > impactAt) return false;
+  const from = getLocalBossProjectilePoint(projectile, Math.max(launchAt, Math.min(previousTime, impactAt)));
+  const to = getLocalBossProjectilePoint(projectile, Math.max(launchAt, Math.min(now, impactAt)));
+  const segmentX = to.x - from.x;
+  const segmentY = to.y - from.y;
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+  const projection = segmentLengthSquared > 0
+    ? clamp(((safeNumber(target?.x, 0) - from.x) * segmentX + (safeNumber(target?.y, 0) - from.y) * segmentY) / segmentLengthSquared, 0, 1)
+    : 0;
+  const closestX = from.x + segmentX * projection;
+  const closestY = from.y + segmentY * projection;
+  return Math.hypot(safeNumber(target?.x, 0) - closestX, safeNumber(target?.y, 0) - closestY)
+    <= Math.max(4, safeNumber(projectile?.radius, 18)) + Math.max(0, extraRadius);
+}
+const NIGHT_LAMP_GLOW_PASS = {
+  glowOnly: true,
+  phaseFilter: 'night',
+  radiusMultiplier: 1.18,
+  intensityMultiplier: 1.08,
+  alphaMultiplier: 0.7,
+};
+
+function colorChannelsToRgba(channels, alphaMultiplier = 1) {
+  if (!Array.isArray(channels) || channels.length < 4) return null;
+  const alpha = clamp(safeNumber(channels[3], 0) * alphaMultiplier, 0, 1);
+  if (alpha <= 0) return null;
+  const red = clamp(Math.round(safeNumber(channels[0], 0)), 0, 255);
+  const green = clamp(Math.round(safeNumber(channels[1], 0)), 0, 255);
+  const blue = clamp(Math.round(safeNumber(channels[2], 0)), 0, 255);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha.toFixed(3)})`;
+}
+
+function drawDayNightOverlay(context, width, height, lighting) {
+  if (!context || !lighting) return;
+  const overlay = colorChannelsToRgba(lighting.overlay);
+  const accent = colorChannelsToRgba(lighting.accent);
+  const brightness = safeNumber(lighting.brightnessMultiplier ?? lighting.brightness, 1);
+  const saturation = safeNumber(lighting.saturationMultiplier ?? lighting.saturation, 1);
+  const fogIntensity = clamp(safeNumber(lighting.fogIntensity, 0), 0, 1);
+  if (!overlay && !accent && brightness === 1 && saturation === 1 && fogIntensity <= 0) return;
+
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+  if (saturation < 1) {
+    const softness = clamp((1 - saturation) * 0.16, 0, 0.16);
+    context.fillStyle = `rgba(176, 198, 218, ${softness.toFixed(3)})`;
+    context.fillRect(0, 0, width, height);
+  }
+  if (brightness < 1) {
+    const shade = clamp((1 - brightness) * 0.38, 0, 0.18);
+    context.fillStyle = `rgba(9, 13, 22, ${shade.toFixed(3)})`;
+    context.fillRect(0, 0, width, height);
+  } else if (brightness > 1) {
+    const lift = clamp((brightness - 1) * 0.12, 0, 0.08);
+    context.fillStyle = `rgba(255, 246, 220, ${lift.toFixed(3)})`;
+    context.fillRect(0, 0, width, height);
+  }
+  if (overlay) {
+    context.fillStyle = overlay;
+    context.fillRect(0, 0, width, height);
+  }
+  if (accent) {
+    const gradient = context.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, accent);
+    gradient.addColorStop(0.58, colorChannelsToRgba(lighting.accent, 0.36) ?? 'rgba(255,255,255,0)');
+    gradient.addColorStop(1, colorChannelsToRgba(lighting.accent, 0) ?? 'rgba(255,255,255,0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+  }
+  if (fogIntensity > 0) {
+    const fogAlpha = clamp(fogIntensity * 0.18, 0, 0.18);
+    context.globalCompositeOperation = 'screen';
+    const verticalMist = context.createLinearGradient(0, 0, 0, height);
+    verticalMist.addColorStop(0, `rgba(212, 229, 238, ${(fogAlpha * 0.95).toFixed(3)})`);
+    verticalMist.addColorStop(0.45, `rgba(190, 213, 226, ${(fogAlpha * 0.45).toFixed(3)})`);
+    verticalMist.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = verticalMist;
+    context.fillRect(0, 0, width, height);
+
+    const bandHeight = Math.max(54, height * 0.12);
+    for (let index = 0; index < 3; index += 1) {
+      const y = height * (0.2 + index * 0.22);
+      const band = context.createLinearGradient(0, y - bandHeight, 0, y + bandHeight);
+      band.addColorStop(0, 'rgba(255,255,255,0)');
+      band.addColorStop(0.5, `rgba(214, 232, 238, ${(fogAlpha * (0.55 - index * 0.1)).toFixed(3)})`);
+      band.addColorStop(1, 'rgba(255,255,255,0)');
+      context.fillStyle = band;
+      context.fillRect(0, y - bandHeight, width, bandHeight * 2);
+    }
+  }
+  context.restore();
+}
+
+function combineOverlayChannels(baseChannels, overlayColor, overlayAlpha) {
+  const baseAlpha = clamp(safeNumber(baseChannels?.[3], 0), 0, 1);
+  const topAlpha = clamp(safeNumber(overlayAlpha, 0), 0, 1);
+  if (topAlpha <= 0) return [...(baseChannels ?? [255, 255, 255, 0])];
+  if (baseAlpha <= 0) return [...overlayColor, topAlpha];
+
+  const outAlpha = clamp(topAlpha + baseAlpha * (1 - topAlpha), 0, 1);
+  const outColor = [0, 1, 2].map((index) => (
+    (
+      safeNumber(overlayColor?.[index], 255) * topAlpha
+      + safeNumber(baseChannels?.[index], 255) * baseAlpha * (1 - topAlpha)
+    ) / Math.max(0.001, outAlpha)
+  ));
+  return [...outColor, outAlpha];
+}
+
+function applyWeatherLightingModifier(lighting, weatherModifier) {
+  if (!lighting || !weatherModifier) return lighting;
+  const overlay = combineOverlayChannels(
+    lighting.overlay,
+    weatherModifier.overlayColor,
+    weatherModifier.overlayAlpha,
+  );
+  const accent = combineOverlayChannels(
+    lighting.accent,
+    weatherModifier.accentColor,
+    weatherModifier.accentAlpha,
+  );
+  const brightnessMultiplier = clamp(
+    safeNumber(lighting.brightnessMultiplier ?? lighting.brightness, 1)
+      * safeNumber(weatherModifier.brightnessMultiplier, 1),
+    0.45,
+    1.15,
+  );
+  const saturationMultiplier = clamp(
+    safeNumber(lighting.saturationMultiplier ?? lighting.saturation, 1)
+      * safeNumber(weatherModifier.saturationMultiplier, 1),
+    0.45,
+    1.2,
+  );
+
+  return {
+    ...lighting,
+    overlayColor: overlay.slice(0, 3),
+    overlayAlpha: overlay[3],
+    accentColor: accent.slice(0, 3),
+    accentAlpha: accent[3],
+    overlay,
+    accent,
+    brightness: brightnessMultiplier,
+    brightnessMultiplier,
+    saturation: saturationMultiplier,
+    saturationMultiplier,
+    fogIntensity: clamp(
+      safeNumber(lighting.fogIntensity, 0) + safeNumber(weatherModifier.fogIntensity, 0),
+      0,
+      0.45,
+    ),
+    weather: weatherModifier,
+  };
+}
+
+function weatherNoise(seed) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawPixelRaindrop(context, x, y, length, slant, scale, alpha, tint = [174, 213, 233]) {
+  const [red, green, blue] = tint;
+  const steps = Math.max(3, Math.round(length / 3));
+  const width = Math.max(1, Math.round(scale));
+  for (let step = 0; step < steps; step += 1) {
+    const progress = step / Math.max(1, steps - 1);
+    const px = Math.round(x - slant * progress);
+    const py = Math.round(y + length * progress);
+    const segmentAlpha = alpha * (0.22 + progress * 0.58);
+    context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${segmentAlpha.toFixed(3)})`;
+    context.fillRect(px, py, width, Math.max(1, Math.round(scale * 1.8)));
+  }
+
+  const headX = Math.round(x - slant);
+  const headY = Math.round(y + length);
+  context.fillStyle = `rgba(218, 239, 248, ${(alpha * 0.86).toFixed(3)})`;
+  context.fillRect(headX, headY, Math.max(1, width + 1), Math.max(1, Math.round(scale + 1)));
+}
+
+function drawRainSplash(context, x, y, size, alpha) {
+  const pixel = Math.max(1, Math.round(size));
+  context.fillStyle = `rgba(190, 225, 238, ${alpha.toFixed(3)})`;
+  context.fillRect(Math.round(x), Math.round(y), pixel, pixel);
+  context.fillStyle = `rgba(154, 200, 222, ${(alpha * 0.7).toFixed(3)})`;
+  context.fillRect(Math.round(x - pixel * 3), Math.round(y + pixel), pixel * 2, pixel);
+  context.fillRect(Math.round(x + pixel * 2), Math.round(y + pixel), pixel * 2, pixel);
+  if (size > 1.2) {
+    context.fillStyle = `rgba(220, 240, 248, ${(alpha * 0.45).toFixed(3)})`;
+    context.fillRect(Math.round(x - pixel), Math.round(y - pixel * 2), pixel, pixel);
+    context.fillRect(Math.round(x + pixel), Math.round(y - pixel), pixel, pixel);
+  }
+}
+
+function drawWeatherEffects(context, width, height, precipitation, now = performance.now()) {
+  if (!context || !precipitation?.active) return;
+  const cloudCover = clamp(safeNumber(precipitation.cloudCover, 0), 0, 1);
+  const rainIntensity = clamp(safeNumber(precipitation.rainIntensity, 0), 0, 1);
+  const stormIntensity = clamp(safeNumber(precipitation.stormIntensity, 0), 0, 1);
+  const windIntensity = clamp(safeNumber(precipitation.windIntensity, 0), 0, 1);
+
+  if (cloudCover > 0.04) {
+    context.save();
+    context.globalCompositeOperation = 'source-over';
+    const drift = (now * (0.006 + windIntensity * 0.018)) % Math.max(1, height * 0.7);
+    for (let index = 0; index < 3; index += 1) {
+      const bandHeight = Math.max(86, height * (0.12 + index * 0.025));
+      const y = ((index * height * 0.33 + drift) % (height + bandHeight * 2)) - bandHeight;
+      const alpha = cloudCover * (0.025 + stormIntensity * 0.018) * (1 - index * 0.16);
+      const band = context.createLinearGradient(0, y - bandHeight, 0, y + bandHeight);
+      band.addColorStop(0, 'rgba(16, 24, 34, 0)');
+      band.addColorStop(0.5, `rgba(16, 24, 34, ${alpha.toFixed(3)})`);
+      band.addColorStop(1, 'rgba(16, 24, 34, 0)');
+      context.fillStyle = band;
+      context.fillRect(0, y - bandHeight, width, bandHeight * 2);
+    }
+    context.restore();
+  }
+
+  if (rainIntensity > 0.04) {
+    context.save();
+    context.globalCompositeOperation = 'screen';
+
+    context.fillStyle = `rgba(119, 160, 184, ${(0.036 * rainIntensity).toFixed(3)})`;
+    context.fillRect(0, 0, width, height);
+
+    const density = (width * height) / 9500;
+    const farCount = Math.floor(density * (0.85 + rainIntensity * 1.05));
+    const mainCount = Math.floor(density * (0.72 + rainIntensity * 1.18));
+    const nearCount = Math.floor(density * (0.18 + rainIntensity * 0.22 + stormIntensity * 0.34));
+    const fallSpeed = 0.42 + rainIntensity * 0.42 + windIntensity * 0.22;
+    const slant = 2.5 + windIntensity * 8 + stormIntensity * 4;
+
+    for (let index = 0; index < farCount; index += 1) {
+      const seed = index * 5;
+      const baseX = weatherNoise(seed + 1) * (width + 100) - 50;
+      const baseY = weatherNoise(seed + 2) * (height + 90) - 45;
+      const y = (baseY + now * fallSpeed * 0.72 + index * 13) % (height + 90) - 45;
+      const x = (baseX + now * windIntensity * 0.04 + y * windIntensity * 0.045) % (width + 100) - 50;
+      const alpha = clamp(0.08 + rainIntensity * 0.09 + weatherNoise(seed + 3) * 0.045, 0.055, 0.22);
+      context.fillStyle = `rgba(156, 196, 218, ${alpha.toFixed(3)})`;
+      context.fillRect(Math.round(x), Math.round(y), 1, 2 + Math.round(weatherNoise(seed + 4) * 2));
+    }
+
+    for (let index = 0; index < mainCount; index += 1) {
+      const seed = index * 7 + 1000;
+      const baseX = weatherNoise(seed + 1) * (width + 140) - 70;
+      const baseY = weatherNoise(seed + 2) * (height + 130) - 65;
+      const y = (baseY + now * fallSpeed + index * 17) % (height + 130) - 65;
+      const x = (baseX + now * windIntensity * 0.07 + y * windIntensity * 0.065) % (width + 140) - 70;
+      const length = 9 + rainIntensity * 8 + weatherNoise(seed + 3) * 6 + stormIntensity * 4;
+      const alpha = clamp(0.19 + rainIntensity * 0.22 + stormIntensity * 0.11 + weatherNoise(seed + 4) * 0.07, 0.15, 0.58);
+      drawPixelRaindrop(context, x, y, length, slant, 1.18, alpha, [188, 224, 240]);
+    }
+
+    for (let index = 0; index < nearCount; index += 1) {
+      const seed = index * 11 + 3000;
+      const baseX = weatherNoise(seed + 1) * (width + 180) - 90;
+      const baseY = weatherNoise(seed + 2) * (height + 160) - 80;
+      const y = (baseY + now * fallSpeed * 1.16 + index * 23) % (height + 160) - 80;
+      const x = (baseX + now * windIntensity * 0.1 + y * windIntensity * 0.085) % (width + 180) - 90;
+      const length = 15 + rainIntensity * 10 + stormIntensity * 9 + weatherNoise(seed + 3) * 7;
+      const alpha = clamp(0.27 + rainIntensity * 0.24 + stormIntensity * 0.17 + weatherNoise(seed + 4) * 0.08, 0.2, 0.72);
+      drawPixelRaindrop(context, x, y, length, slant * 1.25, 1.75, alpha, [207, 236, 248]);
+    }
+
+    const splashCount = Math.floor(density * (0.26 + rainIntensity * 0.5 + stormIntensity * 0.22));
+    for (let index = 0; index < splashCount; index += 1) {
+      const seed = index * 13 + 7000;
+      const cycle = (now * (0.0016 + rainIntensity * 0.0012) + weatherNoise(seed + 1)) % 1;
+      if (cycle > 0.26) continue;
+      const x = weatherNoise(seed + 2) * width;
+      const y = height * (0.43 + weatherNoise(seed + 3) * 0.52);
+      const alpha = clamp((1 - cycle / 0.26) * (0.18 + rainIntensity * 0.2 + stormIntensity * 0.1), 0, 0.44);
+      drawRainSplash(context, x, y, 1 + stormIntensity * 0.8, alpha);
+    }
+    context.restore();
+  }
+
+  const lightningFlash = clamp(safeNumber(precipitation.lightningFlash, 0), 0, 1);
+  if (lightningFlash > 0.01) {
+    context.save();
+    context.globalCompositeOperation = 'screen';
+    context.fillStyle = `rgba(196, 220, 255, ${(0.22 * lightningFlash).toFixed(3)})`;
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = `rgba(255, 255, 255, ${(0.08 * lightningFlash).toFixed(3)})`;
+    context.fillRect(0, 0, width, height);
+    context.restore();
+  }
+}
 
 export default function App() {
   const canvasRef = React.useRef(null);
@@ -316,6 +712,7 @@ export default function App() {
   const player = React.useRef({ x: 420, y: 420, facing: 0 });
   const hunterPetRef = React.useRef({ x: 420, y: 452, facing: 0, walk: 0, nextAttackAt: 0, targetEnemyId: null });
   const forcedMoveRef = React.useRef(null);
+  const hostileSlowEffectsRef = React.useRef([]);
   const lastSafePlayerPositionRef = React.useRef({ x: 420, y: 420, facing: 0 });
   const camera = React.useRef({ x: 0, y: 0 });
   const mouse = React.useRef({ x: 420, y: 420, screenX: 0, screenY: 0 });
@@ -361,6 +758,11 @@ export default function App() {
   const selectedPlayerIdRef = React.useRef(null);
   const lastColyseusInputAt = React.useRef(0);
   const mapTransitioningRef = React.useRef(false);
+  const dungeonConfirmOpenRef = React.useRef(false);
+  const dungeonEntranceConfirmCooldownRef = React.useRef(0);
+  const activeCaveInteriorIdRef = React.useRef(null);
+  const lastCaveEntranceKeyRef = React.useRef(null);
+  const caveInteriorTransitionCooldownRef = React.useRef(0);
   const worldV2ChunkCacheRef = React.useRef(new globalThis.Map());
   const worldV2ChunkLoadRef = React.useRef(new globalThis.Map());
   const worldV2StreamingRef = React.useRef(false);
@@ -452,6 +854,7 @@ export default function App() {
   const [talentsOpen, setTalentsOpen] = React.useState(false);
   const [abilityBookOpen, setAbilityBookOpen] = React.useState(false);
   const [gameMenuOpen, setGameMenuOpen] = React.useState(false);
+  const [dungeonConfirmOpen, setDungeonConfirmOpenState] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [selectedResolutionId, setSelectedResolutionId] = React.useState(() => {
     try {
@@ -513,6 +916,8 @@ export default function App() {
   const [adminCloudCharacters, setAdminCloudCharacters] = React.useState([]);
   const [adminOnlinePlayers, setAdminOnlinePlayers] = React.useState([]);
   const [adminPlayersStatus, setAdminPlayersStatus] = React.useState('Players not loaded');
+  const [dayNightDebugState, setDayNightDebugState] = React.useState(() => getDayNightDebugState());
+  const [weatherDebugState, setWeatherDebugState] = React.useState(() => getWeatherDebugState());
   const [abilitySlots, setAbilitySlots] = React.useState(Array(ABILITY_BAR_SLOTS).fill(null));
   const [spriteLoadVersion, setSpriteLoadVersion] = React.useState(0);
   const [authStatus, setAuthStatus] = React.useState(
@@ -531,6 +936,10 @@ export default function App() {
   selectedPlayerIdRef.current = selectedPlayerId;
   abilitySlotsRef.current = abilitySlots;
   partyMembersRef.current = partyMembers;
+  const setDungeonConfirmOpen = React.useCallback((open) => {
+    dungeonConfirmOpenRef.current = Boolean(open);
+    setDungeonConfirmOpenState(Boolean(open));
+  }, []);
   openUiRef.current = {
     inventoryOpen,
     shopOpen,
@@ -542,6 +951,7 @@ export default function App() {
     talentsOpen,
     abilityBookOpen,
     gameMenuOpen,
+    dungeonConfirmOpen,
     settingsOpen,
     friendsOpen,
     mapOpen,
@@ -599,6 +1009,11 @@ export default function App() {
     }
     if (openUi.gameMenuOpen) {
       setGameMenuOpen(false);
+      closed = true;
+    }
+    if (openUi.dungeonConfirmOpen) {
+      setDungeonConfirmOpen(false);
+      dungeonEntranceConfirmCooldownRef.current = performance.now() + 900;
       closed = true;
     }
     if (openUi.shopOpen) {
@@ -917,6 +1332,67 @@ export default function App() {
   }, [lastCast]);
 
   React.useEffect(() => {
+    const syncWorldDebugState = () => {
+      setDayNightDebugState(getDayNightDebugState());
+      setWeatherDebugState(getWeatherDebugState());
+    };
+    syncWorldDebugState();
+    const timer = window.setInterval(syncWorldDebugState, 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    const debugTime = {
+      setPhase: (phase) => {
+        const result = setForcedPhase(phase);
+        setDayNightDebugState(getDayNightDebugState());
+        return result;
+      },
+      setSpeed: (multiplier) => {
+        const result = setTimeSpeed(multiplier);
+        setDayNightDebugState(getDayNightDebugState());
+        return result;
+      },
+      clearOverride: () => {
+        const result = clearForcedPhase();
+        setDayNightDebugState(getDayNightDebugState());
+        return result;
+      },
+      getState: getDayNightDebugState,
+    };
+
+    window.debugTime = debugTime;
+    const debugWeather = {
+      setWeather: (weather) => {
+        const result = setForcedWeather(weather);
+        setWeatherDebugState(getWeatherDebugState());
+        return result;
+      },
+      setSpeed: (multiplier) => {
+        const result = setWeatherSpeed(multiplier);
+        setWeatherDebugState(getWeatherDebugState());
+        return result;
+      },
+      clearOverride: () => {
+        const result = clearForcedWeather();
+        setWeatherDebugState(getWeatherDebugState());
+        return result;
+      },
+      getState: getWeatherDebugState,
+    };
+
+    window.debugWeather = debugWeather;
+    return () => {
+      if (window.debugTime === debugTime) {
+        delete window.debugTime;
+      }
+      if (window.debugWeather === debugWeather) {
+        delete window.debugWeather;
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
     setWorldMapWaypoint(null);
     setSelectedMapZoneId(null);
     focusWorldMapOnPlayer(isWorldV2Map(currentMapId) ? WORLD_MAP_INITIAL_ZOOM : 1);
@@ -924,7 +1400,7 @@ export default function App() {
 
   React.useEffect(() => {
     let cancelled = false;
-    loadImage(`${resolveAssetUrl('maps/world_v3_overview.png')}?v=${WORLD_MAP_OVERVIEW_VERSION}`)
+    loadImage(`${resolveAssetUrl('maps/world_map/continents/continent_01/continent_01_overview.png')}?v=${WORLD_MAP_OVERVIEW_VERSION}`)
       .then((image) => {
         if (cancelled) return;
         worldMapOverviewImageRef.current = image;
@@ -1064,16 +1540,20 @@ export default function App() {
     const centerMapId = getWorldV2MapIdFromPoint(centerPoint.x, centerPoint.y, generationId) ?? preferredMapId ?? `world_region_2_2_${generationId}`;
     worldV2LoadedRegionKeyRef.current = `${generationId}:${chunkIds.join('|')}`;
     preloadWorldV2ChunksAround(centerPoint, WORLD_V2_PRELOAD_CHUNK_RADIUS, generationId);
-    return createWorldV2ChunkComposite(loadedChunks, centerMapId, chunkIndex.tilesets, generationId);
+    return createWorldV2ChunkComposite(loadedChunks, centerMapId, chunkIndex.tilesets, generationId, chunkIndex);
   }, [loadWorldV2Chunk, preloadWorldV2ChunksAround]);
 
   const loadPlayableMap = React.useCallback(async (mapId, positionHint = null) => {
     const normalizedMapId = normalizeMapId(mapId);
+    if (import.meta.env.DEV && isWorldV2Map(normalizedMapId)) {
+      return loadTiledMap(normalizedMapId);
+    }
     if (!isWorldV2Map(normalizedMapId)) return loadTiledMap(normalizedMapId);
     return buildWorldV2CompositeAround(positionHint, normalizedMapId);
   }, [buildWorldV2CompositeAround]);
 
   const ensureWorldV2StreamingForPosition = React.useCallback((point) => {
+    if (import.meta.env.DEV) return;
     if (!isWorldV2Map(currentMapIdRef.current) || !isFinitePoint(point) || worldV2StreamingRef.current) return;
     const generationId = getWorldGenerationIdFromMapId(currentMapIdRef.current);
     const nextMapId = getWorldV2MapIdFromPoint(point.x, point.y, generationId);
@@ -1118,6 +1598,8 @@ export default function App() {
         tiledWorld.current = loadedMap;
         currentMapIdRef.current = loadedMap.mapId;
         setCurrentMapId(loadedMap.mapId);
+        activeCaveInteriorIdRef.current = null;
+        lastCaveEntranceKeyRef.current = null;
         const worldLabel = formatWorldGenerationLabel(loadedMap.worldGenerationId ?? getWorldGenerationIdFromMapId(loadedMap.mapId));
         setMapStatus(loadedMap.isChunkWorld
           ? `${worldLabel} chunk streaming: ${loadedMap.loadedRegions.length} chunks active`
@@ -1161,6 +1643,7 @@ export default function App() {
     });
     setIsDead(false);
     deadRef.current = false;
+    hostileSlowEffectsRef.current = [];
     lastCombatAt.current = 0;
     setEnemyCount(0);
     setLastCast(null);
@@ -1195,6 +1678,8 @@ export default function App() {
         tiledWorld.current = loadedMap;
         currentMapIdRef.current = loadedMap.mapId;
         setCurrentMapId(loadedMap.mapId);
+        activeCaveInteriorIdRef.current = null;
+        lastCaveEntranceKeyRef.current = null;
         setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
       } catch (error) {
         console.error(error);
@@ -1477,6 +1962,226 @@ export default function App() {
     requestAdminOnlinePlayers();
   };
 
+  const getActiveInteriorId = () => normalizeInteriorId(activeCaveInteriorIdRef.current);
+
+  const getActiveLocalInteriorId = (point = player.current) => {
+    const activeCaveInteriorId = getActiveInteriorId();
+    if (activeCaveInteriorId) return activeCaveInteriorId;
+    if (!tiledWorld.current || !point) return null;
+    return normalizeInteriorId(getInteriorZoneId(getOpenInteriorZone(tiledWorld.current, point, null)));
+  };
+
+  const isPlayerPointInsideActiveInterior = (point, interiorId = getActiveInteriorId()) => {
+    const activeInteriorId = normalizeInteriorId(interiorId);
+    if (!activeInteriorId) return true;
+    return isPointInCaveInteriorSpace(tiledWorld.current, point, activeInteriorId);
+  };
+
+  const canMovePlayerTo = (x, y, collisionOptions = undefined) => {
+    const activeInteriorId = normalizeInteriorId(collisionOptions?.activeInteriorId ?? getActiveInteriorId());
+    return canMoveTo(tiledWorld.current, x, y, PLAYER.radius, collisionOptions)
+      && isPlayerPointInsideActiveInterior({ x, y }, activeInteriorId);
+  };
+
+  const canBlinkPlayerTo = (x, y, collisionOptions = undefined) => {
+    const activeInteriorId = normalizeInteriorId(collisionOptions?.activeInteriorId ?? getActiveInteriorId());
+    if (!canMovePlayerTo(x, y, collisionOptions)) return false;
+    if (!activeInteriorId) return true;
+    const activeCaveZone = getCaveInteriorZone(tiledWorld.current, activeInteriorId);
+    return !activeCaveZone || pointInObject({ x, y }, activeCaveZone, PLAYER.radius);
+  };
+
+  const findPlayerMovementTarget = (
+    origin,
+    facing,
+    targetDistance,
+    collisionOptions = undefined,
+    validator = canMovePlayerTo,
+  ) => {
+    const activeWorldWidth = getTiledWorldPixelWidth(tiledWorld.current);
+    const activeWorldHeight = getTiledWorldPixelHeight(tiledWorld.current);
+    const fallback = { x: origin.x, y: origin.y };
+    for (let stepDistance = targetDistance; stepDistance >= 16; stepDistance -= 16) {
+      const targetX = clamp(origin.x + Math.cos(facing) * stepDistance, PLAYER.radius, activeWorldWidth - PLAYER.radius);
+      const targetY = clamp(origin.y + Math.sin(facing) * stepDistance, PLAYER.radius, activeWorldHeight - PLAYER.radius);
+      if (validator(targetX, targetY, collisionOptions)) return { x: targetX, y: targetY };
+    }
+    return fallback;
+  };
+
+  const invalidateDynamicMapOverview = () => {
+    mapCanvasDrawRef.current.minimap = 0;
+    mapCanvasDrawRef.current.world = 0;
+    mapOverviewCacheRef.current = {
+      ...mapOverviewCacheRef.current,
+      key: null,
+      canvas: null,
+    };
+  };
+
+  const getLocalInteriorId = (entity) => normalizeInteriorId(
+    entity?.interiorId
+    ?? entity?.props?.interiorId
+    ?? entity?.props?.caveId
+    ?? entity?.props?.targetInteriorId,
+  );
+
+  const canShareLocalInteriorSpace = (entity) => getLocalInteriorId(entity) === getActiveLocalInteriorId();
+
+  const getActiveTransitionAtPlayer = () => (
+    tiledWorld.current?.transitions?.find((transition) => (
+      canShareLocalInteriorSpace(transition)
+      && pointInObject(player.current, transition, PLAYER.radius)
+    ))
+  );
+
+  const updateActiveCaveInterior = (now = performance.now()) => {
+    const activeWorld = tiledWorld.current;
+    if (!activeWorld || !isWorldV2Map(currentMapIdRef.current)) {
+      const hadActiveInterior = Boolean(activeCaveInteriorIdRef.current);
+      activeCaveInteriorIdRef.current = null;
+      lastCaveEntranceKeyRef.current = null;
+      if (hadActiveInterior) invalidateDynamicMapOverview();
+      return null;
+    }
+
+    const entranceZone = getCaveEntranceZone(activeWorld, player.current);
+    const entranceInteriorId = entranceZone ? getInteriorZoneId(entranceZone) : null;
+    const entranceKey = entranceZone
+      ? `${entranceZone.mapId ?? currentMapIdRef.current}:${entranceZone.id ?? entranceZone.name}:${entranceInteriorId}`
+      : null;
+    const previousEntranceKey = lastCaveEntranceKeyRef.current;
+
+    if (!entranceKey) {
+      lastCaveEntranceKeyRef.current = null;
+    } else if (entranceKey !== previousEntranceKey && now >= caveInteriorTransitionCooldownRef.current) {
+      const currentInteriorId = getActiveInteriorId();
+      activeCaveInteriorIdRef.current = currentInteriorId === entranceInteriorId ? null : entranceInteriorId;
+      caveInteriorTransitionCooldownRef.current = now + 650;
+      lastCaveEntranceKeyRef.current = entranceKey;
+      invalidateDynamicMapOverview();
+      setLastCast(currentInteriorId === entranceInteriorId ? 'Left cave' : 'Entered cave');
+    }
+
+    const activeInteriorId = getActiveInteriorId();
+    if (activeInteriorId && !isPointInCaveInteriorSpace(activeWorld, player.current, activeInteriorId)) {
+      if (!canMoveTo(activeWorld, player.current.x, player.current.y, PLAYER.radius)) {
+        return activeInteriorId;
+      }
+      activeCaveInteriorIdRef.current = null;
+      lastCaveEntranceKeyRef.current = null;
+      invalidateDynamicMapOverview();
+      return null;
+    }
+
+    return getActiveInteriorId();
+  };
+
+  const applyWorldControls = (controls = {}) => {
+    try {
+      if (controls.time) {
+        if (controls.time.forcedPhase) {
+          setForcedPhase(controls.time.forcedPhase);
+        } else {
+          clearForcedPhase();
+        }
+        if (Number.isFinite(Number(controls.time.speedMultiplier))) {
+          setTimeSpeed(controls.time.speedMultiplier);
+        }
+      }
+
+      if (controls.weather) {
+        if (controls.weather.forcedWeather) {
+          setForcedWeather(controls.weather.forcedWeather);
+        } else {
+          clearForcedWeather();
+        }
+        if (Number.isFinite(Number(controls.weather.speedMultiplier))) {
+          setWeatherSpeed(controls.weather.speedMultiplier);
+        }
+      }
+    } catch (error) {
+      setLastCast(`World sync failed: ${error.message}`);
+    }
+
+    setDayNightDebugState(getDayNightDebugState());
+    setWeatherDebugState(getWeatherDebugState());
+  };
+
+  const setAdminWorldTimePhase = (phase) => {
+    if (!isAdmin) return;
+    if (colyseusRoomRef.current) {
+      colyseusRoomRef.current.send('adminSetWorldTime', {
+        auth: { email: authUserRef.current?.email ?? '' },
+        phase,
+      });
+      setLastCast(`World time: ${phase}`);
+      return;
+    }
+
+    if (phase === 'auto') {
+      clearForcedPhase();
+      setLastCast('World time: Auto');
+    } else {
+      setForcedPhase(phase);
+      setLastCast(`World time: ${phase}`);
+    }
+    setDayNightDebugState(getDayNightDebugState());
+  };
+
+  const setAdminWorldTimeSpeed = (multiplier) => {
+    if (!isAdmin) return;
+    if (colyseusRoomRef.current) {
+      colyseusRoomRef.current.send('adminSetWorldTimeSpeed', {
+        auth: { email: authUserRef.current?.email ?? '' },
+        multiplier,
+      });
+      setLastCast(`World time speed: ${multiplier}x`);
+      return;
+    }
+
+    setTimeSpeed(multiplier);
+    setDayNightDebugState(getDayNightDebugState());
+    setLastCast(`World time speed: ${multiplier}x`);
+  };
+
+  const setAdminWeatherPhase = (weather) => {
+    if (!isAdmin) return;
+    if (colyseusRoomRef.current) {
+      colyseusRoomRef.current.send('adminSetWeather', {
+        auth: { email: authUserRef.current?.email ?? '' },
+        weather,
+      });
+      setLastCast(`Weather: ${weather}`);
+      return;
+    }
+
+    if (weather === 'auto') {
+      clearForcedWeather();
+      setLastCast('Weather: Auto');
+    } else {
+      setForcedWeather(weather);
+      setLastCast(`Weather: ${weather}`);
+    }
+    setWeatherDebugState(getWeatherDebugState());
+  };
+
+  const setAdminWeatherSpeed = (multiplier) => {
+    if (!isAdmin) return;
+    if (colyseusRoomRef.current) {
+      colyseusRoomRef.current.send('adminSetWeatherSpeed', {
+        auth: { email: authUserRef.current?.email ?? '' },
+        multiplier,
+      });
+      setLastCast(`Weather speed: ${multiplier}x`);
+      return;
+    }
+
+    setWeatherSpeed(multiplier);
+    setWeatherDebugState(getWeatherDebugState());
+    setLastCast(`Weather speed: ${multiplier}x`);
+  };
+
   const adminTeleportToPlayer = (targetId) => {
     if (!isAdmin || !targetId || !colyseusRoomRef.current) return;
     colyseusRoomRef.current.send('adminTeleportTo', {
@@ -1493,6 +2198,25 @@ export default function App() {
       targetId,
     });
     setAdminPlayersStatus('Bringing player here...');
+  };
+
+  const adminTeleportToLocation = (location) => {
+    if (!isAdmin || !location) return;
+    if (!colyseusRoomRef.current) {
+      setLastCast('Admin teleport requires server connection');
+      return;
+    }
+    const mapId = normalizeMapId(location.mapId ?? currentMapIdRef.current);
+    const x = safeNumber(location.x, player.current.x);
+    const y = safeNumber(location.y, player.current.y);
+    setMapOpen(false);
+    colyseusRoomRef.current.send('adminTeleportToLocation', {
+      auth: { email: authUserRef.current?.email ?? '' },
+      mapId,
+      x,
+      y,
+    });
+    setAdminPlayersStatus(`Teleporting to ${Math.round(x)}, ${Math.round(y)}...`);
   };
 
   const addItemToActiveInventory = (item, sourceLabel = 'Loot') => {
@@ -1559,6 +2283,25 @@ export default function App() {
     setSelectedQuestDialogId(null);
   };
 
+  const abandonQuest = (questId) => {
+    const activeQuest = questId ? characterRef.current?.quests?.active?.[questId] : null;
+    const quest = getQuestSnapshot(activeQuest);
+    if (!activeQuest) return;
+    updateQuestState((quests) => {
+      const nextActive = { ...quests.active };
+      delete nextActive[questId];
+      const nextMainQuestId = quests.mainQuestId === questId
+        ? Object.keys(nextActive)[0] ?? null
+        : quests.mainQuestId;
+      return {
+        ...quests,
+        active: nextActive,
+        mainQuestId: nextMainQuestId,
+      };
+    });
+    setLastCast(`Quest abandoned: ${quest?.title ?? 'Quest'}`);
+  };
+
   const completeQuestTurnIn = (questId) => {
     const activeQuest = characterRef.current?.quests?.active?.[questId];
     const quest = getQuestSnapshot(activeQuest);
@@ -1604,6 +2347,45 @@ export default function App() {
       const active = Object.fromEntries(Object.entries(quests.active).map(([questId, activeQuest]) => {
         const quest = getQuestSnapshot(activeQuest);
         if (!quest || quest.type !== 'kill' || activeQuest.status === 'ready') return [questId, activeQuest];
+        const objectives = Array.isArray(quest.objectives)
+          ? quest.objectives
+            .map((objective) => ({
+              ...objective,
+              enemyKind: normalizeEnemyKind(objective?.enemyKind ?? objective?.kind ?? objective?.id),
+              required: Math.max(1, Math.floor(safeNumber(objective?.required, 1))),
+            }))
+            .filter((objective) => objective.enemyKind)
+          : [];
+        if (objectives.length > 0) {
+          const progressByKind = { ...(activeQuest.progressByKind ?? activeQuest.objectiveProgress ?? {}) };
+          let matchedObjective = false;
+          objectives.forEach((objective) => {
+            const matchingKills = kills.filter((killKinds) => killKinds.has(objective.enemyKind)).length;
+            if (!matchingKills) return;
+            progressByKind[objective.enemyKind] = Math.min(
+              objective.required,
+              Math.max(0, Math.floor(safeNumber(progressByKind[objective.enemyKind], 0))) + matchingKills,
+            );
+            matchedObjective = true;
+          });
+          if (!matchedObjective) return [questId, activeQuest];
+          const progress = objectives.reduce((total, objective) => (
+            total + Math.min(objective.required, Math.max(0, Math.floor(safeNumber(progressByKind[objective.enemyKind], 0))))
+          ), 0);
+          const ready = objectives.every((objective) => (
+            Math.max(0, Math.floor(safeNumber(progressByKind[objective.enemyKind], 0))) >= objective.required
+          ));
+          changed = true;
+          return [
+            questId,
+            {
+              ...activeQuest,
+              progress,
+              progressByKind,
+              status: ready ? 'ready' : 'active',
+            },
+          ];
+        }
         const questEnemyKind = normalizeEnemyKind(quest.enemyKind);
         const matchingKills = kills.filter((killKinds) => killKinds.has(questEnemyKind)).length;
         if (!matchingKills) return [questId, activeQuest];
@@ -2379,7 +3161,12 @@ export default function App() {
     setShopOpen(false);
     setInventoryOpen(false);
     setVitalsValue({ ...vitalsRef.current, hp: 0 });
-    enemies.current = enemies.current.map((enemy) => ({ ...enemy, state: 'idle' }));
+    const now = performance.now();
+    enemies.current = enemies.current.map((enemy) => (
+      enemy.state === 'aggro' || enemy.targetPlayerId || enemy.firstHitPlayerId
+        ? resetEnemyAggro(enemy, now)
+        : enemy
+    ));
   };
 
   const respawnPlayer = async () => {
@@ -2429,6 +3216,7 @@ export default function App() {
     setEnemyCount(0);
     setIsDead(false);
     deadRef.current = false;
+    hostileSlowEffectsRef.current = [];
     persistCurrentPosition(player.current, currentMapIdRef.current);
     setLastCast('Respawned');
   };
@@ -2459,6 +3247,10 @@ export default function App() {
     tiledWorld.current = loadedMap;
     currentMapIdRef.current = loadedMap.mapId;
     setCurrentMapId(loadedMap.mapId);
+    setDungeonConfirmOpen(false);
+    dungeonEntranceConfirmCooldownRef.current = 0;
+    activeCaveInteriorIdRef.current = null;
+    lastCaveEntranceKeyRef.current = null;
     enemies.current = [];
     combatEnemyIdsRef.current.clear();
     effects.current = [];
@@ -2476,6 +3268,9 @@ export default function App() {
       : `Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
 
     const spawn = findSpawnObject(loadedMap, spawnName, activeCharacter);
+    const spawnInteriorId = isWorldV2Map(loadedMap.mapId) ? getLocalInteriorId(spawn) : null;
+    activeCaveInteriorIdRef.current = spawnInteriorId;
+    if (spawnInteriorId) invalidateDynamicMapOverview();
     const nextPosition = spawn
       ? getObjectPosition(spawn)
       : getRaceStartPosition(loadedMap, activeCharacter?.raceId);
@@ -2496,7 +3291,39 @@ export default function App() {
     };
     persistCurrentPosition(safePosition, loadedMap.mapId);
     if (message) setLastCast(message);
-  }, [loadPlayableMap]);
+  }, [loadPlayableMap, setDungeonConfirmOpen]);
+
+  const cancelDungeonEntry = () => {
+    dungeonEntranceConfirmCooldownRef.current = performance.now() + 900;
+    setDungeonConfirmOpen(false);
+    setLastCast('Dungeon entry cancelled');
+  };
+
+  const confirmDungeonEntry = () => {
+    if (mapTransitioningRef.current || !characterRef.current || deadRef.current) return;
+    const activeTransition = getActiveTransitionAtPlayer();
+    const transitionTargetMapId = getTransitionTargetMapId(activeTransition);
+    const isDungeonEntrance = isWorldV2Map(currentMapIdRef.current)
+      && (activeTransition?.name === 'dungeon_01_entrance' || transitionTargetMapId === 'dungeon_01');
+    if (!isDungeonEntrance) {
+      dungeonEntranceConfirmCooldownRef.current = performance.now() + 600;
+      setDungeonConfirmOpen(false);
+      return;
+    }
+    const entryError = getDungeonEntryError(characterRef.current);
+    if (entryError) {
+      dungeonEntranceConfirmCooldownRef.current = performance.now() + 1200;
+      setDungeonConfirmOpen(false);
+      setLastCast(entryError);
+      return;
+    }
+    setDungeonConfirmOpen(false);
+    mapTransitioningRef.current = true;
+    switchMap('dungeon_01', 'dungeon_01_start', 'Entered dungeon')
+      .finally(() => {
+        mapTransitioningRef.current = false;
+      });
+  };
 
   const teleportToMapPosition = React.useCallback(async (nextMapId, targetPosition, message) => {
     const activeCharacter = characterRef.current;
@@ -2505,6 +3332,8 @@ export default function App() {
     tiledWorld.current = loadedMap;
     currentMapIdRef.current = loadedMap.mapId;
     setCurrentMapId(loadedMap.mapId);
+    activeCaveInteriorIdRef.current = null;
+    lastCaveEntranceKeyRef.current = null;
     enemies.current = [];
     combatEnemyIdsRef.current.clear();
     effects.current = [];
@@ -2567,16 +3396,17 @@ export default function App() {
 
   const teleportToRandomNewWorldRegion = React.useCallback(async (generationId = 'v3') => {
     const generation = getWorldGenerationConfig(generationId);
-    const targetMapId = generation.id === 'v3' ? WORLD_V3_HUB_MAP_ID : getRandomWorldV2MapId(generation.id);
+    const usesActiveContinent = generation.id === 'v3' || generation.aliasOf === 'v3';
+    const targetMapId = usesActiveContinent ? WORLD_V3_HUB_MAP_ID : getRandomWorldV2MapId(generation.id);
     const regionOffset = getWorldV2RegionOffset(targetMapId);
-    const globalTargetPosition = generation.id === 'v3'
+    const globalTargetPosition = usesActiveContinent
       ? { ...WORLD_V3_HUB_ARRIVAL }
       : {
         x: regionOffset.x + PLAYER.radius + Math.random() * Math.max(1, WORLD_V2_REGION_PIXEL_SIZE - PLAYER.radius * 2),
         y: regionOffset.y + PLAYER.radius + Math.random() * Math.max(1, WORLD_V2_REGION_PIXEL_SIZE - PLAYER.radius * 2),
       };
     const loadedMap = await buildWorldV2CompositeAround(globalTargetPosition, targetMapId);
-    const configuredSpawn = generation.id === 'v3'
+    const configuredSpawn = usesActiveContinent
       ? findSpawnObject(loadedMap, WORLD_V3_AFTER_STARTING_SPAWN_NAME, characterRef.current)
       : null;
     const configuredSpawnPosition = configuredSpawn ? getObjectPosition(configuredSpawn) : null;
@@ -2614,7 +3444,7 @@ export default function App() {
       mapId: safeMapId,
     };
     if (characterRef.current) persistCurrentPosition(safePosition, safeMapId);
-    setLastCast(generation.id === 'v3' ? 'Arrived at Tamzia. Report to the Town Hall.' : 'Entered the new world');
+    setLastCast(usesActiveContinent ? 'Arrived at Tamzia. Report to the Town Hall.' : 'Entered the new world');
   }, [buildWorldV2CompositeAround]);
 
   const teleportToAdminTarget = React.useCallback(async (target) => {
@@ -2625,6 +3455,8 @@ export default function App() {
     tiledWorld.current = loadedMap;
     currentMapIdRef.current = loadedMap.mapId;
     setCurrentMapId(loadedMap.mapId);
+    activeCaveInteriorIdRef.current = null;
+    lastCaveEntranceKeyRef.current = null;
     enemies.current = [];
     combatEnemyIdsRef.current.clear();
     effects.current = [];
@@ -2679,14 +3511,10 @@ export default function App() {
     let recallOrigin = { x: player.current.x, y: player.current.y };
 
     if (isWorldV2Map(currentMapIdRef.current)) {
-      const oldWorldMap = await loadTiledMap('world');
-      const returnPortal = getTransition(oldWorldMap, 'transition_to_new_world');
-      const returnPoint = getObjectPosition(returnPortal) ?? { x: 420, y: 420 };
-      await teleportToMapPosition('world', {
-        x: returnPoint.x + 96,
-        y: returnPoint.y + 96,
+      await teleportToMapPosition(WORLD_V3_HUB_MAP_ID, {
+        ...WORLD_V3_HUB_ARRIVAL,
         facing: player.current.facing,
-      }, 'Returned to old world');
+      }, 'Returned to Tamzia');
       setRecallCast(null);
       setInventoryOpen(false);
       return;
@@ -2855,6 +3683,8 @@ export default function App() {
         nextBossSpawnAt.current = getInitialBossSpawnAt(loadedMap);
         currentMapIdRef.current = loadedMap.mapId;
         setCurrentMapId(loadedMap.mapId);
+        activeCaveInteriorIdRef.current = null;
+        lastCaveEntranceKeyRef.current = null;
         setMapStatus(`Map loaded: ${loadedMap.zones.length} zone, ${loadedMap.spawns.length} spawn`);
       })
       .catch((error) => {
@@ -2942,8 +3772,13 @@ export default function App() {
           y: player.current.y,
           facing: player.current.facing,
           mapId: currentMapIdRef.current,
+          interiorId: getActiveLocalInteriorId(),
           hp: vitalsRef.current.hp,
           maxHp: joinStats.health,
+        });
+
+        room.onMessage('worldControls', (controls) => {
+          applyWorldControls(controls);
         });
 
         room.onMessage('world', (worldState) => {
@@ -3011,11 +3846,38 @@ export default function App() {
             setSelectedPlayerId(null);
           }
           const now = performance.now();
+          const serverTime = safeNumber(worldState.serverTime, Date.now());
+          const toLocalAttackTime = (value) => (
+            Number.isFinite(value) && value > 0 ? now + (value - serverTime) : 0
+          );
           locallyDefeatedEnemyIdsRef.current.forEach((expiresAt, enemyId) => {
             if (expiresAt <= now) locallyDefeatedEnemyIdsRef.current.delete(enemyId);
           });
           enemies.current = (worldState.enemies ?? [])
-            .map(sanitizeEnemy)
+            .map((enemy) => {
+              const sanitized = sanitizeEnemy(enemy);
+              if (!sanitized) return null;
+              return {
+                ...sanitized,
+                attackStartedAt: toLocalAttackTime(sanitized.attackStartedAt),
+                attackLaunchAt: toLocalAttackTime(sanitized.attackLaunchAt),
+                attackImpactAt: toLocalAttackTime(sanitized.attackImpactAt),
+                attackUntil: toLocalAttackTime(sanitized.attackUntil),
+                nextMechanicAt: toLocalAttackTime(sanitized.nextMechanicAt),
+                nextSecondaryMechanicAt: toLocalAttackTime(sanitized.nextSecondaryMechanicAt),
+                mechanicStartedAt: toLocalAttackTime(sanitized.mechanicStartedAt),
+                mechanicLaunchAt: toLocalAttackTime(sanitized.mechanicLaunchAt),
+                mechanicImpactAt: toLocalAttackTime(sanitized.mechanicImpactAt),
+                mechanicUntil: toLocalAttackTime(sanitized.mechanicUntil),
+                mechanicProjectiles: (Array.isArray(sanitized.mechanicProjectiles)
+                  ? sanitized.mechanicProjectiles
+                  : []).map((projectile) => ({
+                  ...projectile,
+                  launchAt: toLocalAttackTime(projectile.launchAt),
+                  impactAt: toLocalAttackTime(projectile.impactAt),
+                })),
+              };
+            })
             .filter((enemy) => enemy && !locallyDefeatedEnemyIdsRef.current.has(String(enemy.id)));
           setEnemyCount(enemies.current.length);
         });
@@ -3044,13 +3906,15 @@ export default function App() {
             return;
           }
           if (effect?.casterId) {
+            const usesMageCastRecovery = visualClassId === 'mage' && Boolean(sanitizedEffect.autoAttack);
             remoteAttackStatesRef.current.set(effect.casterId, {
               startedAt: now,
-              until: now + 320,
+              until: now + (usesMageCastRecovery ? MAGE_CAST_DURATION_MS : 320),
               type: sanitizedEffect.type,
               facing: sanitizedEffect.facing,
               ranged: sanitizedEffect.range > 80 || sanitizedEffect.projectile || sanitizedEffect.autoAttack,
               autoAttack: sanitizedEffect.autoAttack,
+              castRecovery: usesMageCastRecovery,
               weaponType: CLASS_SPRITE_DETAILS[visualClassId]?.weapon,
             });
           }
@@ -3081,15 +3945,23 @@ export default function App() {
         room.onMessage('hit', (message) => {
           const rawDamage = Number(message?.damage ?? 0);
           if (deadRef.current || rawDamage <= 0) return;
-          const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, rawDamage, performance.now());
+          const hitNow = performance.now();
+          const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, rawDamage, hitNow);
           if (damage <= 0) {
             setLastCast('Blocked');
             return;
           }
-          lastCombatAt.current = performance.now();
+          const slowDuration = clamp(safeNumber(message?.slowDuration, 0), 0, 10000);
+          if (slowDuration > 0) {
+            hostileSlowEffectsRef.current.push({
+              until: hitNow + slowDuration,
+              multiplier: clamp(safeNumber(message?.slowMultiplier, 0.7), 0.2, 1),
+            });
+          }
+          lastCombatAt.current = hitNow;
           const nextHp = Math.max(0, vitalsRef.current.hp - damage);
           setVitalsValue({ ...vitalsRef.current, hp: nextHp });
-          setLastCast(`-${damage} HP`);
+          setLastCast(slowDuration > 0 ? `-${damage} HP · Slowed` : `-${damage} HP`);
           if (nextHp <= 0) killPlayer();
         });
 
@@ -3115,6 +3987,7 @@ export default function App() {
           setVitalsValue({ ...vitalsRef.current, hp: nextHp });
           setIsDead(false);
           deadRef.current = false;
+          hostileSlowEffectsRef.current = [];
           setLastCast('Resurrected');
         });
 
@@ -3186,11 +4059,38 @@ export default function App() {
             setLastCast(text);
             requestAdminOnlinePlayers();
           }
+          if (message.action === 'teleportToLocation') {
+            const x = Math.round(safeNumber(message.x, player.current.x));
+            const y = Math.round(safeNumber(message.y, player.current.y));
+            const text = `Teleported to ${x}, ${y}`;
+            setAdminPlayersStatus(text);
+            setLastCast(text);
+          }
           if (message.action === 'levelUpPlayer') {
             const text = `${message.targetName ?? 'Player'} is level ${message.level ?? '?'}`;
             setAdminPlayersStatus(text);
             setLastCast(text);
             requestAdminOnlinePlayers();
+          }
+          if (message.action === 'worldTime') {
+            const text = `World time: ${message.phase ?? 'auto'}`;
+            setAdminPlayersStatus(text);
+            setLastCast(text);
+          }
+          if (message.action === 'worldTimeSpeed') {
+            const text = `World time speed: ${safeNumber(message.multiplier, 1)}x`;
+            setAdminPlayersStatus(text);
+            setLastCast(text);
+          }
+          if (message.action === 'weather') {
+            const text = `Weather: ${message.weather ?? 'auto'}`;
+            setAdminPlayersStatus(text);
+            setLastCast(text);
+          }
+          if (message.action === 'weatherSpeed') {
+            const text = `Weather speed: ${safeNumber(message.multiplier, 1)}x`;
+            setAdminPlayersStatus(text);
+            setLastCast(text);
           }
         });
 
@@ -3505,31 +4405,42 @@ export default function App() {
         ? new Set(options.targetEnemyIds.map((id) => String(id)))
         : null;
       const chainTargets = !targetEnemyIds && ability.type === 'chain'
-        ? selectChainEnemyTargets(enemies.current, ability, origin, facing, colyseusSessionIdRef.current ?? 'local')
+        ? selectChainEnemyTargets(enemies.current.filter(canShareLocalInteriorSpace), ability, origin, facing, colyseusSessionIdRef.current ?? 'local')
         : null;
       let totalDamageDone = 0;
 
       const damagedEnemies = enemies.current.map((enemy) => {
-          const hit = targetEnemyIds
-            ? targetEnemyIds.has(String(enemy.id))
-            : chainTargets
-              ? chainTargets.has(enemy.id)
-              : abilityHitsEnemyClient(ability, origin, facing, enemy);
-          if (!hit) return enemy;
-          combatEnemyIdsRef.current.add(String(enemy.id));
-          if (hasHunterPet(characterRef.current)) {
-            hunterPetRef.current.targetEnemyId = enemy.id;
-          }
-          lastCombatAt.current = now;
-          const finalDamage = getAbilityDamageAgainstEnemy(ability, damage, enemy, now);
-          totalDamageDone += Math.min(enemy.hp, finalDamage);
-          return applyAbilityDebuffsClient(
-            { ...enemy, state: 'aggro', hp: enemy.hp - finalDamage, hitAt: now },
-            ability,
-            colyseusSessionIdRef.current ?? 'local',
-            now,
-          );
-        });
+        if (!canShareLocalInteriorSpace(enemy)) return enemy;
+        const hit = targetEnemyIds
+          ? targetEnemyIds.has(String(enemy.id))
+          : chainTargets
+            ? chainTargets.has(enemy.id)
+            : abilityHitsEnemyClient(ability, origin, facing, enemy);
+        if (!hit) return enemy;
+        combatEnemyIdsRef.current.add(String(enemy.id));
+        if (hasHunterPet(characterRef.current)) {
+          hunterPetRef.current.targetEnemyId = enemy.id;
+        }
+        lastCombatAt.current = now;
+        const finalDamage = getAbilityDamageAgainstEnemy(ability, damage, enemy, now);
+        totalDamageDone += Math.min(enemy.hp, finalDamage);
+        const ownerId = colyseusSessionIdRef.current ?? 'local';
+        return applyAbilityDebuffsClient(
+          {
+            ...enemy,
+            state: 'aggro',
+            hp: enemy.hp - finalDamage,
+            targetPlayerId: enemy.targetPlayerId ?? ownerId,
+            firstHitPlayerId: enemy.firstHitPlayerId ?? ownerId,
+            leashStartedAt: null,
+            aggroDisabledUntil: null,
+            hitAt: now,
+          },
+          ability,
+          ownerId,
+          now,
+        );
+      });
 
       const defeatedEnemies = damagedEnemies.filter((enemy) => enemy.hp <= 0);
       enemies.current = damagedEnemies.filter((enemy) => enemy.hp > 0);
@@ -3566,6 +4477,7 @@ export default function App() {
       if (!ability || !isFinitePoint(origin)) return [];
       const localEnemies = enemies.current.filter((enemy) => {
         if (!enemy || enemy.hp <= 0) return false;
+        if (!canShareLocalInteriorSpace(enemy)) return false;
         if (
           currentMapIdRef.current
           && enemy.mapId
@@ -3609,7 +4521,8 @@ export default function App() {
 
     const sendDamageToHitEnemies = (room, ability, origin, facing, damage, options = {}) => {
       if (!room || !(damage > 0)) return false;
-      const hitEnemies = options.hitEnemies ?? getLocallyHitEnemies(ability, origin, facing);
+      const hitEnemies = (options.hitEnemies ?? getLocallyHitEnemies(ability, origin, facing))
+        .filter(canShareLocalInteriorSpace);
       if (hitEnemies.length === 0) return false;
 
       hitEnemies.forEach((enemy) => {
@@ -4119,7 +5032,7 @@ export default function App() {
       let hit = false;
       const defeatedEnemies = [];
       const damagedEnemies = enemies.current.map((enemy) => {
-        if (String(enemy.id) !== String(targetEnemyId) || enemy.hp <= 0) return enemy;
+        if (String(enemy.id) !== String(targetEnemyId) || enemy.hp <= 0 || !canShareLocalInteriorSpace(enemy)) return enemy;
         hit = true;
         combatEnemyIdsRef.current.add(String(enemy.id));
         lastCombatAt.current = now;
@@ -4134,6 +5047,8 @@ export default function App() {
             hitAt: now,
             targetPlayerId: enemy.targetPlayerId ?? ownerId,
             firstHitPlayerId: enemy.firstHitPlayerId ?? ownerId,
+            leashStartedAt: null,
+            aggroDisabledUntil: null,
           },
           ability,
           ownerId,
@@ -4351,6 +5266,7 @@ export default function App() {
       if (!ability || !isFinitePoint(origin)) return [];
       const localEnemies = enemies.current.filter((enemy) => {
         if (!enemy || enemy.hp <= 0) return false;
+        if (!canShareLocalInteriorSpace(enemy)) return false;
         if (
           currentMapIdRef.current
           && enemy.mapId
@@ -4394,7 +5310,8 @@ export default function App() {
 
     const sendDamageToHitEnemies = (room, ability, origin, facing, damage, options = {}) => {
       if (!room || !(damage > 0)) return false;
-      const hitEnemies = options.hitEnemies ?? getLocallyHitEnemies(ability, origin, facing);
+      const hitEnemies = (options.hitEnemies ?? getLocallyHitEnemies(ability, origin, facing))
+        .filter(canShareLocalInteriorSpace);
       if (hitEnemies.length === 0) return false;
 
       hitEnemies.forEach((enemy) => {
@@ -4416,7 +5333,7 @@ export default function App() {
     };
 
     const launchSingleTargetProjectile = (originInput, target, ability, now, options = {}) => {
-      if (!target || target.id == null || target.hp <= 0 || !isFinitePoint(target)) return false;
+      if (!target || target.id == null || target.hp <= 0 || !isFinitePoint(target) || !canShareLocalInteriorSpace(target)) return false;
       const origin = safePoint(originInput, player.current);
       if (!isFinitePoint(origin)) return false;
       const facing = Math.atan2(target.y - origin.y, target.x - origin.x);
@@ -4562,27 +5479,26 @@ export default function App() {
       rightClickCooldownRef.current = now + ability.cooldown;
       const movementDistance = ability.dashDistance ?? ability.blinkDistance ?? ability.chargeDistance ?? 0;
       if (movementDistance > 0) {
-        const activeWorldWidth = getTiledWorldPixelWidth(tiledWorld.current);
-        const activeWorldHeight = getTiledWorldPixelHeight(tiledWorld.current);
+        const activeInteriorId = getActiveInteriorId();
+        const movementCollisionOptions = activeInteriorId
+          ? { activeInteriorId, ignoreWorldCollision: true }
+          : undefined;
         const targetDistance = Math.min(movementDistance, Math.max(32, distance(player.current, safeMouse)));
-        const targetX = clamp(player.current.x + Math.cos(facing) * targetDistance, PLAYER.radius, activeWorldWidth - PLAYER.radius);
-        const targetY = clamp(player.current.y + Math.sin(facing) * targetDistance, PLAYER.radius, activeWorldHeight - PLAYER.radius);
+        const targetPoint = findPlayerMovementTarget(
+          player.current,
+          facing,
+          targetDistance,
+          movementCollisionOptions,
+          ability.blinkDistance ? canBlinkPlayerTo : canMovePlayerTo,
+        );
         if (ability.blinkDistance) {
-          const movedPoint = { x: player.current.x, y: player.current.y };
-          if (canMoveTo(tiledWorld.current, targetX, targetY, PLAYER.radius)) {
-            movedPoint.x = targetX;
-            movedPoint.y = targetY;
-          } else {
-            if (canMoveTo(tiledWorld.current, targetX, player.current.y, PLAYER.radius)) movedPoint.x = targetX;
-            if (canMoveTo(tiledWorld.current, movedPoint.x, targetY, PLAYER.radius)) movedPoint.y = targetY;
-          }
-          player.current.x = movedPoint.x;
-          player.current.y = movedPoint.y;
+          player.current.x = targetPoint.x;
+          player.current.y = targetPoint.y;
           lastSafePlayerPositionRef.current = { ...player.current };
         } else {
           forcedMoveRef.current = {
-            x: targetX,
-            y: targetY,
+            x: targetPoint.x,
+            y: targetPoint.y,
             speed: ability.chargeDistance ? 880 : 760,
             damageOnFinish: Boolean(ability.chargeDistance),
             ability,
@@ -4629,13 +5545,15 @@ export default function App() {
         ? Math.atan2(safeMouse.y - player.current.y, safeMouse.x - player.current.x)
         : safeNumber(player.current.facing, 0);
       player.current.facing = facing;
+      const usesMageCastRecovery = activeCharacter.classId === 'mage' && ability.type === 'bolt';
       player.current.attack = {
         startedAt: now,
-        until: now + 280,
+        until: now + (usesMageCastRecovery ? MAGE_CAST_DURATION_MS : 280),
         type: ability.type,
         facing,
         ranged: isRangedClass(activeCharacter.classId),
         autoAttack: true,
+        castRecovery: usesMageCastRecovery,
         weaponType: CLASS_SPRITE_DETAILS[activeCharacter.classId]?.weapon,
       };
       const speedMultiplier = now < (combatBuffsRef.current.attackSpeedUntil ?? 0)
@@ -4661,7 +5579,8 @@ export default function App() {
       const finalDamage = Math.ceil(damage * getCombatDamageMultiplier(combatBuffsRef.current, ability, now));
       const origin = { x: player.current.x, y: player.current.y };
       const hitEnemies = getLocallyHitEnemies(ability, origin, facing);
-      const impactDelay = getAbilityImpactDelayMs(ability, origin, hitEnemies[0]);
+      const projectileImpactDelay = getAbilityImpactDelayMs(ability, origin, hitEnemies[0]);
+      const impactDelay = projectileImpactDelay + (usesMageCastRecovery ? MAGE_WAND_RELEASE_DELAY_MS : 0);
       const isTravelVisual = ['bolt', 'shot'].includes(ability.type)
         || (ability.type === 'cleave' && String(ability.name ?? '').toLowerCase().includes('multishot'));
       const visualAbility = isTravelVisual
@@ -4725,6 +5644,7 @@ export default function App() {
       const currentMapId = currentMapIdRef.current;
       const validTargets = enemies.current
         .filter((enemy) => enemy && enemy.hp > 0)
+        .filter(canShareLocalInteriorSpace)
         .filter((enemy) => {
           const sameMap = !currentMapId || !enemy.mapId || getGameplayMapSpaceId(enemy.mapId) === getGameplayMapSpaceId(currentMapId);
           const combatTarget = combatEnemyIdsRef.current.has(String(enemy.id))
@@ -4781,7 +5701,7 @@ export default function App() {
         const nextY = clamp(pet.y + dirY * petSpeed * delta, HUNTER_PET.radius, activeWorldHeight - HUNTER_PET.radius);
         const movement = moveEnemyWithCollision(
           tiledWorld.current,
-          { ...pet, radius: HUNTER_PET.radius },
+          { ...pet, radius: HUNTER_PET.radius, interiorId: getActiveLocalInteriorId() },
           nextX,
           nextY,
         );
@@ -5069,7 +5989,8 @@ export default function App() {
     const smoothRemotePlayers = (delta) => {
       const targets = remotePlayersRef.current
         .map(sanitizeWorldPlayer)
-        .filter((target) => target?.id);
+        .filter((target) => target?.id)
+        .filter(canShareLocalInteriorSpace);
       const previousDisplays = new globalThis.Map(displayedRemotePlayersRef.current.map((remotePlayer) => [remotePlayer.id, remotePlayer]));
       const amount = clamp(1 - Math.exp(-REMOTE_PLAYER_SMOOTHING * delta), 0, 1);
 
@@ -5110,16 +6031,24 @@ export default function App() {
       mouse.current.x = mouse.current.screenX + cameraX;
       mouse.current.y = mouse.current.screenY + cameraY;
 
+      let suppressOutdoorAtmosphere = false;
       context.clearRect(0, 0, viewWidth, viewHeight);
       context.save();
       try {
         context.translate(-cameraX, -cameraY);
 
       let activeInteriorZone = null;
+      let activeCaveEntranceZones = [];
       if (tiledWorld.current) {
         context.fillStyle = '#1f2d2f';
         context.fillRect(0, 0, worldWidth, worldHeight);
-        activeInteriorZone = getOpenInteriorZone(tiledWorld.current, safePlayer);
+        const activeInteriorId = getActiveInteriorId();
+        activeInteriorZone = getOpenInteriorZone(tiledWorld.current, safePlayer, activeInteriorId);
+        const activeLocalInteriorId = activeInteriorZone
+          ? getInteriorZoneId(activeInteriorZone)
+          : activeInteriorId;
+        suppressOutdoorAtmosphere = Boolean(activeLocalInteriorId);
+        activeCaveEntranceZones = activeInteriorId ? getCaveEntranceZones(tiledWorld.current, activeInteriorId) : [];
         const drawnLayerCount = drawTiledWorld(
           context,
           tiledWorld.current,
@@ -5131,7 +6060,13 @@ export default function App() {
             console.error(error);
             setRenderStatus(`Layer skipped: ${layer?.name ?? 'unnamed'}`);
           },
-          { fadeBuildings: Boolean(activeInteriorZone), activeInteriorZone },
+          {
+            fadeBuildings: Boolean(activeInteriorZone),
+            activeInteriorZone,
+            activeCaveEntranceZones,
+            interiorOnly: Boolean(activeInteriorId && activeInteriorZone),
+            now,
+          },
         );
         if (drawnLayerCount === 0) {
           const fallbackTileSize = tiledWorld.current.map?.tilewidth ?? WORLD.tile;
@@ -5185,8 +6120,37 @@ export default function App() {
         NPCS.forEach(drawNpc);
       }
 
+      const hasPlacedWantedBoardProp = (tiledWorld.current?.props ?? []).some((prop) => {
+        const label = `${prop?.props?.type ?? ''} ${prop?.type ?? ''} ${prop?.name ?? ''}`.toLowerCase();
+        return label.includes('wanted_board') || label.includes('wanted board') || label.includes('wantedboard');
+      });
+
+      if (tiledWorld.current?.props?.length) {
+        drawTamziaFountains(
+          context,
+          tiledWorld.current.props,
+          cameraX,
+          cameraY,
+          viewWidth,
+          viewHeight,
+          now,
+        );
+      }
+
+      if (tiledWorld.current?.lightMarkers?.length) {
+        drawStreetLamps(
+          context,
+          tiledWorld.current.lightMarkers,
+          cameraX,
+          cameraY,
+          viewWidth,
+          viewHeight,
+        );
+      }
+
       (tiledWorld.current?.questGivers ?? [])
         .filter((giver) => isNpcVisibleForInterior(giver, activeInteriorZone))
+        .filter(() => !hasPlacedWantedBoardProp)
         .filter((giver) => String(giver?.props?.npcType ?? '').toLowerCase().includes('wanted_board'))
         .forEach((giver) => drawWantedBoardAt(context, giver, now));
 
@@ -5220,6 +6184,10 @@ export default function App() {
         .filter((giver) => isNpcVisibleForInterior(giver, activeInteriorZone))
         .filter((giver) => !visibleNpcQuestIds.has(String(giver?.id ?? '')))
         .filter((giver) => giver?.props?.renderHidden !== true)
+        .filter((giver) => {
+          if (!hasPlacedWantedBoardProp) return true;
+          return !String(giver?.props?.npcType ?? '').toLowerCase().includes('wanted_board');
+        })
         .forEach((giver) => {
           if (isTamziaInteriorNpc(giver)) drawTamziaNpcAt(context, giver, now);
           else drawQuestGiverAt(context, giver, now);
@@ -5243,13 +6211,15 @@ export default function App() {
           console.error(error);
         }
       });
-      enemies.current.forEach((enemy) => {
-        try {
-          drawEnemy(context, enemy, now);
-        } catch (error) {
-          console.error(error);
-        }
-      });
+      enemies.current
+        .filter(canShareLocalInteriorSpace)
+        .forEach((enemy) => {
+          try {
+            drawEnemy(context, enemy, now);
+          } catch (error) {
+            console.error(error);
+          }
+        });
       const brokenEffects = new Set();
       effects.current.forEach((effect) => {
         try {
@@ -5264,9 +6234,55 @@ export default function App() {
         setRenderStatus(`Removed ${brokenEffects.size} broken effect${brokenEffects.size > 1 ? 's' : ''}`);
       }
 
-      drawInteriorFocusOverlay(context, activeInteriorZone, worldWidth, worldHeight, now);
+      drawInteriorFocusOverlay(context, activeInteriorZone, worldWidth, worldHeight, now, activeCaveEntranceZones);
       } finally {
         context.restore();
+      }
+      if (!suppressOutdoorAtmosphere) {
+        try {
+          const weatherModifier = getWeatherLightingModifier();
+          const precipitation = getPrecipitationState();
+          const lighting = applyWeatherLightingModifier(getLightingForPhase(), weatherModifier);
+          drawDayNightOverlay(context, viewWidth, viewHeight, lighting);
+          if (lighting.phase === 'night' && tiledWorld.current?.lightMarkers?.length) {
+            context.save();
+            try {
+              context.translate(-cameraX, -cameraY);
+              drawStreetLamps(
+                context,
+                tiledWorld.current.lightMarkers,
+                cameraX,
+                cameraY,
+                viewWidth,
+                viewHeight,
+                NIGHT_LAMP_GLOW_PASS,
+              );
+            } finally {
+              context.restore();
+            }
+          }
+          if (tiledWorld.current?.props?.length) {
+            context.save();
+            try {
+              context.translate(-cameraX, -cameraY);
+              drawTamziaFountains(
+                context,
+                tiledWorld.current.props,
+                cameraX,
+                cameraY,
+                viewWidth,
+                viewHeight,
+                now,
+                { glowOnly: true, lighting, postOverlay: true },
+              );
+            } finally {
+              context.restore();
+            }
+          }
+          drawWeatherEffects(context, viewWidth, viewHeight, precipitation, now);
+        } catch (error) {
+          console.error('Day/night overlay failed', error);
+        }
       }
     };
 
@@ -5326,7 +6342,15 @@ export default function App() {
           readySlots.forEach((slotIndex) => {
             if (aliveCount >= pack.maxAlive) return;
 
-            enemies.current.push(createEnemy(nextEnemyId.current, pack.spawn, player.current, slotIndex, pack.maxAlive, tiledWorld.current));
+            enemies.current.push(createEnemy(
+              nextEnemyId.current,
+              pack.spawn,
+              player.current,
+              slotIndex,
+              pack.maxAlive,
+              tiledWorld.current,
+              enemies.current,
+            ));
             nextEnemyId.current += 1;
             aliveCount += 1;
             spawnedAnyEnemy = true;
@@ -5337,7 +6361,15 @@ export default function App() {
             while (occupiedSlots.has(openSlot) && openSlot < pack.maxAlive) openSlot += 1;
             if (openSlot >= pack.maxAlive) break;
             occupiedSlots.add(openSlot);
-            enemies.current.push(createEnemy(nextEnemyId.current, pack.spawn, player.current, openSlot, pack.maxAlive, tiledWorld.current));
+            enemies.current.push(createEnemy(
+              nextEnemyId.current,
+              pack.spawn,
+              player.current,
+              openSlot,
+              pack.maxAlive,
+              tiledWorld.current,
+              enemies.current,
+            ));
             nextEnemyId.current += 1;
             aliveCount += 1;
             spawnedAnyEnemy = true;
@@ -5405,6 +6437,10 @@ export default function App() {
       }
 
       const forcedMove = forcedMoveRef.current;
+      const activeInteriorId = normalizeInteriorId(activeCaveInteriorIdRef.current);
+      const playerCollisionOptions = activeInteriorId
+        ? { activeInteriorId, ignoreWorldCollision: true }
+        : undefined;
       if (forcedMove && !deadRef.current) {
         const toX = forcedMove.x - player.current.x;
         const toY = forcedMove.y - player.current.y;
@@ -5427,11 +6463,11 @@ export default function App() {
           const nextX = player.current.x + moveX;
           const nextY = player.current.y + moveY;
           let blocked = true;
-          if (canMoveTo(tiledWorld.current, nextX, player.current.y, PLAYER.radius)) {
+          if (canMovePlayerTo(nextX, player.current.y, playerCollisionOptions)) {
             player.current.x = nextX;
             blocked = false;
           }
-          if (canMoveTo(tiledWorld.current, player.current.x, nextY, PLAYER.radius)) {
+          if (canMovePlayerTo(player.current.x, nextY, playerCollisionOptions)) {
             player.current.y = nextY;
             blocked = false;
           }
@@ -5441,42 +6477,79 @@ export default function App() {
           if (blocked) forcedMoveRef.current = null;
         }
       } else if (dx !== 0 || dy !== 0) {
+        hostileSlowEffectsRef.current = hostileSlowEffectsRef.current.filter((effect) => effect.until > now);
+        const hostileMovementMultiplier = hostileSlowEffectsRef.current.reduce(
+          (multiplier, effect) => Math.min(multiplier, clamp(safeNumber(effect.multiplier, 1), 0.2, 1)),
+          1,
+        );
+        const movementSpeed = PLAYER.speed * hostileMovementMultiplier;
         const length = Math.hypot(dx, dy);
         dx /= length;
         dy /= length;
-        player.current.vx = dx * PLAYER.speed;
-        player.current.vy = dy * PLAYER.speed;
-        player.current.facing = Math.atan2(dy, dx);
+        const previousX = player.current.x;
+        const previousY = player.current.y;
         const activeWorldWidth = getTiledWorldPixelWidth(tiledWorld.current);
         const activeWorldHeight = getTiledWorldPixelHeight(tiledWorld.current);
-        const nextX = clamp(player.current.x + dx * PLAYER.speed * delta, PLAYER.radius, activeWorldWidth - PLAYER.radius);
-        const nextY = clamp(player.current.y + dy * PLAYER.speed * delta, PLAYER.radius, activeWorldHeight - PLAYER.radius);
+        const nextX = clamp(player.current.x + dx * movementSpeed * delta, PLAYER.radius, activeWorldWidth - PLAYER.radius);
+        const nextY = clamp(player.current.y + dy * movementSpeed * delta, PLAYER.radius, activeWorldHeight - PLAYER.radius);
 
-        if (canMoveTo(tiledWorld.current, nextX, player.current.y, PLAYER.radius)) {
+        if (canMovePlayerTo(nextX, player.current.y, playerCollisionOptions)) {
           player.current.x = nextX;
         }
-        if (canMoveTo(tiledWorld.current, player.current.x, nextY, PLAYER.radius)) {
+        if (canMovePlayerTo(player.current.x, nextY, playerCollisionOptions)) {
           player.current.y = nextY;
         }
+        const movementState = getMovementStateFromDisplacement(
+          { x: previousX, y: previousY },
+          player.current,
+          delta,
+          player.current.facing,
+        );
+        player.current.vx = movementState.vx;
+        player.current.vy = movementState.vy;
+        player.current.facing = movementState.facing;
       } else {
         player.current.vx = 0;
         player.current.vy = 0;
+      }
+
+      const playerIsMoving = Math.abs(player.current.vx ?? 0) + Math.abs(player.current.vy ?? 0) > 0.05;
+      if (playerIsMoving) {
+        const walkDirectionSector = ((Math.round(safeNumber(player.current.facing, 0) / (Math.PI / 4)) % 8) + 8) % 8;
+        // Preserve gait phase while turning so changing sprite rows does not
+        // repeatedly snap the character back to the neutral passing pose.
+        if (
+          !player.current.walkMoving
+          || !Number.isFinite(player.current.walkStartedAt)
+        ) {
+          player.current.walkStartedAt = now;
+        }
+        player.current.walkMoving = true;
+        player.current.walkDirectionSector = walkDirectionSector;
+        player.current.animationTime = Math.max(0, now - player.current.walkStartedAt);
+      } else {
+        player.current.walkMoving = false;
+        player.current.walkDirectionSector = null;
+        player.current.walkStartedAt = now;
+        player.current.animationTime = 0;
       }
 
       if (isWorldV2Map(currentMapIdRef.current) && tiledWorld.current?.isRegionWorld) {
         ensureWorldV2StreamingForPosition(player.current);
       }
 
+      updateActiveCaveInterior(now);
+
       if (!mapTransitioningRef.current && characterRef.current && !deadRef.current && tiledWorld.current) {
         const currentMap = currentMapIdRef.current;
-        const activeTransition = tiledWorld.current.transitions?.find((transition) => pointInObject(player.current, transition, PLAYER.radius));
+        const activeTransition = getActiveTransitionAtPlayer();
         const transitionTargetMapId = getTransitionTargetMapId(activeTransition);
-        const isDungeonEntrance = currentMap === 'world'
+        const isDungeonEntrance = isWorldV2Map(currentMap)
           && (activeTransition?.name === 'dungeon_01_entrance' || transitionTargetMapId === 'dungeon_01');
         const transitionName = String(activeTransition?.name ?? '').trim().toLowerCase();
         const transitionTargetKey = normalizeTransitionTargetKey(getTransitionRawTarget(activeTransition));
         const isNewWorldTransition = transitionName === 'transition_to_new_world'
-          || ['new_world', 'new_world_v3', 'world_v2', 'world_v3', 'world_continent_v2', 'world_continent_v3'].includes(transitionTargetKey);
+          || ['new_world', 'new_world_v3', 'world_v2', 'world_v3', 'world_continent_v2', 'world_continent_v3', 'world_continent_v4', 'continent_01'].includes(transitionTargetKey);
         const newWorldGenerationId = ['world_v2', 'world_continent_v2'].includes(transitionTargetKey) ? 'v2' : 'v3';
 
         if (isNewWorldTransition) {
@@ -5506,19 +6579,16 @@ export default function App() {
               lastTransitionWarningAtRef.current = now;
               setLastCast(entryError);
             }
-          } else {
-            mapTransitioningRef.current = true;
-            switchMap('dungeon_01', 'dungeon_01_start', 'Entered dungeon')
-              .finally(() => {
-                mapTransitioningRef.current = false;
-              });
+          } else if (!dungeonConfirmOpenRef.current && now >= dungeonEntranceConfirmCooldownRef.current) {
+            setDungeonConfirmOpen(true);
+            setLastCast('Enter dungeon?');
           }
         } else if (currentMap === 'dungeon_01' && activeTransition?.name === 'dungeon_01_exit') {
           if (hasFinalBossAlive(enemies.current)) {
             setLastCast('Defeat the final boss first');
           } else {
             mapTransitioningRef.current = true;
-            switchMap('world', 'dungeon_01_entrance', 'Dungeon cleared')
+            switchMap(transitionTargetMapId || WORLD_V3_HUB_MAP_ID, 'dungeon_01_entrance', 'Dungeon cleared')
               .then(() => {
                 player.current.y += 130;
                 setPosition({ ...player.current });
@@ -5561,7 +6631,7 @@ export default function App() {
                 : switchMap(
                   targetMapId,
                   getTransitionTargetSpawnName(activeTransition, characterRef.current, targetMapId),
-                  targetMapId === 'world' ? 'Entered the city' : 'Changed zone',
+                  isWorldV2Map(targetMapId) ? 'Entered the city' : 'Changed zone',
                 );
               transitionPromise
                 .finally(() => {
@@ -5602,6 +6672,7 @@ export default function App() {
           x: player.current.x,
           y: player.current.y,
           facing: player.current.facing,
+          interiorId: getActiveLocalInteriorId(),
           name: characterRef.current.name,
           classId: characterRef.current.classId,
           raceId: characterRef.current.raceId,
@@ -5629,55 +6700,351 @@ export default function App() {
       }
 
       if (!onlineRoom) {
-        enemies.current = enemies.current.map((enemy) => {
+        const enemyMovementSnapshot = enemies.current;
+        enemies.current = enemyMovementSnapshot.map((enemy) => {
+          if (!canShareLocalInteriorSpace(enemy)) {
+            const idleEnemy = (enemy.state === 'aggro' || enemy.targetPlayerId || enemy.firstHitPlayerId)
+              ? resetEnemyAggro(enemy, now)
+              : enemy;
+            return updateIdleEnemyMovement(
+              idleEnemy,
+              now,
+              delta,
+              idleEnemy.type === 'boss' || idleEnemy.type?.includes?.('boss'),
+              tiledWorld.current,
+              enemyMovementSnapshot,
+            );
+          }
+
+          const isBossEnemy = enemy.type === 'boss' || enemy.type?.includes?.('boss');
+          if (deadRef.current && enemy.state === 'aggro') {
+            return updateIdleEnemyMovement(
+              resetEnemyAggro(enemy, now),
+              now,
+              delta,
+              isBossEnemy,
+              tiledWorld.current,
+              enemyMovementSnapshot,
+            );
+          }
+
           if (enemy.state !== 'aggro') {
             return updateIdleEnemyMovement(
               enemy,
               now,
               delta,
-              enemy.type === 'boss' || enemy.type?.includes?.('boss'),
+              isBossEnemy,
               tiledWorld.current,
+              enemyMovementSnapshot,
             );
           }
 
-        const toPlayerX = player.current.x - enemy.x;
-        const toPlayerY = player.current.y - enemy.y;
-        const length = Math.hypot(toPlayerX, toPlayerY) || 1;
-        const drift = Math.sin(now / 520 + enemy.wobble) * 0.35;
-        const dirX = toPlayerX / length;
-        const dirY = toPlayerY / length;
-        const attackRange = (enemy.radius ?? ENEMY.radius) + PLAYER.radius + 8;
-        const nextAttackAt = enemy.nextAttackAt ?? 0;
-
-        if (!deadRef.current && length <= attackRange && now >= nextAttackAt) {
-          const rawDamage = safeNumber(enemy.damage, enemy.type === 'boss' ? 28 : 9);
-          const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, rawDamage, now);
-          lastCombatAt.current = now;
-          const nextHp = Math.max(0, vitalsRef.current.hp - damage);
-          setVitalsValue({ ...vitalsRef.current, hp: nextHp });
-          setLastCast(damage > 0 ? `-${damage} HP` : 'Blocked');
-          if (nextHp <= 0) {
-            killPlayer();
+          let activeEnemy = enemy;
+          const toPlayerX = player.current.x - activeEnemy.x;
+          const toPlayerY = player.current.y - activeEnemy.y;
+          const length = Math.hypot(toPlayerX, toPlayerY) || 1;
+          const homePoint = isFinitePoint(activeEnemy.home) ? activeEnemy.home : activeEnemy.wanderTarget;
+          const distanceFromHome = isFinitePoint(homePoint) ? distance(activeEnemy, homePoint) : 0;
+          const leashDistance = isBossEnemy ? LOCAL_BOSS_LEASH_DISTANCE : LOCAL_ENEMY_LEASH_DISTANCE;
+          const outsideLeash = length > leashDistance || distanceFromHome > leashDistance * 1.25;
+          if (outsideLeash) {
+            const leashStartedAt = activeEnemy.leashStartedAt ?? now;
+            if (now - leashStartedAt >= LOCAL_ENEMY_LEASH_GRACE_MS || distanceFromHome > leashDistance * 1.8) {
+              return updateIdleEnemyMovement(
+                resetEnemyAggro(activeEnemy, now),
+                now,
+                delta,
+                isBossEnemy,
+                tiledWorld.current,
+                enemyMovementSnapshot,
+              );
+            }
+            activeEnemy = { ...activeEnemy, leashStartedAt };
+          } else if (activeEnemy.leashStartedAt != null) {
+            activeEnemy = { ...activeEnemy, leashStartedAt: null };
           }
 
+          const drift = Math.sin(now / 520 + activeEnemy.wobble) * 0.35;
+          const dirX = toPlayerX / length;
+          const dirY = toPlayerY / length;
+          const separation = getEnemySeparationVector(activeEnemy, enemyMovementSnapshot);
+          const meleeAttackRange = (activeEnemy.radius ?? ENEMY.radius) + PLAYER.radius + 8;
+          const nextAttackAt = activeEnemy.nextAttackAt ?? 0;
+
+          const mechanicConfig = getLocalWorldBossMechanicConfig(activeEnemy);
+          const rangedAttackConfig = mechanicConfig?.rangedAttack ?? null;
+          const attackRange = rangedAttackConfig?.range ?? meleeAttackRange;
+          const rangedAttackStartRange = rangedAttackConfig
+            ? Math.min(attackRange, safeNumber(rangedAttackConfig.attackStartRange, attackRange))
+            : attackRange;
+          if (mechanicConfig && !Number.isFinite(activeEnemy.nextMechanicAt)) {
+            activeEnemy = {
+              ...activeEnemy,
+              nextMechanicAt: now + mechanicConfig.initialDelay,
+            };
+          }
+          if (mechanicConfig?.secondary && !Number.isFinite(activeEnemy.nextSecondaryMechanicAt)) {
+            activeEnemy = {
+              ...activeEnemy,
+              nextSecondaryMechanicAt: now + mechanicConfig.secondary.initialDelay,
+            };
+          }
+
+          const mechanicUntil = safeNumber(activeEnemy.mechanicUntil, 0);
+          const activeMechanicConfig = getActiveLocalWorldBossMechanicConfig(mechanicConfig, activeEnemy.mechanicType);
+          if (activeMechanicConfig && now < mechanicUntil) {
+            const mechanicImpactAt = safeNumber(activeEnemy.mechanicImpactAt, mechanicUntil);
+            const mechanicProjectiles = Array.isArray(activeEnemy.mechanicProjectiles)
+              ? activeEnemy.mechanicProjectiles
+              : [];
+            if (mechanicProjectiles.length > 0 && !activeEnemy.mechanicResolved) {
+              const projectileHit = !deadRef.current && mechanicProjectiles.some((projectile) => (
+                localBossProjectileSweptHit(projectile, player.current, now - Math.max(1, delta * 1000), now, PLAYER.radius)
+              ));
+              if (projectileHit) {
+                const rawDamage = safeNumber(activeMechanicConfig.damage, 1);
+                const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, rawDamage, now);
+                if (damage > 0 && safeNumber(activeMechanicConfig.slowDuration, 0) > 0) {
+                  hostileSlowEffectsRef.current.push({
+                    until: now + activeMechanicConfig.slowDuration,
+                    multiplier: clamp(safeNumber(activeMechanicConfig.slowMultiplier, 0.7), 0.2, 1),
+                  });
+                }
+                lastCombatAt.current = now;
+                const nextHp = Math.max(0, vitalsRef.current.hp - damage);
+                setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+                setLastCast(damage > 0 ? `-${damage} HP · Slowed` : 'Blocked');
+                if (nextHp <= 0) killPlayer();
+              }
+              const mechanicFinished = projectileHit || now >= mechanicImpactAt;
+              return {
+                ...activeEnemy,
+                mechanicResolved: mechanicFinished,
+                attackResolved: mechanicFinished,
+                targetX: player.current.x,
+                targetY: player.current.y,
+              };
+            }
+            if (!activeEnemy.mechanicResolved && now >= mechanicImpactAt) {
+              if (!deadRef.current && length <= activeMechanicConfig.radius) {
+                const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, activeMechanicConfig.damage, now);
+                lastCombatAt.current = now;
+                const nextHp = Math.max(0, vitalsRef.current.hp - damage);
+                setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+                setLastCast(damage > 0 ? `-${damage} HP` : 'Blocked');
+                if (nextHp <= 0) killPlayer();
+              }
+              return {
+                ...activeEnemy,
+                mechanicResolved: true,
+                attackResolved: true,
+                targetX: player.current.x,
+                targetY: player.current.y,
+              };
+            }
+            return {
+              ...activeEnemy,
+              targetX: player.current.x,
+              targetY: player.current.y,
+            };
+          }
+
+          const primaryActivationRange = mechanicConfig?.activationRange ?? safeNumber(mechanicConfig?.radius, 0) * 1.35;
+          const primaryReady = Boolean(
+            mechanicConfig
+            && length <= primaryActivationRange
+            && now >= safeNumber(activeEnemy.nextMechanicAt, Number.POSITIVE_INFINITY)
+          );
+          const secondaryConfig = mechanicConfig?.secondary ?? null;
+          const secondaryReady = Boolean(
+            secondaryConfig
+            && length >= safeNumber(secondaryConfig.minRange, 0)
+            && length <= safeNumber(secondaryConfig.activationRange, 0)
+            && now >= safeNumber(activeEnemy.nextSecondaryMechanicAt, Number.POSITIVE_INFINITY)
+          );
+          const selectedMechanicConfig = secondaryReady && (!primaryReady || length > primaryActivationRange)
+            ? secondaryConfig
+            : primaryReady
+              ? mechanicConfig
+              : null;
+
+          if (selectedMechanicConfig) {
+            const mechanicProjectiles = selectedMechanicConfig.projectileSpeed
+              ? createLocalBossProjectilePattern(activeEnemy, player.current, selectedMechanicConfig, now)
+              : [];
+            const mechanicLaunchAt = mechanicProjectiles[0]?.launchAt
+              ?? now + selectedMechanicConfig.telegraphDuration;
+            const mechanicImpactAt = mechanicProjectiles.length > 0
+              ? Math.max(...mechanicProjectiles.map((projectile) => projectile.impactAt))
+              : now + selectedMechanicConfig.telegraphDuration;
+            const mechanicUntilAt = mechanicProjectiles.length > 0
+              ? mechanicImpactAt + safeNumber(selectedMechanicConfig.recoveryDuration, 300)
+              : now + selectedMechanicConfig.totalDuration;
+            const cooldownField = selectedMechanicConfig === secondaryConfig
+              ? 'nextSecondaryMechanicAt'
+              : 'nextMechanicAt';
+            return {
+              ...activeEnemy,
+              [cooldownField]: now + selectedMechanicConfig.cooldown,
+              mechanicType: selectedMechanicConfig.type,
+              mechanicStartedAt: now,
+              mechanicLaunchAt,
+              mechanicImpactAt,
+              mechanicUntil: mechanicUntilAt,
+              mechanicRadius: safeNumber(selectedMechanicConfig.radius, 0),
+              mechanicProjectiles,
+              mechanicHitPlayerIds: [],
+              mechanicResolved: false,
+              nextAttackAt: Math.max(safeNumber(activeEnemy.nextAttackAt, 0), mechanicUntilAt + 250),
+              attackStartedAt: now,
+              attackType: selectedMechanicConfig.type,
+              attackLaunchAt: mechanicLaunchAt,
+              attackImpactAt: mechanicLaunchAt,
+              attackUntil: mechanicUntilAt,
+              attackResolved: false,
+              targetX: player.current.x,
+              targetY: player.current.y,
+            };
+          }
+
+          const attackUntil = safeNumber(activeEnemy.attackUntil, 0);
+          if (now < attackUntil) {
+            const attackImpactAt = safeNumber(activeEnemy.attackImpactAt, attackUntil);
+            if (activeEnemy.attackType === 'water-bolt' && !activeEnemy.attackResolved) {
+              const attackProjectile = {
+                originX: activeEnemy.attackOriginX,
+                originY: activeEnemy.attackOriginY,
+                targetX: activeEnemy.attackTargetX,
+                targetY: activeEnemy.attackTargetY,
+                launchAt: activeEnemy.attackLaunchAt,
+                impactAt: activeEnemy.attackImpactAt,
+                radius: activeEnemy.attackProjectileRadius,
+              };
+              const attackHit = !deadRef.current && localBossProjectileSweptHit(
+                attackProjectile,
+                player.current,
+                now - Math.max(1, delta * 1000),
+                now,
+                PLAYER.radius,
+              );
+              if (attackHit) {
+                const rawDamage = safeNumber(activeEnemy.damage, isBossEnemy ? 28 : 9);
+                const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, rawDamage, now);
+                if (damage > 0 && safeNumber(rangedAttackConfig?.slowDuration, 0) > 0) {
+                  hostileSlowEffectsRef.current.push({
+                    until: now + rangedAttackConfig.slowDuration,
+                    multiplier: clamp(safeNumber(rangedAttackConfig.slowMultiplier, 0.7), 0.2, 1),
+                  });
+                }
+                lastCombatAt.current = now;
+                const nextHp = Math.max(0, vitalsRef.current.hp - damage);
+                setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+                setLastCast(damage > 0 ? `-${damage} HP · Slowed` : 'Blocked');
+                if (nextHp <= 0) killPlayer();
+              }
+              if (attackHit || now >= attackImpactAt) {
+                return {
+                  ...activeEnemy,
+                  attackResolved: true,
+                  targetX: player.current.x,
+                  targetY: player.current.y,
+                };
+              }
+              return {
+                ...activeEnemy,
+                targetX: player.current.x,
+                targetY: player.current.y,
+              };
+            }
+            if (!activeEnemy.attackResolved && now >= attackImpactAt) {
+              if (!deadRef.current && length <= meleeAttackRange) {
+                const rawDamage = safeNumber(activeEnemy.damage, isBossEnemy ? 28 : 9);
+                const damage = mitigateDamageWithCombatBuffs(combatBuffsRef.current, rawDamage, now);
+                lastCombatAt.current = now;
+                const nextHp = Math.max(0, vitalsRef.current.hp - damage);
+                setVitalsValue({ ...vitalsRef.current, hp: nextHp });
+                setLastCast(damage > 0 ? `-${damage} HP` : 'Blocked');
+                if (nextHp <= 0) killPlayer();
+              }
+              return {
+                ...activeEnemy,
+                attackResolved: true,
+                targetX: player.current.x,
+                targetY: player.current.y,
+              };
+            }
+            return {
+              ...activeEnemy,
+              targetX: player.current.x,
+              targetY: player.current.y,
+            };
+          }
+          if (!deadRef.current && length <= rangedAttackStartRange && now >= nextAttackAt) {
+            if (rangedAttackConfig) {
+              const [attackProjectile] = createLocalBossProjectilePattern(activeEnemy, player.current, {
+                ...rangedAttackConfig,
+                telegraphDuration: rangedAttackConfig.launchDelay,
+                maxTravelDistance: rangedAttackConfig.range,
+                projectileCount: 1,
+                projectileSpread: 0,
+              }, now);
+              const attackUntilAt = attackProjectile.impactAt + safeNumber(rangedAttackConfig.recoveryDuration, 180);
+              return {
+                ...activeEnemy,
+                nextAttackAt: now + safeNumber(rangedAttackConfig.cooldown, 1350),
+                attackStartedAt: now,
+                attackType: rangedAttackConfig.type,
+                attackLaunchAt: attackProjectile.launchAt,
+                attackImpactAt: attackProjectile.impactAt,
+                attackUntil: attackUntilAt,
+                attackResolved: false,
+                attackOriginX: attackProjectile.originX,
+                attackOriginY: attackProjectile.originY,
+                attackTargetX: attackProjectile.targetX,
+                attackTargetY: attackProjectile.targetY,
+                attackProjectileRadius: attackProjectile.radius,
+                targetX: player.current.x,
+                targetY: player.current.y,
+              };
+            }
+            return {
+              ...activeEnemy,
+              nextAttackAt: now + safeNumber(activeEnemy.attackCooldown, isBossEnemy ? 1100 : 850),
+              attackStartedAt: now,
+              attackType: 'melee',
+              attackLaunchAt: 0,
+              attackImpactAt: now + LOCAL_ENEMY_ATTACK_IMPACT_MS,
+              attackUntil: now + LOCAL_ENEMY_ATTACK_ANIMATION_MS,
+              attackResolved: false,
+              targetX: player.current.x,
+              targetY: player.current.y,
+            };
+          }
+          if (rangedAttackConfig && length <= safeNumber(rangedAttackConfig.preferredRange, rangedAttackConfig.range)) {
+            return {
+              ...activeEnemy,
+              targetX: player.current.x,
+              targetY: player.current.y,
+            };
+          }
+
+          let chaseX = dirX - dirY * drift + separation.x * separation.strength * 0.95;
+          let chaseY = dirY + dirX * drift + separation.y * separation.strength * 0.95;
+          const chaseLength = Math.hypot(chaseX, chaseY) || 1;
+          chaseX /= chaseLength;
+          chaseY /= chaseLength;
+          const movement = moveEnemyWithCollision(
+            tiledWorld.current,
+            activeEnemy,
+            activeEnemy.x + chaseX * (activeEnemy.speed ?? ENEMY.speed) * delta,
+            activeEnemy.y + chaseY * (activeEnemy.speed ?? ENEMY.speed) * delta,
+          );
+
           return {
-            ...enemy,
-            nextAttackAt: now + safeNumber(enemy.attackCooldown, enemy.type === 'boss' ? 1100 : 850),
+            ...activeEnemy,
+            x: movement.x,
+            y: movement.y,
           };
-        }
-
-        const movement = moveEnemyWithCollision(
-          tiledWorld.current,
-          enemy,
-          enemy.x + (dirX - dirY * drift) * (enemy.speed ?? ENEMY.speed) * delta,
-          enemy.y + (dirY + dirX * drift) * (enemy.speed ?? ENEMY.speed) * delta,
-        );
-
-        return {
-          ...enemy,
-          x: movement.x,
-          y: movement.y,
-        };
         });
       }
 
@@ -5702,15 +7069,15 @@ export default function App() {
       effects.current = effects.current
         .map((effect) => {
           try {
-          const followPoint = getEffectFollowPoint(effect);
-          if (followPoint) {
-            effect = {
-              ...effect,
-              x: followPoint.x,
-              y: followPoint.y,
-              facing: effect.type === 'channel' ? safeNumber(followPoint.facing, effect.facing) : effect.facing,
-            };
-          }
+            const followPoint = getEffectFollowPoint(effect);
+            if (followPoint) {
+              effect = {
+                ...effect,
+                x: followPoint.x,
+                y: followPoint.y,
+                facing: effect.type === 'channel' ? safeNumber(followPoint.facing, effect.facing) : effect.facing,
+              };
+            }
 
           if (effect.type === 'chain') {
             if (deadRef.current) return effect;
@@ -5745,6 +7112,8 @@ export default function App() {
               if (!target?.id || hitTargetIds.has(String(target.id))) return;
               const impactAt = effect.start + (index + 1) * segmentMs;
               if (now < impactAt) return;
+              const liveTarget = enemies.current.find((enemy) => String(enemy.id) === String(target.id));
+              if (!liveTarget || !canShareLocalInteriorSpace(liveTarget)) return;
 
               hitTargetIds.add(String(target.id));
               if (damage <= 0) return;
@@ -5764,14 +7133,24 @@ export default function App() {
 
               let totalDamageDone = 0;
               const damagedEnemies = enemies.current.map((enemy) => {
-                if (enemy.id !== target.id) return enemy;
+                if (enemy.id !== target.id || !canShareLocalInteriorSpace(enemy)) return enemy;
                 lastCombatAt.current = now;
                 const finalDamage = getAbilityDamageAgainstEnemy(effect, damage, enemy, now);
                 totalDamageDone += Math.min(enemy.hp, finalDamage);
+                const ownerId = colyseusSessionIdRef.current ?? 'local';
                 return applyAbilityDebuffsClient(
-                  { ...enemy, state: 'aggro', hp: enemy.hp - finalDamage, hitAt: now },
+                  {
+                    ...enemy,
+                    state: 'aggro',
+                    hp: enemy.hp - finalDamage,
+                    targetPlayerId: enemy.targetPlayerId ?? ownerId,
+                    firstHitPlayerId: enemy.firstHitPlayerId ?? ownerId,
+                    leashStartedAt: null,
+                    aggroDisabledUntil: null,
+                    hitAt: now,
+                  },
                   effect,
-                  colyseusSessionIdRef.current ?? 'local',
+                  ownerId,
                   now,
                 );
               });
@@ -5927,6 +7306,7 @@ export default function App() {
             let totalDamageDone = 0;
             let hitCount = 0;
             const damagedEnemies = enemies.current.map((enemy) => {
+              if (!canShareLocalInteriorSpace(enemy)) return enemy;
               const hit = abilityHitsEnemyClient(effect, start, effectFacing, enemy);
               if (!hit) return enemy;
               combatEnemyIdsRef.current.add(String(enemy.id));
@@ -5937,10 +7317,20 @@ export default function App() {
               lastCombatAt.current = now;
               const finalDamage = getAbilityDamageAgainstEnemy(effect, damage, enemy, now);
               totalDamageDone += Math.min(enemy.hp, finalDamage);
+              const ownerId = colyseusSessionIdRef.current ?? 'local';
               return applyAbilityDebuffsClient(
-                { ...enemy, state: 'aggro', hp: enemy.hp - finalDamage, hitAt: now },
+                {
+                  ...enemy,
+                  state: 'aggro',
+                  hp: enemy.hp - finalDamage,
+                  targetPlayerId: enemy.targetPlayerId ?? ownerId,
+                  firstHitPlayerId: enemy.firstHitPlayerId ?? ownerId,
+                  leashStartedAt: null,
+                  aggroDisabledUntil: null,
+                  hitAt: now,
+                },
                 effect,
-                colyseusSessionIdRef.current ?? 'local',
+                ownerId,
                 now,
               );
             });
@@ -6010,6 +7400,7 @@ export default function App() {
         };
         const candidateTargets = enemies.current
           .filter((enemy) => enemy && enemy.hp > 0)
+          .filter(canShareLocalInteriorSpace)
           .filter((enemy) => distance(enemy, casterPoint) <= autoBoltRange)
           .filter((enemy) => {
             const sameMap = !currentMapIdRef.current || !enemy.mapId || getGameplayMapSpaceId(enemy.mapId) === getGameplayMapSpaceId(currentMapIdRef.current);
@@ -6075,7 +7466,7 @@ export default function App() {
         ));
         const resourceConfig = getResourceConfig(activeCharacter);
         const hasNearbyAggro = enemies.current.some((enemy) => (
-          enemy.state === 'aggro' && distance(enemy, player.current) < 220
+          canShareLocalInteriorSpace(enemy) && enemy.state === 'aggro' && distance(enemy, player.current) < 220
         ));
         const outOfCombat = !hasNearbyAggro && now - lastCombatAt.current > PLAYER.outOfCombatDelay;
         let nextVitals = vitalsRef.current;
@@ -6262,7 +7653,6 @@ export default function App() {
   );
   const worldMapZoomValue = clamp(safeNumber(worldMapZoom, 1), 1, WORLD_MAP_MAX_ZOOM);
   const isWorldV2CurrentMap = isWorldV2Map(currentMapId);
-  const worldMapGenerationId = isWorldV2CurrentMap ? getWorldGenerationIdFromMapId(currentMapId) : null;
   const registryTileSize = safeNumber(worldV2Registry?.tileSize, WORLD.tile);
   const registryZones = isWorldV2CurrentMap
     ? (worldV2Registry?.regions ?? []).map((region) => createRegistryZone(region, registryTileSize))
@@ -6322,8 +7712,12 @@ export default function App() {
     && point.x <= worldMapView.x + worldMapView.width
     && point.y <= worldMapView.y + worldMapView.height
   );
-  const minimapEnemies = SHOW_MAP_ENEMY_DOTS ? enemies.current.filter(pointInMinimapView).slice(0, 80) : [];
-  const mapEnemies = SHOW_MAP_ENEMY_DOTS ? enemies.current.filter(pointInWorldMapView).slice(0, 180) : [];
+  const minimapEnemies = SHOW_MAP_ENEMY_DOTS
+    ? enemies.current.filter(canShareLocalInteriorSpace).filter(pointInMinimapView).slice(0, 80)
+    : [];
+  const mapEnemies = SHOW_MAP_ENEMY_DOTS
+    ? enemies.current.filter(canShareLocalInteriorSpace).filter(pointInWorldMapView).slice(0, 180)
+    : [];
   const minimapPlayers = displayedRemotePlayersRef.current.filter(pointInMinimapView).slice(0, 12);
   const mapPlayers = displayedRemotePlayersRef.current.filter(pointInWorldMapView).slice(0, 30);
   const minimapPercent = (point, axis) => {
@@ -6347,14 +7741,19 @@ export default function App() {
   const focusedMapZoneDescription = getZoneDescription(focusedMapZone);
   const focusedMapZoneLevel = getZoneLevelLabel(focusedMapZone);
   const hasWorldMapOverviewImage = Boolean(
-    worldMapGenerationId === 'v3'
+    isWorldV2CurrentMap
     && worldMapOverviewReady
     && worldMapOverviewImageRef.current,
   );
   const isWorldMapOverviewZoom = isFullWorldMapMode && worldMapZoomValue <= 1.05;
+  const activeLocalInteriorIdForMap = getActiveLocalInteriorId();
   const registryLandmarks = isWorldV2CurrentMap
     ? (worldV2Registry?.landmarks ?? [])
       .filter((landmark) => landmark.showOnMap !== false)
+      .filter((landmark) => {
+        const landmarkInteriorId = getLocalInteriorId(landmark);
+        return !landmarkInteriorId || landmarkInteriorId === activeLocalInteriorIdForMap;
+      })
       .map((landmark) => ({
         id: landmark.id,
         x: safeNumber(landmark.x, 0) * registryTileSize,
@@ -6401,6 +7800,7 @@ export default function App() {
     .sort((a, b) => safeNumber(a.quest.chainIndex, 0) - safeNumber(b.quest.chainIndex, 0));
   const mainQuestEntry = getMainQuest(character);
   const selectedQuestLogEntry = mainQuestEntry ?? questLogEntries[0] ?? null;
+  const selectedQuestLogId = selectedQuestLogEntry?.questId ?? selectedQuestLogEntry?.id ?? null;
   const mainQuestId = mainQuestEntry?.id ?? mainQuestEntry?.questId ?? null;
   const questMarkerEntries = questLogEntries
     .map((entry) => ({
@@ -6471,6 +7871,20 @@ export default function App() {
       ? minimapWorldHeight / 2
       : clamp(centerY, viewHeight / 2, minimapWorldHeight - viewHeight / 2),
   });
+  const getWorldMapPointFromEvent = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const x = worldMapView.x + ((event.clientX - rect.left) / rect.width) * worldMapView.width;
+    const y = worldMapView.y + ((event.clientY - rect.top) / rect.height) * worldMapView.height;
+    const mapId = isWorldV2CurrentMap
+      ? getWorldV2MapIdFromPoint(x, y, getWorldGenerationIdFromMapId(currentMapId)) ?? currentMapId
+      : currentMapId;
+    return {
+      x: clamp(x, 0, minimapWorldWidth),
+      y: clamp(y, 0, minimapWorldHeight),
+      mapId,
+    };
+  };
   const handleWorldMapPointerDown = (event) => {
     if (!isFullWorldMapMode || worldMapZoomValue <= 1.001 || event.button !== 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -6521,20 +7935,19 @@ export default function App() {
       suppressWorldMapClickRef.current = false;
       return;
     }
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const x = worldMapView.x + ((event.clientX - rect.left) / rect.width) * worldMapView.width;
-    const y = worldMapView.y + ((event.clientY - rect.top) / rect.height) * worldMapView.height;
-    const waypointMapId = isWorldV2CurrentMap
-      ? getWorldV2MapIdFromPoint(x, y, getWorldGenerationIdFromMapId(currentMapId)) ?? currentMapId
-      : currentMapId;
-    const nextWaypoint = {
-      x: clamp(x, 0, minimapWorldWidth),
-      y: clamp(y, 0, minimapWorldHeight),
-      mapId: waypointMapId,
-    };
+    const nextWaypoint = getWorldMapPointFromEvent(event);
+    if (!nextWaypoint) return;
     setWorldMapWaypoint(nextWaypoint);
     setLastCast(`Waypoint: ${Math.round(nextWaypoint.x)}, ${Math.round(nextWaypoint.y)}`);
+  };
+  const handleWorldMapDoubleClick = (event) => {
+    if (!isAdmin || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressWorldMapClickRef.current = false;
+    const target = getWorldMapPointFromEvent(event);
+    if (!target) return;
+    adminTeleportToLocation(target);
   };
   const handleWorldMapWheel = (event) => {
     event.stopPropagation();
@@ -6585,9 +7998,22 @@ export default function App() {
   const selectedPlayerHpPercent = selectedPlayer
     ? (clamp(selectedPlayer.hp ?? selectedPlayer.maxHp, 0, selectedPlayer.maxHp ?? 1) / Math.max(1, selectedPlayer.maxHp ?? 1)) * 100
     : 0;
+  const dayNightModeLabel = dayNightDebugState.mode === 'forced' ? 'Forced' : 'Auto';
+  const dayNightPhaseLabel = String(dayNightDebugState.phase ?? 'day');
+  const dayNightForcedPhase = dayNightDebugState.forcedPhase ?? null;
+  const dayNightSpeedMultiplier = safeNumber(dayNightDebugState.speedMultiplier, 1);
+  const weatherModeLabel = weatherDebugState.mode === 'forced' ? 'Forced' : 'Auto';
+  const weatherPhaseLabel = String(weatherDebugState.phase ?? 'clear');
+  const weatherForcedPhase = weatherDebugState.forcedWeather ?? null;
+  const weatherSpeedMultiplier = safeNumber(weatherDebugState.speedMultiplier, 1);
+  const weatherTargetLabel = weatherDebugState.transition?.from === weatherDebugState.transition?.to
+    ? weatherDebugState.remainingLabel
+    : weatherDebugState.transitionLabel;
 
   React.useEffect(() => {
     const getTilesetForGid = (tilesets, gid) => [...tilesets].reverse().find((candidate) => gid >= candidate.firstgid) ?? null;
+    const overviewObjectLayerNames = new Set(['tamzia_river_tribe', 'tamzia_forest', 'tamzia_bandit_forest', 'tamzia_dense_forest']);
+    const tiledGidMask = 0x1fffffff;
 
     const parseMapColor = (color) => {
       const match = String(color ?? '').trim().match(/^#?([0-9a-f]{6})$/i);
@@ -6696,16 +8122,79 @@ export default function App() {
       return canvas;
     };
 
+    const normalizeOverviewLayerName = (layer) => String(layer?.name ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    const getLayerProperty = (layer, propertyName) => (
+      (layer?.properties ?? []).find((property) => property.name === propertyName)?.value
+    );
+    const getLayerInteriorId = (layer) => normalizeInteriorId(
+      getLayerProperty(layer, 'interiorId')
+      ?? getLayerProperty(layer, 'caveId'),
+    );
+    const isCaveInteriorOverviewLayer = (layer) => [
+      'caveinteriors',
+      'cave_interiors',
+      'cavedetails',
+      'cave_details',
+    ].includes(normalizeOverviewLayerName(layer));
+    const isCaveRoofOverviewLayer = (layer) => [
+      'caveroofs',
+      'cave_roofs',
+    ].includes(normalizeOverviewLayerName(layer));
+    const isCaveEntranceOverviewLayer = (layer) => [
+      'caveentrances',
+      'cave_entrances',
+    ].includes(normalizeOverviewLayerName(layer));
+    const isOverviewCollisionLayer = (layer) => normalizeOverviewLayerName(layer).includes('collision');
+    const shouldDrawOverviewLayer = (layer, activeInteriorId = null) => {
+      if (layer.type !== 'tilelayer' || layer.visible === false || !hasTileData(layer) || isOverviewCollisionLayer(layer)) {
+        return false;
+      }
+      const layerInteriorId = getLayerInteriorId(layer);
+      if (isCaveInteriorOverviewLayer(layer)) {
+        return Boolean(activeInteriorId) && (!layerInteriorId || layerInteriorId === activeInteriorId);
+      }
+      if (isCaveRoofOverviewLayer(layer)) {
+        return false;
+      }
+      return true;
+    };
+    const shouldDrawOverviewObjectLayer = (layer) => (
+      layer?.type === 'objectgroup'
+      && layer.visible !== false
+      && overviewObjectLayerNames.has(layer.name)
+    );
+    const getOverviewObjectProperty = (object, propertyName) => (
+      object?.props?.[propertyName]
+      ?? (object?.properties ?? []).find((property) => property.name === propertyName)?.value
+    );
+    const getOverviewObjectAlpha = (object) => {
+      const type = String(object?.type || getOverviewObjectProperty(object, 'type') || '').toLowerCase();
+      if (type.includes('tree')) return 0.66;
+      if (type.includes('bush')) return 0.52;
+      if (type.includes('detail')) return 0.32;
+      return 0.44;
+    };
+    const hasDynamicCaveOverviewLayers = (tiledMap) => {
+      const mapHasCaveLayer = (sourceMap) => (sourceMap?.layers ?? []).some((layer) => (
+        layer.type === 'tilelayer'
+        && hasTileData(layer)
+        && (isCaveInteriorOverviewLayer(layer) || isCaveRoofOverviewLayer(layer) || isCaveEntranceOverviewLayer(layer))
+      ));
+      if (tiledMap?.isRegionWorld) return tiledMap.loadedRegions.some((region) => mapHasCaveLayer(region.map));
+      return mapHasCaveLayer(tiledMap?.map);
+    };
+
     const buildMapOverviewCanvas = (tiled) => {
       const map = tiled?.map;
       if (!map || !Array.isArray(tiled?.tilesets)) return null;
+      const activeOverviewInteriorId = getActiveInteriorId();
       const tilesetKey = tiled.tilesets
         .map((tileset) => `${tileset.firstgid}:${tileset.image?.currentSrc ?? tileset.image?.src ?? ''}:${tileset.image?.naturalWidth ?? 0}`)
         .join('|');
       const regionKey = tiled.isRegionWorld
         ? tiled.loadedRegions.map((region) => `${region.mapId}:${region.offsetX}:${region.offsetY}`).join('|')
         : '';
-      const key = `${tiled.mapId}:${map.width}x${map.height}:${tilesetKey}:${regionKey}`;
+      const key = `${tiled.mapId}:${map.width}x${map.height}:${tilesetKey}:${regionKey}:interior:${activeOverviewInteriorId ?? 'outside'}`;
       if (mapOverviewCacheRef.current.key === key && mapOverviewCacheRef.current.canvas) {
         return mapOverviewCacheRef.current.canvas;
       }
@@ -6763,7 +8252,7 @@ export default function App() {
 
       const drawOverviewMap = (sourceMap, tilesets, offsetTileX = 0, offsetTileY = 0) => {
         sourceMap.layers
-          .filter((layer) => layer.type === 'tilelayer' && layer.visible !== false && layer.name !== 'Collision' && hasTileData(layer))
+          .filter((layer) => shouldDrawOverviewLayer(layer, activeOverviewInteriorId))
           .forEach((layer) => {
             for (let row = 0; row < sourceMap.height; row += overviewTileScale) {
               for (let col = 0; col < sourceMap.width; col += overviewTileScale) {
@@ -6780,6 +8269,36 @@ export default function App() {
               }
             }
           });
+
+        sourceMap.layers
+          .filter(shouldDrawOverviewObjectLayer)
+          .forEach((layer) => {
+            const tileWidth = safeNumber(sourceMap.tilewidth, WORLD.tile);
+            const tileHeight = safeNumber(sourceMap.tileheight, WORLD.tile);
+            (layer.objects ?? []).forEach((object) => {
+              if (object.visible === false) return;
+              const gid = safeNumber(object.gid, 0) & tiledGidMask;
+              if (!gid) return;
+              const color = getTileColor(gid, layer.name, tilesets);
+              if (!color) return;
+              const objectWidth = Math.max(1, safeNumber(object.width, tileWidth));
+              const objectHeight = Math.max(1, safeNumber(object.height, tileHeight));
+              const startTileX = offsetTileX + safeNumber(object.x, 0) / tileWidth;
+              const endTileX = offsetTileX + (safeNumber(object.x, 0) + objectWidth) / tileWidth;
+              const startTileY = offsetTileY + (safeNumber(object.y, 0) - objectHeight) / tileHeight;
+              const endTileY = offsetTileY + safeNumber(object.y, 0) / tileHeight;
+              const x = Math.floor(startTileX / overviewTileScale);
+              const y = Math.floor(startTileY / overviewTileScale);
+              const width = Math.max(1, Math.ceil(endTileX / overviewTileScale) - x);
+              const height = Math.max(1, Math.ceil(endTileY / overviewTileScale) - y);
+
+              context.save();
+              context.globalAlpha = getOverviewObjectAlpha(object);
+              context.fillStyle = color;
+              context.fillRect(x, y, width, height);
+              context.restore();
+            });
+          });
       };
 
       if (tiled.isRegionWorld) {
@@ -6793,7 +8312,7 @@ export default function App() {
         });
       } else {
         map.layers
-          .filter((layer) => layer.type === 'tilelayer' && layer.visible !== false && layer.name !== 'Collision' && hasTileData(layer))
+          .filter((layer) => shouldDrawOverviewLayer(layer, activeOverviewInteriorId))
           .forEach((layer) => {
             for (let row = 0; row < map.height; row += overviewTileScale) {
               for (let col = 0; col < map.width; col += overviewTileScale) {
@@ -6841,8 +8360,10 @@ export default function App() {
       context.clearRect(0, 0, width, height);
       context.fillStyle = '#20362f';
       context.fillRect(0, 0, width, height);
-      const useStaticWorldOverview = key === 'world' && hasWorldMapOverviewImage;
-      const useRegistryOverview = key === 'world' && !useStaticWorldOverview && isWorldV2CurrentMap && worldV2Registry;
+      const activeOverviewInteriorId = getActiveInteriorId();
+      const useDynamicCaveOverview = Boolean(activeOverviewInteriorId) && hasDynamicCaveOverviewLayers(tiled);
+      const useStaticWorldOverview = key === 'world' && hasWorldMapOverviewImage && !useDynamicCaveOverview;
+      const useRegistryOverview = key === 'world' && !useStaticWorldOverview && !useDynamicCaveOverview && isWorldV2CurrentMap && worldV2Registry;
       const overview = useStaticWorldOverview
         ? worldMapOverviewImageRef.current
         : (
@@ -7251,7 +8772,7 @@ export default function App() {
             )}
           </aside>
         )}
-        {questLogEntries.length > 0 && (
+        {questLogEntries.length > 0 && !inventoryOpen && (
           <aside className="quest-tracker" aria-label="Active quests">
             {questLogEntries.map((entry) => (
               <button
@@ -7345,7 +8866,104 @@ export default function App() {
               <span>Esc</span>
             </div>
             <button type="button" onClick={() => setGameMenuOpen(false)}>Resume</button>
-            {isAdmin && <button type="button" onClick={openAdminPlayers}>Players</button>}
+            {isAdmin && (
+              <section className="game-menu-admin-section" aria-label="Admin Panel">
+                <div className="game-menu-admin-heading">
+                  <Monitor size={14} />
+                  <strong>Admin Panel</strong>
+                </div>
+                <div className="admin-panel-actions">
+                  <button type="button" onClick={adminSetMaxLevel}>Max Level</button>
+                  <button type="button" onClick={openAdminPlayers}>Players</button>
+                </div>
+                <section className="admin-time-section" aria-label="World Time">
+                  <div className="admin-time-title">World Time</div>
+                  <div className="admin-time-readout">
+                    <span>Time <strong>{dayNightDebugState.time}</strong></span>
+                    <span>Phase <strong>{dayNightPhaseLabel}</strong></span>
+                    <span>Speed <strong>{dayNightSpeedMultiplier}x</strong></span>
+                    <span>Mode <strong>{dayNightModeLabel}</strong></span>
+                  </div>
+                  <div className="admin-time-buttons">
+                    {DAY_NIGHT_PHASES.map((phase) => {
+                      const selected = phase === 'auto'
+                        ? !dayNightForcedPhase
+                        : dayNightForcedPhase === phase;
+                      return (
+                        <button
+                          className={selected ? 'selected' : ''}
+                          key={phase}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setAdminWorldTimePhase(phase)}
+                        >
+                          {phase}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="admin-time-buttons speed">
+                    {DAY_NIGHT_SPEEDS.map((speed) => {
+                      const selected = Math.abs(dayNightSpeedMultiplier - speed) < 0.001;
+                      return (
+                        <button
+                          className={selected ? 'selected' : ''}
+                          key={speed}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setAdminWorldTimeSpeed(speed)}
+                        >
+                          {speed}x
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+                <section className="admin-time-section" aria-label="Weather">
+                  <div className="admin-time-title">Weather</div>
+                  <div className="admin-time-readout">
+                    <span>State <strong>{weatherPhaseLabel}</strong></span>
+                    <span>Next <strong>{weatherTargetLabel}</strong></span>
+                    <span>Speed <strong>{weatherSpeedMultiplier}x</strong></span>
+                    <span>Mode <strong>{weatherModeLabel}</strong></span>
+                  </div>
+                  <div className="admin-time-buttons">
+                    {WEATHER_PHASES.map((weather) => {
+                      const selected = weather === 'auto'
+                        ? !weatherForcedPhase
+                        : weatherForcedPhase === weather;
+                      return (
+                        <button
+                          className={selected ? 'selected' : ''}
+                          key={weather}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setAdminWeatherPhase(weather)}
+                        >
+                          {weather}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="admin-time-buttons speed">
+                    {WEATHER_SPEEDS.map((speed) => {
+                      const selected = Math.abs(weatherSpeedMultiplier - speed) < 0.001;
+                      return (
+                        <button
+                          className={selected ? 'selected' : ''}
+                          key={speed}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setAdminWeatherSpeed(speed)}
+                        >
+                          {speed}x
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              </section>
+            )}
             <button type="button" onClick={() => setSettingsOpen((open) => !open)}>Settings</button>
             <button type="button" onClick={saveCurrentCharacter}>Character Menu</button>
             <button className="danger-button" type="button" onClick={exitGame}>Exit Game</button>
@@ -7496,6 +9114,15 @@ export default function App() {
             <div>
               <button className="danger-button" type="button" onClick={confirmDestroyItem}>Yes</button>
               <button type="button" onClick={() => setDestroyConfirmItemId(null)}>No</button>
+            </div>
+          </div>
+        )}
+        {character && dungeonConfirmOpen && (
+          <div className="dungeon-confirm">
+            <strong>Enter dungeon?</strong>
+            <div>
+              <button className="confirm-button" type="button" onClick={confirmDungeonEntry}>Yes</button>
+              <button type="button" onClick={cancelDungeonEntry}>No</button>
             </div>
           </div>
         )}
@@ -7843,6 +9470,15 @@ export default function App() {
                     <span>{selectedQuestLogEntry.quest.objectiveText}</span>
                     <small>{getQuestProgressText(selectedQuestLogEntry.activeQuest, selectedQuestLogEntry.quest)}</small>
                     <em>{selectedQuestLogEntry.quest.xpReward ?? 0} XP reward</em>
+                    <div className="quest-actions">
+                      <button
+                        className="secondary"
+                        type="button"
+                        onClick={() => abandonQuest(selectedQuestLogId)}
+                      >
+                        Abandon
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <p className="quest-empty">Accept a quest from a quest giver.</p>
@@ -8118,6 +9754,7 @@ export default function App() {
               className={`world-map-canvas ${isFullWorldMapMode ? 'full-world' : 'zone-world'} ${isWorldMapOverviewZoom ? 'overview-world' : ''} ${worldMapDragging ? 'dragging' : ''}`}
               onClick={handleWorldMapClick}
               onContextMenu={handleWorldMapContextMenu}
+              onDoubleClick={handleWorldMapDoubleClick}
               onPointerCancel={finishWorldMapDrag}
               onPointerDown={handleWorldMapPointerDown}
               onPointerMove={handleWorldMapPointerMove}
@@ -8245,7 +9882,7 @@ export default function App() {
             </div>
             <div className="map-waypoint-readout">
               {isFullWorldMapMode
-                ? 'Click to set waypoint | Drag to pan | Mouse wheel zooms at cursor'
+                ? `${isAdmin ? 'Double-click to teleport | ' : ''}Click to set waypoint | Drag to pan | Mouse wheel zooms at cursor`
                 : `${selectedMapZoneTitle || 'Current zone'}${focusedMapZoneDescription ? ` | ${focusedMapZoneDescription}` : ''}${focusedMapZoneLevel ? ` | ${focusedMapZoneLevel}` : ''}`}
               {worldMapWaypoint && !isFullWorldMapMode
                 ? ` | Waypoint ${Math.round(worldMapWaypoint.x)}, ${Math.round(worldMapWaypoint.y)} | ${waypointDistance} px`

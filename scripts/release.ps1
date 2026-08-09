@@ -6,6 +6,8 @@ $PackageLockPath = Join-Path $Root "package-lock.json"
 $UpdatesDir = Join-Path $Root "updates"
 $ReleaseDir = Join-Path $Root "release"
 $LatestManifestPath = Join-Path $UpdatesDir "latest.yml"
+$CacheDir = Join-Path $Root ".cache"
+$WorldMapAssetHashPath = Join-Path $CacheDir "world-map-assets-input.sha256"
 $KeepReleaseCount = 0
 
 function Invoke-Step {
@@ -148,6 +150,113 @@ function Remove-OldReleaseInstallers {
   Remove-OldInstallerFiles -Directory $ReleaseDir -Label "release"
 }
 
+function Get-RelativePath {
+  param([string]$Path)
+
+  $rootPath = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  if (-not $fullPath.StartsWith($rootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $fullPath
+  }
+
+  return $fullPath.Substring($rootPath.Length).TrimStart('\', '/').Replace('\', '/')
+}
+
+function Get-WorldMapAssetInputFiles {
+  $patterns = @(
+    "public\maps\world_map\world_map_manifest.json",
+    "public\maps\world_map\continents\continent_01\continent_01.world",
+    "public\maps\world_map\continents\continent_01\continent_01_manifest.json",
+    "public\maps\world_map\continents\continent_01\continent_01_regions.json",
+    "public\maps\world_map\continents\continent_01\regions\continent_01_region_*.tmj",
+    "public\maps\world_map\continents\continent_01\markers\*.json",
+    "public\maps\world_map\continents\continent_01\tilesets\*.tsx",
+    "public\maps\world_map\continents\continent_01\tilesets\*.png",
+    "scripts\apply-brightwater-dungeon-content.mjs",
+    "scripts\generate-cave-interior-assets.mjs",
+    "scripts\generate-world-v3-chunks.mjs",
+    "scripts\generate-world-v3-overview.mjs"
+  )
+
+  $files = New-Object System.Collections.Generic.List[string]
+  foreach ($pattern in $patterns) {
+    Get-ChildItem -Path (Join-Path $Root $pattern) -File -ErrorAction SilentlyContinue |
+      ForEach-Object { $files.Add($_.FullName) }
+  }
+
+  return $files |
+    Sort-Object -Unique |
+    Sort-Object { Get-RelativePath $_ }
+}
+
+function Get-WorldMapAssetInputHash {
+  $files = @(Get-WorldMapAssetInputFiles)
+  if ($files.Count -eq 0) {
+    throw "No world map asset input files were found."
+  }
+
+  $lines = $files | ForEach-Object {
+    $relativePath = Get-RelativePath $_
+    $fileHash = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$relativePath|$fileHash"
+  }
+
+  $hashInput = [System.Text.Encoding]::UTF8.GetBytes(($lines -join "`n"))
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $hashBytes = $sha256.ComputeHash($hashInput)
+  } finally {
+    $sha256.Dispose()
+  }
+
+  return -join ($hashBytes | ForEach-Object { $_.ToString("x2") })
+}
+
+function Invoke-WorldMapAssetUpdateIfNeeded {
+  $currentHash = Get-WorldMapAssetInputHash
+  $previousHash = $null
+  if (Test-Path $WorldMapAssetHashPath) {
+    $previousHash = (Get-Content $WorldMapAssetHashPath -Raw).Trim()
+  }
+
+  $requiredOutputs = @(
+    (Join-Path $Root "public\maps\world_map\continents\continent_01\continent_01_overview.png"),
+    (Join-Path $Root "public\maps\world_map\continents\continent_01\regions\chunks\continent_01_chunks.json")
+  )
+  $missingOutputs = @($requiredOutputs | Where-Object { -not (Test-Path $_) })
+
+  if ($previousHash -eq $currentHash -and $missingOutputs.Count -eq 0) {
+    Write-Host "World map Tiled inputs are unchanged; skipping world map asset generation." -ForegroundColor Green
+    return
+  }
+
+  if ($missingOutputs.Count -gt 0) {
+    Write-Host "World map generated outputs are missing; regenerating." -ForegroundColor Yellow
+  } elseif ($previousHash) {
+    Write-Host "World map Tiled inputs changed; regenerating runtime chunks and overview PNG." -ForegroundColor Yellow
+  } else {
+    Write-Host "No world map generation cache found; generating runtime chunks and overview PNG." -ForegroundColor Yellow
+  }
+
+  npm.cmd run generate:world:v4-chunks
+  Assert-CommandSucceeded "continent_01 chunk generation"
+
+  npm.cmd run generate:world:v4-overview
+  Assert-CommandSucceeded "continent_01 overview generation"
+
+  # Chunk preparation also updates generated Tiled inputs (the dungeon region
+  # map, continent manifests, and generated tilesets). Cache the fingerprint of
+  # that final on-disk state, not the fingerprint captured before generation.
+  # Otherwise the next unchanged release always sees our own generated changes
+  # and needlessly regenerates the entire world again.
+  $finalHash = Get-WorldMapAssetInputHash
+  New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($WorldMapAssetHashPath, $finalHash + [Environment]::NewLine, $utf8NoBom)
+
+  Write-Host "World map asset generation cache updated." -ForegroundColor Green
+}
+
 try {
   Set-Location $Root
 
@@ -167,24 +276,34 @@ try {
     throw "Version must look like 0.1.6 or 1.0.0."
   }
 
-  if ((Compare-Semver $newVersion $currentVersion) -le 0) {
-    throw "Next version must be higher than current version $currentVersion."
+  $versionComparison = Compare-Semver $newVersion $currentVersion
+  if ($versionComparison -lt 0) {
+    throw "Next version cannot be lower than current version $currentVersion."
   }
 
   Write-Host ""
-  Write-Host "This will build update $currentVersion -> $newVersion."
+  if ($versionComparison -eq 0) {
+    Write-Host "This will rebuild current version $newVersion." -ForegroundColor Yellow
+    Write-Host "Use this only to retry an incomplete local release." -ForegroundColor Yellow
+  } else {
+    Write-Host "This will build update $currentVersion -> $newVersion."
+  }
   $confirm = Read-Host "Continue? Type y"
   if ($confirm.Trim().ToLowerInvariant() -ne "y") {
     Write-Host "Cancelled."
     exit 0
   }
 
-  Invoke-Step "[1/5] Updating package version" {
-    npm.cmd version $newVersion --no-git-tag-version
-    Assert-CommandSucceeded "npm version"
+  Invoke-Step "[1/9] Updating package version" {
+    if ($versionComparison -eq 0) {
+      Write-Host "Package version is already $newVersion; keeping it for this retry." -ForegroundColor Green
+    } else {
+      npm.cmd version $newVersion --no-git-tag-version
+      Assert-CommandSucceeded "npm version"
+    }
   }
 
-  Invoke-Step "[2/5] Installing dependencies if needed" {
+  Invoke-Step "[2/9] Installing dependencies if needed" {
     if (Test-Path (Join-Path $Root "node_modules")) {
       Write-Host "node_modules exists, skipping npm install."
     } else {
@@ -193,17 +312,26 @@ try {
     }
   }
 
-  Invoke-Step "[3/5] Building Electron installer" {
+  Invoke-Step "[3/9] Updating world map assets if Tiled inputs changed" {
+    Invoke-WorldMapAssetUpdateIfNeeded
+  }
+
+  Invoke-Step "[4/9] Building Electron installer" {
     npm.cmd run electron:dist
     Assert-CommandSucceeded "electron build"
   }
 
-  Invoke-Step "[4/5] Preparing client update files" {
+  Invoke-Step "[5/9] Verifying packaged client freshness" {
+    npm.cmd run verify:packaged-client
+    Assert-CommandSucceeded "packaged client verification"
+  }
+
+  Invoke-Step "[6/9] Preparing client update files" {
     npm.cmd run update:prepare
     Assert-CommandSucceeded "update preparation"
   }
 
-  Invoke-Step "[5/6] Verifying update manifest" {
+  Invoke-Step "[7/9] Verifying update manifest" {
     if (-not (Test-Path $LatestManifestPath)) {
       throw "updates/latest.yml was not generated."
     }
@@ -227,7 +355,7 @@ try {
 
     $latestJson = @{
       version = $newVersion
-      url = "http://localhost:2567/updates/$([uri]::EscapeDataString($updatePackageName))"
+      url = [uri]::EscapeDataString($updatePackageName)
       notes = "Version $newVersion"
     } | ConvertTo-Json -Depth 4
 
@@ -239,7 +367,12 @@ try {
     Write-Host "Update package: $updatePackageName" -ForegroundColor Green
   }
 
-  Invoke-Step "[6/6] Cleaning old installer archives" {
+  Invoke-Step "[8/9] Verifying updater payload matches tested client" {
+    npm.cmd run verify:update-payload
+    Assert-CommandSucceeded "update payload verification"
+  }
+
+  Invoke-Step "[9/9] Cleaning old installer archives" {
     Remove-OldUpdateInstallers
     Remove-OldReleaseInstallers
   }
@@ -258,6 +391,8 @@ try {
   Write-Host ""
   Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
   Write-Host ""
-  Write-Host "No files were deleted. Check the message above and run release.bat again."
+  Write-Host "Release stopped before completion and nothing was uploaded automatically."
+  Write-Host "Generated files or the package version may remain from completed steps."
+  Write-Host "Fix the error, then run release.bat again with the same version to retry."
   exit 1
 }

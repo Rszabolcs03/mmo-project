@@ -343,6 +343,19 @@ function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function getMovementStateFromDisplacement(previous, current, deltaSeconds, fallbackFacing = 0) {
+  const delta = Math.max(0.001, safeNumber(deltaSeconds, 0.001));
+  const moveX = safeNumber(current?.x) - safeNumber(previous?.x);
+  const moveY = safeNumber(current?.y) - safeNumber(previous?.y);
+  const moved = Math.hypot(moveX, moveY) > 0.001;
+  return {
+    vx: moved ? moveX / delta : 0,
+    vy: moved ? moveY / delta : 0,
+    facing: moved ? Math.atan2(moveY, moveX) : safeNumber(fallbackFacing, 0),
+    moved,
+  };
+}
+
 function distanceToSegment(point, start, end) {
   if (!isFinitePoint(point) || !isFinitePoint(start) || !isFinitePoint(end)) return Number.POSITIVE_INFINITY;
   const lineX = end.x - start.x;
@@ -1216,6 +1229,26 @@ function getRepairAllCost(character) {
   return (character?.inventory ?? []).reduce((total, item) => total + getRepairCost(item), 0);
 }
 
+function normalizeQuestEnemyKind(value) {
+  return String(value ?? '').toLowerCase().trim().replace(/[_\s]+/g, '-');
+}
+
+function getQuestKillObjectives(quest) {
+  if (!quest || quest.type !== 'kill') return [];
+  const explicitObjectives = Array.isArray(quest.objectives)
+    ? quest.objectives
+      .map((objective) => {
+        const enemyKind = normalizeQuestEnemyKind(objective?.enemyKind ?? objective?.kind ?? objective?.id);
+        const required = Math.max(1, Math.floor(safeNumber(objective?.required, 1)));
+        return enemyKind ? { ...objective, enemyKind, required } : null;
+      })
+      .filter(Boolean)
+    : [];
+  if (explicitObjectives.length > 0) return explicitObjectives;
+  const enemyKind = normalizeQuestEnemyKind(quest.enemyKind);
+  return enemyKind ? [{ enemyKind, required: Math.max(1, Math.floor(safeNumber(quest.required, 1))) }] : [];
+}
+
 function getScaledQuestXpReward(quest) {
   if (!quest) return 0;
   if (quest.xpRewardLocked) return Math.max(0, safeNumber(quest.xpReward, 0));
@@ -1229,7 +1262,25 @@ function normalizeQuestState(quests = {}) {
     .filter(([questId, quest]) => questId && quest)
     .map(([questId, quest]) => {
       const questSnapshot = quest.quest ? { ...quest.quest } : null;
-      if (questSnapshot?.type === 'kill' && safeNumber(questSnapshot.required, 0) !== 1 && !questSnapshot.requiredLocked) {
+      if (
+        questSnapshot?.id === 'world_region_0_0_v3:tamzia:redscar-highwaymen'
+        && (!Array.isArray(questSnapshot.objectives) || questSnapshot.objectives.length === 0)
+      ) {
+        questSnapshot.required = 13;
+        questSnapshot.requiredLocked = true;
+        questSnapshot.objectiveText = 'Defeat 12 Redscar Highwaymen and Redscar Captain Varn';
+        questSnapshot.description = 'Redscar Highwaymen have made a hard camp on the southern road. Break the camp and bring down Captain Varn inside the hideout.';
+        questSnapshot.objectives = [
+          { enemyKind: 'redscar-highwayman', required: 12, label: 'Highwaymen' },
+          { enemyKind: 'redscar-captain', required: 1, label: 'Captain Varn' },
+        ];
+      }
+      const explicitObjectives = Array.isArray(questSnapshot?.objectives) && questSnapshot.objectives.length > 0;
+      if (questSnapshot?.type === 'kill' && explicitObjectives) {
+        const objectives = getQuestKillObjectives(questSnapshot);
+        questSnapshot.objectives = objectives;
+        questSnapshot.required = objectives.reduce((total, objective) => total + objective.required, 0);
+      } else if (questSnapshot?.type === 'kill' && safeNumber(questSnapshot.required, 0) !== 1 && !questSnapshot.requiredLocked) {
         const minimumRequired = normalizeMapId(questSnapshot.mapId) === 'world' ? 1 : 15;
         questSnapshot.required = Math.max(minimumRequired, Math.floor(safeNumber(questSnapshot.required, minimumRequired)));
         questSnapshot.objectiveText = String(questSnapshot.objectiveText ?? '').replace(/Defeat \d+/i, `Defeat ${questSnapshot.required}`);
@@ -1238,15 +1289,28 @@ function normalizeQuestState(quests = {}) {
       if (questSnapshot) {
         questSnapshot.xpReward = Math.max(safeNumber(questSnapshot.xpReward, 0), getScaledQuestXpReward(questSnapshot));
       }
-      const progress = Math.max(0, Math.floor(safeNumber(quest.progress, 0)));
+      const objectives = getQuestKillObjectives(questSnapshot);
+      const usesObjectiveProgress = questSnapshot?.type === 'kill' && explicitObjectives && objectives.length > 0;
+      const storedProgressByKind = quest.progressByKind ?? quest.objectiveProgress ?? {};
+      const progressByKind = Object.fromEntries(objectives.map((objective, index) => {
+        const kind = normalizeQuestEnemyKind(objective.enemyKind);
+        const stored = safeNumber(storedProgressByKind[kind], index === 0 ? quest.progress : 0);
+        return [kind, Math.min(objective.required, Math.max(0, Math.floor(stored)))];
+      }));
+      const progress = usesObjectiveProgress
+        ? objectives.reduce((total, objective) => total + safeNumber(progressByKind[objective.enemyKind], 0), 0)
+        : Math.max(0, Math.floor(safeNumber(quest.progress, 0)));
       const ready = questSnapshot?.type === 'kill'
-        ? progress >= safeNumber(questSnapshot.required, 1)
+        ? usesObjectiveProgress
+          ? objectives.every((objective) => safeNumber(progressByKind[objective.enemyKind], 0) >= objective.required)
+          : progress >= safeNumber(questSnapshot.required, 1)
         : quest.status === 'ready';
       return [
         questId,
         {
           status: ready ? 'ready' : 'active',
           progress,
+          ...(usesObjectiveProgress ? { progressByKind } : {}),
           acceptedAt: quest.acceptedAt ?? new Date().toISOString(),
           quest: questSnapshot,
         },
@@ -1302,6 +1366,7 @@ export {
   samePartyMembers,
   sameOnlinePlayers,
   distance,
+  getMovementStateFromDisplacement,
   distanceToSegment,
   angleDifference,
   lerpAngle,

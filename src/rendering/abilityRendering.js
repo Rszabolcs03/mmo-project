@@ -9,6 +9,10 @@ import {
 
 import { sanitizeEffect, distance } from '../game/characterLogic';
 import {
+  getMageStaffTipWorldPoint,
+  MAGE_WAND_RELEASE_DELAY_MS,
+} from '../game/mageStaffGeometry';
+import {
   ABILITY_VISUAL_IMAGE_CACHE,
   getAbilityVisualImage,
   preloadAbilityVisual,
@@ -131,6 +135,37 @@ function drawAbilityAssetEffect(context, effect, now) {
 
   try {
     if (type === 'bolt') {
+      if (effect.autoAttack && effectName.includes('wand bolt')) {
+        const elapsed = Math.max(0, now - safeNumber(effect.start, now));
+        const start = getMageStaffTipWorldPoint(effect, facing, 'release');
+        if (elapsed < MAGE_WAND_RELEASE_DELAY_MS) {
+          // The character renderer owns the wind-up glow. Treat the bolt as
+          // handled so the generic hand-origin fallback cannot appear early.
+          return true;
+        }
+        const travel = clamp(safeNumber(effect.range, 520), 120, 620);
+        const travelDuration = Math.max(120, duration - MAGE_WAND_RELEASE_DELAY_MS - 180);
+        const projectileProgress = clamp(
+          (elapsed - MAGE_WAND_RELEASE_DELAY_MS) / travelDuration,
+          0,
+          1,
+        );
+        const head = {
+          x: start.x + fx * projectileProgress * travel,
+          y: start.y + fy * projectileProgress * travel,
+        };
+        trail('projectile', start, head, { count: 2, size: 14, alpha: 0.28, rotation: facing, loop: true });
+        draw('projectile', head.x, head.y, { size: 26, rotation: facing, alpha: 0.96, loop: true });
+        if (projectileProgress >= 1) {
+          const impactProgress = clamp(
+            (elapsed - MAGE_WAND_RELEASE_DELAY_MS - travelDuration) / 180,
+            0,
+            1,
+          );
+          draw('impact', head.x, head.y, { size: 32, alpha: 1 - impactProgress });
+        }
+        return true;
+      }
       const start = { x: effect.x + fx * 18, y: effect.y + fy * 18 };
       const head = { x: effect.x + fx * (42 + progress * 190), y: effect.y + fy * (42 + progress * 190) };
       trail('projectile', start, head, { count: 3, size: 25, alpha: 0.45, rotation: facing, loop: true });

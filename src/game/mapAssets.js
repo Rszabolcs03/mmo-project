@@ -14,15 +14,21 @@ import {
   getWorldV2RegionOffset,
 } from './world';
 import {
+  RACES,
   CLASSES,
+  TALENTS,
+  FRESH_RACE_HERITAGE_STYLE_CHOICES,
+  FRESH_RACE_DEFAULT_HERITAGE,
   CHARACTER_SPRITE_EXPECTED_WIDTH,
   CHARACTER_SPRITE_EXPECTED_HEIGHT,
+  CHARACTER_SPRITE_EIGHT_DIRECTION_HEIGHT,
+  HUMAN_CHARACTER_SPRITE_EXPECTED_WIDTH,
+  HUMAN_CHARACTER_SPRITE_EXPECTED_HEIGHT,
   CHARACTER_SPRITE_VERSION,
   CHARACTER_SPRITE_VARIANTS,
   CHARACTER_SPRITES,
   CHARACTER_SPRITE_LOADS,
   CHARACTER_LAYER_ORDER,
-  CHARACTER_LAYER_DIRS,
   CHARACTER_LAYER_IMAGES,
   CHARACTER_LAYER_LOADS,
   ENEMY_SPRITES,
@@ -36,6 +42,19 @@ import {
 
 function getProperties(object) {
   return Object.fromEntries((object.properties ?? []).map((property) => [property.name, property.value]));
+}
+
+function getObjectsWithLayerProps(layer, mapId) {
+  const layerProps = getProperties(layer ?? {});
+  return (layer?.objects ?? []).map((object) => ({
+    ...object,
+    props: {
+      ...layerProps,
+      ...getProperties(object),
+    },
+    mapId,
+    layerName: layer?.name,
+  }));
 }
 
 function getQuestGiverProfile(mapId) {
@@ -66,6 +85,117 @@ function normalizeQuestGiver(object, mapId, index = 0) {
   };
 }
 
+function isStreetLampPlaceholder(object, props = null) {
+  const markerProps = props ?? (object?.props && typeof object.props === 'object' ? object.props : getProperties(object ?? {}));
+  const label = [
+    markerProps.type,
+    markerProps.name,
+    object?.type,
+    object?.name,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return label.includes('street_lamp') || label.includes('street-lamp') || label.includes('street lamp');
+}
+
+function isBigStreetLampPlaceholder(object, props = null) {
+  const markerProps = props ?? (object?.props && typeof object.props === 'object' ? object.props : getProperties(object ?? {}));
+  const label = [
+    markerProps.type,
+    markerProps.name,
+    object?.type,
+    object?.name,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return label.includes('big_street_lamp') || label.includes('big-street-lamp') || label.includes('big street lamp');
+}
+
+function isCampFireLightPlaceholder(object, props = null) {
+  const markerProps = props ?? (object?.props && typeof object.props === 'object' ? object.props : getProperties(object ?? {}));
+  const label = [
+    markerProps.type,
+    markerProps.name,
+    object?.type,
+    object?.name,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return label.includes('camp_fire') || label.includes('camp-fire') || label.includes('camp fire');
+}
+
+function isAmbientLightPlaceholder(object, props = null) {
+  return isStreetLampPlaceholder(object, props) || isCampFireLightPlaceholder(object, props);
+}
+
+function withStreetLampDefaults(object, props) {
+  if (!isStreetLampPlaceholder(object, props)) return props;
+  const isBigLamp = isBigStreetLampPlaceholder(object, props);
+  return {
+    ...props,
+    type: props.type || (isBigLamp ? 'big_street_lamp' : 'street_lamp'),
+    radius: props.radius ?? (isBigLamp ? 188 : 132),
+    intensity: props.intensity ?? (isBigLamp ? 0.9 : 0.82),
+    color: props.color ?? '#ffd37a',
+    activeFrom: props.activeFrom ?? 'evening',
+    activeTo: props.activeTo ?? 'dawn',
+  };
+}
+
+function normalizeLightMarker(object, mapId, index = 0) {
+  const baseProps = object?.props && typeof object.props === 'object' ? object.props : getProperties(object);
+  const props = withStreetLampDefaults(object, baseProps);
+  const layerKey = object?.layerName ? `${object.layerName}-` : '';
+  const isTileObject = Number.isFinite(Number(object?.gid)) && Number(object.gid) > 0;
+  const sourceX = Number(object?.sourceX ?? object?.x ?? 0);
+  const sourceY = Number(object?.sourceY ?? object?.y ?? 0);
+  const width = Number(object?.width ?? 0);
+  const height = Number(object?.height ?? 0);
+  const x = object?.point
+    ? sourceX
+    : sourceX + width / 2;
+  const y = object?.point
+    ? sourceY
+    : isTileObject
+      ? sourceY - height / 2
+      : sourceY + height / 2;
+  const anchorX = Number.isFinite(Number(object?.anchorX))
+    ? Number(object.anchorX)
+    : x;
+  const anchorY = Number.isFinite(Number(object?.anchorY))
+    ? Number(object.anchorY)
+    : object?.point
+      ? y
+      : isTileObject
+        ? sourceY
+        : sourceY + height;
+  const markerType = props.type || object?.type || object?.name || 'light';
+
+  return {
+    ...object,
+    x,
+    y,
+    sourceX,
+    sourceY,
+    anchorX,
+    anchorY,
+    mapId: object?.mapId ?? mapId,
+    id: String(props.id ?? object?.id ?? object?.name ?? `${mapId}-${layerKey}light-${index}`),
+    type: markerType,
+    radius: props.radius,
+    intensity: props.intensity,
+    color: props.color,
+    activeFrom: props.activeFrom,
+    activeTo: props.activeTo,
+    alwaysOn: props.alwaysOn,
+    props,
+  };
+}
+
+function normalizeMapProp(object, mapId, layerName = 'Props') {
+  const props = object?.props && typeof object.props === 'object' ? object.props : getProperties(object);
+  return {
+    ...object,
+    props,
+    mapId,
+    layerName,
+  };
+}
+
 function parseTsxTileset(xmlText) {
   const document = new DOMParser().parseFromString(xmlText, 'application/xml');
   const tileset = document.querySelector('tileset');
@@ -74,11 +204,28 @@ function parseTsxTileset(xmlText) {
     throw new Error('Invalid TSX tileset response');
   }
 
+  const animations = {};
+  document.querySelectorAll('tile').forEach((tile) => {
+    const tileId = Number(tile.getAttribute('id'));
+    const frames = [...tile.querySelectorAll('animation frame')]
+      .map((frame) => ({
+        tileid: Number(frame.getAttribute('tileid')),
+        duration: Number(frame.getAttribute('duration')),
+      }))
+      .filter((frame) => Number.isFinite(frame.tileid) && frame.duration > 0);
+    if (!Number.isFinite(tileId) || frames.length === 0) return;
+    animations[tileId] = {
+      frames,
+      totalDuration: frames.reduce((sum, frame) => sum + frame.duration, 0),
+    };
+  });
+
   return {
     columns: Number(tileset.getAttribute('columns')),
     tilewidth: Number(tileset.getAttribute('tilewidth')),
     tileheight: Number(tileset.getAttribute('tileheight')),
     imageSource: image.getAttribute('source'),
+    animations,
   };
 }
 
@@ -124,11 +271,14 @@ async function decodeTiledMapLayers(map) {
   return map;
 }
 
-async function loadImage(src) {
-  const image = new Image();
-  image.src = src;
-  await image.decode();
-  return image;
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'sync';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Image failed to load: ${src}`));
+    image.src = src;
+  });
 }
 
 async function loadImageCached(src) {
@@ -147,6 +297,12 @@ async function loadImageCached(src) {
   return promise;
 }
 
+function getAssetFetchOptions(cacheMode = 'force-cache') {
+  return {
+    cache: import.meta.env.DEV ? 'no-store' : cacheMode,
+  };
+}
+
 async function loadTiledTilesets(tilesetRefs = [], mapUrl, { cacheBust = null, fetchCache = 'force-cache' } = {}) {
   const query = cacheBust ? `?${cacheBust}` : '';
   return Promise.all(
@@ -156,7 +312,7 @@ async function loadTiledTilesets(tilesetRefs = [], mapUrl, { cacheBust = null, f
       if (TILED_TILESET_CACHE.has(cacheKey)) return TILED_TILESET_CACHE.get(cacheKey);
       if (TILED_TILESET_LOADS.has(cacheKey)) return TILED_TILESET_LOADS.get(cacheKey);
 
-      const promise = fetch(`${tilesetUrl}${query}`, { cache: fetchCache })
+      const promise = fetch(`${tilesetUrl}${query}`, getAssetFetchOptions(fetchCache))
         .then((response) => {
           if (!response.ok) {
             throw new Error(`Tileset load failed: ${response.status} ${tilesetUrl}`);
@@ -213,41 +369,21 @@ function getCharacterSpriteBaseClass(spriteId) {
 function getCharacterSpriteCandidates(selectedClass, appearance = {}) {
   const classId = normalizeCharacterLayerId(selectedClass) ?? 'warrior';
   const gender = normalizeCharacterLayerId(appearance.gender);
-  const candidates = [];
-  if (gender) candidates.push(`${classId}-${gender}`);
-  candidates.push(classId);
-  return [...new Set(candidates)];
+  return [`${classId}-${gender === 'female' ? 'female' : 'male'}`];
 }
 
 function loadCharacterSprite(spriteId) {
   const baseClassId = getCharacterSpriteBaseClass(spriteId);
   if (!spriteId || !baseClassId || !CLASSES[baseClassId]) return Promise.resolve(null);
   if (CHARACTER_SPRITES.has(spriteId)) return Promise.resolve(CHARACTER_SPRITES.get(spriteId));
-  if (CHARACTER_SPRITE_LOADS.has(spriteId)) return CHARACTER_SPRITE_LOADS.get(spriteId);
-
-  const promise = loadImage(`${resolveAssetUrl(`assets/characters/${spriteId}.png`)}?v=${CHARACTER_SPRITE_VERSION}`)
-    .then((image) => {
-      if (image.naturalWidth !== CHARACTER_SPRITE_EXPECTED_WIDTH || image.naturalHeight !== CHARACTER_SPRITE_EXPECTED_HEIGHT) {
-        console.warn(`Character spritesheet for ${spriteId} should be ${CHARACTER_SPRITE_EXPECTED_WIDTH}x${CHARACTER_SPRITE_EXPECTED_HEIGHT}, got ${image.naturalWidth}x${image.naturalHeight}.`);
-      }
-      CHARACTER_SPRITES.set(spriteId, image);
-      return image;
-    })
-    .catch((error) => {
-      console.warn(`Missing character spritesheet for ${spriteId}; using generated fallback.`, error);
-      CHARACTER_SPRITES.set(spriteId, null);
-      return null;
-    });
-
-  CHARACTER_SPRITE_LOADS.set(spriteId, promise);
-  return promise;
+  CHARACTER_SPRITES.set(spriteId, null);
+  return Promise.resolve(null);
 }
 
 function loadCharacterSprites() {
-  const spriteIds = Object.keys(CLASSES).flatMap((classId) => [
-    classId,
-    ...CHARACTER_SPRITE_VARIANTS.map((variant) => `${classId}-${variant}`),
-  ]);
+  const spriteIds = Object.keys(CLASSES).flatMap((classId) => (
+    CHARACTER_SPRITE_VARIANTS.map((variant) => `${classId}-${variant}`)
+  ));
   return Promise.all(spriteIds.map(loadCharacterSprite));
 }
 
@@ -343,49 +479,252 @@ function normalizeOptionalCharacterLayerId(value) {
   return normalized === 'none' ? null : normalized;
 }
 
+const HUMAN_FRESH_HAIR_STYLES = new Set([
+  'cropped',
+  'windswept',
+  'tousled',
+  'tied',
+  'long',
+  'side-bangs',
+  'bun',
+  'ponytail',
+]);
+const HUMAN_FRESH_FACE_STYLES = new Set([
+  'natural', 'focused', 'scarred', 'cheerful', 'freckled',
+]);
+
 function getCharacterLayerSelection(selectedClass, selectedRace, appearance = {}) {
   const classId = normalizeCharacterLayerId(selectedClass) ?? 'warrior';
   const genderId = normalizeCharacterLayerId(appearance.gender) ?? 'male';
   const bodyId = normalizeCharacterLayerId(appearance.body);
   const outfitId = normalizeCharacterLayerId(appearance.outfit);
   const weaponId = normalizeCharacterLayerId(appearance.weapon);
+  const hairId = normalizeCharacterLayerId(appearance.hairAsset) ?? normalizeCharacterLayerId(appearance.hairStyle);
+  const beardId = normalizeOptionalCharacterLayerId(appearance.beard);
+  const capeId = normalizeOptionalCharacterLayerId(appearance.cape) ?? normalizeOptionalCharacterLayerId(appearance.capeStyle);
   const outfitVariant = normalizeCharacterLayerId(appearance.outfitVariant) ?? 'classic';
   const weaponVariant = normalizeCharacterLayerId(appearance.weaponVariant) ?? 'classic';
   const raceId = normalizeCharacterLayerId(appearance.race)
     ?? (bodyId && !bodyId.includes('-') ? bodyId : null)
     ?? normalizeCharacterLayerId(selectedRace)
     ?? 'human';
-
+  // Every playable race uses one paper-doll contract: cosmetics, clothing and held
+  // equipment are independent 96px atlases sharing the same frame grid.
+  const usesHumanEightDirectionAssets = Boolean(RACES[raceId]?.allowedClasses?.includes(classId));
+  const combatSpec = normalizeCharacterLayerId(
+    appearance.combatSpec ?? appearance.talentSpec ?? appearance.spec,
+  );
+  const usesTankOffhand = usesHumanEightDirectionAssets
+    && ['warrior', 'paladin'].includes(classId)
+    && TALENTS[classId]?.specs?.[combatSpec]?.role === 'Tank';
+  const requestedFaceStyle = normalizeCharacterLayerId(appearance.faceVariant)
+    ?.replace(/^(?:male|female)-/, '');
+  const genderFaceStyles = genderId === 'female'
+    ? new Set(['natural', 'focused', 'freckled', 'cheerful'])
+    : new Set(['natural', 'focused', 'scarred', 'cheerful']);
+  const faceStyle = genderFaceStyles.has(requestedFaceStyle)
+    ? requestedFaceStyle
+    : 'natural';
+  const humanHairAliases = {
+    parted: 'windswept',
+    bob: 'long',
+    wavy: 'bun',
+    braid: 'ponytail',
+  };
+  const rawHumanHairStyleId = hairId?.replace(/^(?:male|female)-/, '');
+  const humanHairStyleId = humanHairAliases[rawHumanHairStyleId] ?? rawHumanHairStyleId;
+  const fallbackHairStyle = genderId === 'female' ? 'long' : 'cropped';
+  const genderHairStyles = genderId === 'female'
+    ? new Set(['long', 'side-bangs', 'bun', 'ponytail'])
+    : new Set(['cropped', 'windswept', 'tousled', 'tied']);
+  const selectedHairStyle = genderHairStyles.has(humanHairStyleId)
+    ? humanHairStyleId
+    : fallbackHairStyle;
+  const requestedHeritageStyle = normalizeCharacterLayerId(appearance.heritageStyle);
+  const heritageStyleChoices = FRESH_RACE_HERITAGE_STYLE_CHOICES[raceId] ?? [];
+  const heritageStyle = heritageStyleChoices.some((option) => option.id === requestedHeritageStyle)
+    ? requestedHeritageStyle
+    : FRESH_RACE_DEFAULT_HERITAGE[raceId] ?? null;
+  const selectedOutfit = usesHumanEightDirectionAssets
+    ? `${raceId}-fresh-${classId}-${genderId}-${outfitVariant}`
+    : (outfitId && outfitId.includes('-') ? outfitId : `${classId}-${outfitVariant}`);
+  const selectedWeapon = usesHumanEightDirectionAssets
+    ? `${raceId}-fresh-${classId}-${genderId}-${weaponVariant}`
+    : (weaponId && weaponId.includes('-') ? weaponId : `${classId}-${weaponVariant}`);
+  const humanCosmeticId = (layerId, gendered = false) => {
+    if (!usesHumanEightDirectionAssets || !layerId) return layerId;
+    const cosmeticId = layerId.replace(/^human-(?:female-)?/, '');
+    return `human-${gendered && genderId === 'female' ? 'female-' : ''}${cosmeticId}`;
+  };
   return {
-    base: bodyId && bodyId.includes('-') ? bodyId : `${raceId}-${genderId}`,
-    hair: normalizeCharacterLayerId(appearance.hairAsset) ?? normalizeCharacterLayerId(appearance.hairStyle),
-    beard: normalizeOptionalCharacterLayerId(appearance.beard),
-    outfit: outfitId && outfitId.includes('-') ? outfitId : `${classId}-${outfitVariant}`,
-    weapon: weaponId && weaponId.includes('-') ? weaponId : `${classId}-${weaponVariant}`,
-    cape: normalizeOptionalCharacterLayerId(appearance.cape) ?? normalizeOptionalCharacterLayerId(appearance.capeStyle),
+    base: usesHumanEightDirectionAssets
+      ? `${raceId}-fresh-body-${genderId}`
+      : (bodyId && bodyId.includes('-') ? bodyId : `${raceId}-${genderId}`),
+    hair: usesHumanEightDirectionAssets
+      ? `${raceId}-fresh-hair-${genderId}-${selectedHairStyle}`
+      : humanCosmeticId(hairId, true),
+    beard: usesHumanEightDirectionAssets
+      ? genderId === 'female' || !beardId
+        ? null
+        : `${raceId}-fresh-beard-${beardId}`
+      : humanCosmeticId(beardId),
+    outfit: selectedOutfit,
+    face: usesHumanEightDirectionAssets
+      ? `${raceId}-fresh-face-${genderId}-${faceStyle}`
+      : null,
+    heritage: usesHumanEightDirectionAssets && heritageStyle && heritageStyle !== 'none'
+      ? `${raceId}-fresh-heritage-${heritageStyle}`
+      : null,
+    weapon: selectedWeapon,
+    offhand: usesTankOffhand
+      ? `${raceId}-fresh-${classId}-${genderId}-${weaponVariant}`
+      : null,
+    cape: usesHumanEightDirectionAssets
+      ? !capeId
+        ? null
+        : `${raceId}-fresh-cape-${capeId}`
+      : humanCosmeticId(capeId),
+    headwear: usesHumanEightDirectionAssets
+      ? `${raceId}-fresh-${classId}-${genderId}-${outfitVariant}`
+      : null,
   };
 }
 
+function getHumanLayerPrefix(layerId) {
+  return layerId?.match(/^([a-z]+)-fresh-/)?.[0] ?? null;
+}
+
+function getHumanClassLayerId(layerId) {
+  if (typeof layerId !== 'string' || !getHumanLayerPrefix(layerId)) return null;
+  const prefix = getHumanLayerPrefix(layerId);
+  return Object.keys(CLASSES).find((classId) => (
+    layerId === `${prefix}${classId}` || layerId.startsWith(`${prefix}${classId}-`)
+  )) ?? null;
+}
+
+function getHumanClassLayerGenderId(layerId, humanClassId = getHumanClassLayerId(layerId)) {
+  if (!humanClassId) return null;
+  const prefix = getHumanLayerPrefix(layerId);
+  const suffix = layerId.slice(`${prefix}${humanClassId}-`.length);
+  const genderId = suffix.split('-')[0];
+  return genderId === 'female' ? 'female' : 'male';
+}
+
+function getHumanClassLayerVariantId(layerId, humanClassId = getHumanClassLayerId(layerId)) {
+  if (!humanClassId) return 'classic';
+  const prefix = getHumanLayerPrefix(layerId);
+  const suffix = layerId.slice(`${prefix}${humanClassId}-`.length);
+  const parts = suffix.split('-');
+  return parts.length > 1 ? parts.slice(1).join('-') : 'classic';
+}
+
+function getCharacterLayerSourceId(layer, layerId) {
+  return layerId;
+}
+
+function getCharacterLayerAssetPath(layer, layerId) {
+  if (!layer || !layerId) return null;
+
+  if (layer === 'face') {
+    const freshMatch = layerId.match(/^([a-z]+)-fresh-face-(male|female)-(.+)$/);
+    if (!freshMatch || !RACES[freshMatch[1]] || !HUMAN_FRESH_FACE_STYLES.has(freshMatch[3])) return null;
+    return `${freshMatch[1]}_fresh/faces/${freshMatch[2]}/${freshMatch[3]}.png`;
+  }
+
+  if (layer === 'heritage') {
+    const freshMatch = layerId.match(/^([a-z]+)-fresh-heritage-(.+)$/);
+    if (!freshMatch || !RACES[freshMatch[1]]) return null;
+    const valid = FRESH_RACE_HERITAGE_STYLE_CHOICES[freshMatch[1]]
+      ?.some((option) => option.id === freshMatch[2] && option.id !== 'none');
+    return valid ? `${freshMatch[1]}_fresh/heritage/${freshMatch[2]}.png` : null;
+  }
+
+  if (layer === 'base') {
+    const freshMatch = layerId.match(/^([a-z]+)-fresh-body-(male|female)$/);
+    if (freshMatch && RACES[freshMatch[1]]) return `${freshMatch[1]}_fresh/bodies/${freshMatch[2]}.png`;
+    const match = layerId.match(/^(.+)-(male|female)$/);
+    return match ? `bases/${match[1]}/${match[2]}.png` : null;
+  }
+
+  if (layer === 'hair' || layer === 'beard' || layer === 'cape') {
+    const category = layer === 'hair' ? 'hair' : layer === 'beard' ? 'beards' : 'capes';
+    if (layer === 'hair') {
+      const freshMatch = layerId.match(
+        /^([a-z]+)-fresh-hair-(male|female)-(cropped|windswept|tousled|tied|long|side-bangs|bun|ponytail)$/,
+      );
+      if (freshMatch && RACES[freshMatch[1]]) return `${freshMatch[1]}_fresh/hair/${freshMatch[2]}/${freshMatch[3]}.png`;
+    }
+    const beardMatch = layerId.match(/^([a-z]+)-fresh-beard-(short|full)$/);
+    if (layer === 'beard' && beardMatch && RACES[beardMatch[1]]) {
+      return `${beardMatch[1]}_fresh/beards/${beardMatch[2]}.png`;
+    }
+    const capeMatch = layerId.match(/^([a-z]+)-fresh-cape-(short|long)$/);
+    if (layer === 'cape' && capeMatch && RACES[capeMatch[1]]) {
+      return `${capeMatch[1]}_fresh/capes/${capeMatch[2]}.png`;
+    }
+    return `cosmetics/${category}/${layerId}.png`;
+  }
+
+  const humanClassId = getHumanClassLayerId(layerId);
+  if ((layer === 'outfit' || layer === 'headwear' || layer === 'weapon' || layer === 'offhand') && humanClassId) {
+    const genderId = getHumanClassLayerGenderId(layerId, humanClassId);
+    const variantId = getHumanClassLayerVariantId(layerId, humanClassId);
+    const freshPrefix = getHumanLayerPrefix(layerId);
+    if (freshPrefix) {
+      const freshRaceId = freshPrefix.slice(0, -'-fresh-'.length);
+      const category = layer === 'outfit'
+        ? 'outfits'
+        : layer === 'headwear'
+          ? 'headwear'
+          : layer === 'offhand'
+            ? 'offhands'
+            : 'weapons';
+      return `${freshRaceId}_fresh/classes/${humanClassId}/${genderId}/${category}/${variantId}.png`;
+    }
+    return null;
+  }
+
+  if (layer === 'outfit' || layer === 'weapon') {
+    const classId = Object.keys(CLASSES).find((candidate) => layerId.startsWith(`${candidate}-`));
+    if (!classId) return null;
+    const variantId = layerId.slice(classId.length + 1);
+    const category = layer === 'outfit' ? 'outfits' : 'weapons';
+    return variantId ? `classes/${classId}/shared/${category}/${variantId}.png` : null;
+  }
+
+  return null;
+}
+
 function getCharacterLayerCacheKey(layer, layerId) {
-  return `${layer}:${layerId}`;
+  return `${layer}:${getCharacterLayerSourceId(layer, layerId)}`;
 }
 
 function loadCharacterLayer(layer, layerId) {
-  if (!layer || !layerId || !CHARACTER_LAYER_DIRS[layer]) return Promise.resolve(null);
+  const assetPath = getCharacterLayerAssetPath(layer, layerId);
+  if (!assetPath) return Promise.resolve(null);
 
   const cacheKey = getCharacterLayerCacheKey(layer, layerId);
   if (CHARACTER_LAYER_IMAGES.has(cacheKey)) return Promise.resolve(CHARACTER_LAYER_IMAGES.get(cacheKey));
   if (CHARACTER_LAYER_LOADS.has(cacheKey)) return CHARACTER_LAYER_LOADS.get(cacheKey);
 
-  const promise = loadImage(`${resolveAssetUrl(`assets/characters/${CHARACTER_LAYER_DIRS[layer]}/${layerId}.png`)}?v=${CHARACTER_SPRITE_VERSION}`)
+  const promise = loadImage(`${resolveAssetUrl(`assets/characters/${assetPath}`)}?v=${CHARACTER_SPRITE_VERSION}`)
     .then((image) => {
-      if (image.naturalWidth !== CHARACTER_SPRITE_EXPECTED_WIDTH || image.naturalHeight !== CHARACTER_SPRITE_EXPECTED_HEIGHT) {
-        console.warn(`Character layer ${cacheKey} should be ${CHARACTER_SPRITE_EXPECTED_WIDTH}x${CHARACTER_SPRITE_EXPECTED_HEIGHT}, got ${image.naturalWidth}x${image.naturalHeight}.`);
+      const isLargeHuman = Boolean(getHumanLayerPrefix(layerId));
+      const supportedHeight = isLargeHuman
+        ? image.naturalHeight === HUMAN_CHARACTER_SPRITE_EXPECTED_HEIGHT
+        : image.naturalHeight === CHARACTER_SPRITE_EXPECTED_HEIGHT
+          || image.naturalHeight === CHARACTER_SPRITE_EIGHT_DIRECTION_HEIGHT;
+      const expectedWidth = isLargeHuman
+        ? HUMAN_CHARACTER_SPRITE_EXPECTED_WIDTH
+        : CHARACTER_SPRITE_EXPECTED_WIDTH;
+      if (image.naturalWidth !== expectedWidth || !supportedHeight) {
+        console.warn(`Character layer ${cacheKey} should be ${expectedWidth}px wide with a supported character-sheet height, got ${image.naturalWidth}x${image.naturalHeight}.`);
       }
       CHARACTER_LAYER_IMAGES.set(cacheKey, image);
       return image;
     })
-    .catch(() => {
+    .catch((error) => {
+      console.error(`Failed to decode character layer ${assetPath}: ${error?.message ?? error}`);
       CHARACTER_LAYER_IMAGES.set(cacheKey, null);
       return null;
     });
@@ -427,34 +766,45 @@ const TILED_TILESET_CACHE = new globalThis.Map();
 const TILED_TILESET_LOADS = new globalThis.Map();
 const WORLD_V2_CHUNK_INDEX_LOADS = new globalThis.Map();
 const WORLD_V2_REGISTRY_LOADS = new globalThis.Map();
+const LIGHT_MARKER_LAYER_NAMES = ['LightMarkers', 'Lights', 'LightObjects', 'Lighting'];
 
 async function loadTiledMap(mapId = 'world') {
   const normalizedMapId = normalizeMapId(mapId);
   const cacheBust = `v=${Date.now()}`;
   const fileName = MAP_FILES[normalizedMapId] ?? MAP_FILES.world;
   const mapUrl = resolveAssetUrl(`maps/${fileName}`);
-  const map = await fetch(`${mapUrl}?${cacheBust}`, { cache: 'no-store' }).then((response) => response.json());
+  const map = await fetch(`${mapUrl}?${cacheBust}`, getAssetFetchOptions('no-store')).then((response) => response.json());
   await decodeTiledMapLayers(map);
   const tilesets = await loadTiledTilesets(map.tilesets, mapUrl, { cacheBust, fetchCache: 'no-store' });
   const zonesLayer = map.layers.find((layer) => layer.name === 'Zones');
-  const spawnsLayer = map.layers.find((layer) => layer.name === 'Spawns');
-  const bossSpawnsLayer = map.layers.find((layer) => layer.name === 'BossSpawns');
+  const spawnsLayers = map.layers.filter((layer) => ['Spawns', 'CaveSpawns', 'InteriorSpawns'].includes(layer.name));
+  const bossSpawnsLayers = map.layers.filter((layer) => ['BossSpawns', 'CaveBossSpawns', 'InteriorBossSpawns'].includes(layer.name));
   const npcsLayer = map.layers.find((layer) => layer.name === 'NPCs');
   const questGiversLayer = map.layers.find((layer) => layer.name === 'QuestGiver');
   const raceStartsLayer = map.layers.find((layer) => layer.name === 'raceStart');
   const interiorZonesLayer = map.layers.find((layer) => layer.name === 'InteriorZones');
+  const cavesLayer = map.layers.find((layer) => layer.type === 'objectgroup' && layer.name === 'Caves');
   const regionMarkersLayer = map.layers.find((layer) => layer.name === 'RegionMarkers');
   const roadMarkersLayer = map.layers.find((layer) => layer.name === 'RoadMarkers');
   const landmarksLayer = map.layers.find((layer) => layer.name === 'Landmarks');
+  const propsLayers = map.layers.filter((layer) => (
+    layer.type === 'objectgroup' && ['Props', 'CaveProps', 'InteriorProps'].includes(layer.name)
+  ));
+  const lightMarkerLayers = map.layers.filter((layer) => (
+    layer.type === 'objectgroup' && LIGHT_MARKER_LAYER_NAMES.includes(layer.name)
+  ));
+  const streetLampPlaceholderLayers = map.layers.filter((layer) => (
+    layer.type === 'objectgroup' && !LIGHT_MARKER_LAYER_NAMES.includes(layer.name)
+  ));
   const transitionLayers = map.layers.filter((layer) => (
     layer.type === 'objectgroup'
     && ['Transitions', 'Dungeon_transition', 'Dungeon_transitions', 'DungeonTransitions'].includes(layer.name)
   ));
   const graveyardsLayer = map.layers.find((layer) => ['Graveyard', 'Graveyards', 'graveyard'].includes(layer.name));
   const spawns = [
-    ...(spawnsLayer?.objects ?? []),
-    ...(bossSpawnsLayer?.objects ?? []),
-  ].map((spawn) => ({ ...spawn, props: getProperties(spawn), mapId: normalizedMapId }));
+    ...spawnsLayers.flatMap((layer) => getObjectsWithLayerProps(layer, normalizedMapId)),
+    ...bossSpawnsLayers.flatMap((layer) => getObjectsWithLayerProps(layer, normalizedMapId)),
+  ];
   const bossSpawns = spawns.filter((spawn) => spawn.props.bossType || String(spawn.name ?? '').toLowerCase().includes('boss'));
   const enemySpawns = spawns.filter((spawn) => !bossSpawns.includes(spawn) && spawn.props.enemyType);
 
@@ -470,6 +820,7 @@ async function loadTiledMap(mapId = 'world') {
     questGivers: (questGiversLayer?.objects ?? []).map((giver, index) => normalizeQuestGiver(giver, normalizedMapId, index)),
     raceStarts: (raceStartsLayer?.objects ?? []).map((start) => ({ ...start, props: getProperties(start), mapId: normalizedMapId })),
     interiorZones: (interiorZonesLayer?.objects ?? []).map((zone) => ({ ...zone, props: getProperties(zone), mapId: normalizedMapId })),
+    caveZones: (cavesLayer?.objects ?? []).map((zone) => ({ ...zone, props: getProperties(zone), mapId: normalizedMapId, layerName: 'Caves' })),
     transitions: transitionLayers.flatMap((layer) => (
       (layer.objects ?? []).map((transition) => ({ ...transition, props: getProperties(transition), mapId: normalizedMapId, layerName: layer.name }))
     )),
@@ -477,6 +828,27 @@ async function loadTiledMap(mapId = 'world') {
     regionMarkers: (regionMarkersLayer?.objects ?? []).map((marker) => ({ ...marker, props: getProperties(marker), mapId: normalizedMapId })),
     roadMarkers: (roadMarkersLayer?.objects ?? []).map((marker) => ({ ...marker, props: getProperties(marker), mapId: normalizedMapId })),
     landmarks: (landmarksLayer?.objects ?? []).map((landmark) => ({ ...landmark, props: getProperties(landmark), mapId: normalizedMapId })),
+    props: propsLayers.flatMap((layer) => (
+      getObjectsWithLayerProps(layer, normalizedMapId).map((prop) => normalizeMapProp(prop, normalizedMapId, layer.name))
+    )),
+    lightMarkers: [
+      ...lightMarkerLayers.flatMap((layer, layerIndex) => (
+        (layer.objects ?? []).map((marker, index) => normalizeLightMarker(
+          { ...marker, layerName: layer.name },
+          normalizedMapId,
+          `${layerIndex}-${index}`,
+        ))
+      )),
+      ...streetLampPlaceholderLayers.flatMap((layer, layerIndex) => (
+        (layer.objects ?? [])
+          .filter((marker) => isAmbientLightPlaceholder(marker))
+          .map((marker, index) => normalizeLightMarker(
+            { ...marker, layerName: layer.name },
+            normalizedMapId,
+            `street-lamp-${layerIndex}-${index}`,
+          ))
+      )),
+    ],
   };
 }
 
@@ -485,11 +857,12 @@ async function loadWorldV2ChunkIndex(generationId = 'v2') {
   if (WORLD_V2_CHUNK_INDEX_LOADS.has(generation.id)) return WORLD_V2_CHUNK_INDEX_LOADS.get(generation.id);
   const loadPromise = (async () => {
     const indexUrl = resolveAssetUrl(`maps/${generation.chunkIndexFile}`);
-    const query = `v=${generation.chunkAssetVersion}`;
-    const index = await fetch(`${indexUrl}?${query}`, { cache: 'force-cache' }).then((response) => response.json());
+    const query = import.meta.env.DEV ? `v=${Date.now()}` : `v=${generation.chunkAssetVersion}`;
+    const index = await fetch(`${indexUrl}?${query}`, getAssetFetchOptions(import.meta.env.DEV ? 'no-store' : 'force-cache'))
+      .then((response) => response.json());
     const tilesets = await loadTiledTilesets(index.tilesets, indexUrl, {
       cacheBust: query,
-      fetchCache: 'force-cache',
+      fetchCache: import.meta.env.DEV ? 'no-store' : 'force-cache',
     });
     return {
       ...index,
@@ -505,9 +878,8 @@ async function loadWorldV2ChunkIndex(generationId = 'v2') {
 async function loadWorldV2Registry(generationId = 'v2') {
   const generation = getWorldGenerationConfig(generationId);
   if (WORLD_V2_REGISTRY_LOADS.has(generation.id)) return WORLD_V2_REGISTRY_LOADS.get(generation.id);
-  const loadPromise = fetch(`${resolveAssetUrl(`maps/${generation.registryFile}`)}?v=${generation.chunkAssetVersion}`, {
-    cache: 'force-cache',
-  }).then((response) => response.json());
+  const loadPromise = fetch(`${resolveAssetUrl(`maps/${generation.registryFile}`)}?v=${import.meta.env.DEV ? Date.now() : generation.chunkAssetVersion}`, getAssetFetchOptions(import.meta.env.DEV ? 'no-store' : 'force-cache'))
+    .then((response) => response.json());
   WORLD_V2_REGISTRY_LOADS.set(generation.id, loadPromise);
   return loadPromise;
 }
@@ -518,7 +890,8 @@ async function loadWorldV2ChunkMap(chunkId, generationId = 'v2') {
   const chunkInfo = index.chunkById.get(chunkId);
   if (!chunkInfo) throw new Error(`Missing ${generation.id} chunk: ${chunkId}`);
   const chunkUrl = resolveAssetUrl(chunkInfo.file, index.indexUrl);
-  const map = await fetch(`${chunkUrl}?v=${index.version ?? generation.chunkAssetVersion}`, { cache: 'force-cache' })
+  const chunkVersion = import.meta.env.DEV ? Date.now() : (index.version ?? generation.chunkAssetVersion);
+  const map = await fetch(`${chunkUrl}?v=${chunkVersion}`, getAssetFetchOptions(import.meta.env.DEV ? 'no-store' : 'force-cache'))
     .then((response) => response.json());
   await decodeTiledMapLayers(map);
   const offsetX = safeNumber(chunkInfo.x, map.chunkX * WORLD_V2_CHUNK_TILES) * WORLD.tile;
@@ -542,8 +915,8 @@ async function loadWorldV2ChunkMap(chunkId, generationId = 'v2') {
 
   chunk.zones = normalizeWorldV2ChunkObjects(chunk, 'Zones', generation.id);
   chunk.spawns = [
-    ...normalizeWorldV2ChunkObjects(chunk, 'Spawns', generation.id),
-    ...normalizeWorldV2ChunkObjects(chunk, 'BossSpawns', generation.id),
+    ...normalizeWorldV2ChunkObjectsFromLayers(chunk, ['Spawns', 'CaveSpawns', 'InteriorSpawns'], generation.id),
+    ...normalizeWorldV2ChunkObjectsFromLayers(chunk, ['BossSpawns', 'CaveBossSpawns', 'InteriorBossSpawns'], generation.id),
   ];
   chunk.bossSpawns = chunk.spawns.filter((spawn) => spawn.props.bossType || String(spawn.name ?? '').toLowerCase().includes('boss'));
   chunk.enemySpawns = chunk.spawns.filter((spawn) => !chunk.bossSpawns.includes(spawn) && spawn.props.enemyType);
@@ -552,12 +925,20 @@ async function loadWorldV2ChunkMap(chunkId, generationId = 'v2') {
     .map((giver, indexInLayer) => normalizeQuestGiver(giver, chunk.mapId, indexInLayer));
   chunk.raceStarts = normalizeWorldV2ChunkObjects(chunk, 'raceStart', generation.id);
   chunk.interiorZones = normalizeWorldV2ChunkObjects(chunk, 'InteriorZones', generation.id);
+  chunk.caveZones = normalizeWorldV2ChunkObjects(chunk, 'Caves', generation.id)
+    .map((zone) => ({ ...zone, layerName: 'Caves' }));
   chunk.transitions = normalizeWorldV2ChunkObjects(chunk, 'Transitions', generation.id)
     .map((transition) => ({ ...transition, layerName: 'Transitions' }));
   chunk.graveyards = normalizeWorldV2ChunkObjects(chunk, 'Graveyards', generation.id);
   chunk.regionMarkers = normalizeWorldV2ChunkObjects(chunk, 'RegionMarkers', generation.id);
   chunk.roadMarkers = normalizeWorldV2ChunkObjects(chunk, 'RoadMarkers', generation.id);
   chunk.landmarks = normalizeWorldV2ChunkObjects(chunk, 'Landmarks', generation.id);
+  chunk.props = normalizeWorldV2ChunkObjectsFromLayers(chunk, ['Props', 'CaveProps', 'InteriorProps'], generation.id);
+  chunk.lightMarkers = [
+    ...normalizeWorldV2ChunkObjectsFromLayers(chunk, LIGHT_MARKER_LAYER_NAMES, generation.id),
+    ...normalizeWorldV2ChunkStreetLampPlaceholders(chunk, generation.id),
+  ]
+    .map((marker, index) => normalizeLightMarker(marker, marker.mapId ?? chunk.mapId, index));
   return chunk;
 }
 
@@ -569,6 +950,10 @@ function offsetWorldV2Object(object, region) {
     ...object,
     x: region.offsetX + localX,
     y: region.offsetY + localY,
+    ...(Number.isFinite(Number(object?.sourceX)) ? { sourceX: region.offsetX + safeNumber(object.sourceX, localX) } : {}),
+    ...(Number.isFinite(Number(object?.sourceY)) ? { sourceY: region.offsetY + safeNumber(object.sourceY, localY) } : {}),
+    ...(Number.isFinite(Number(object?.anchorX)) ? { anchorX: region.offsetX + safeNumber(object.anchorX, localX) } : {}),
+    ...(Number.isFinite(Number(object?.anchorY)) ? { anchorY: region.offsetY + safeNumber(object.anchorY, localY) } : {}),
     localX,
     localY,
     mapId: objectMapId,
@@ -632,20 +1017,54 @@ function createWorldV2Composite(regionMaps, centerMapId) {
     questGivers: mergeObjects('questGivers'),
     raceStarts: mergeObjects('raceStarts'),
     interiorZones: mergeObjects('interiorZones'),
+    caveZones: mergeObjects('caveZones'),
     transitions: mergeObjects('transitions'),
     graveyards: mergeObjects('graveyards'),
     regionMarkers: mergeObjects('regionMarkers'),
     roadMarkers: mergeObjects('roadMarkers'),
     landmarks: mergeObjects('landmarks'),
+    props: mergeObjects('props'),
+    lightMarkers: mergeObjects('lightMarkers'),
   };
+}
+
+function normalizeWorldV2ChunkObjectsFromLayers(chunk, layerNames, generationId = chunk?.generationId ?? 'v2') {
+  return layerNames.flatMap((layerName) => (
+    normalizeWorldV2ChunkObjects(chunk, layerName, generationId)
+      .map((object) => ({ ...object, layerName }))
+  ));
+}
+
+function normalizeWorldV2ChunkStreetLampPlaceholders(chunk, generationId = chunk?.generationId ?? 'v2') {
+  const generation = getWorldGenerationConfig(generationId);
+  return chunk.map.layers
+    .filter((layer) => layer.type === 'objectgroup' && !LIGHT_MARKER_LAYER_NAMES.includes(layer.name))
+    .flatMap((layer) => (
+      (layer.objects ?? [])
+        .filter((object) => isAmbientLightPlaceholder(object))
+        .map((object) => ({
+          ...object,
+          layerName: layer.name,
+          props: getProperties(object),
+          mapId: getWorldV2MapIdFromPoint(
+            chunk.offsetX + safeNumber(object.x, 0),
+            chunk.offsetY + safeNumber(object.y, 0),
+            generation.id,
+          ) ?? chunk.mapId,
+        }))
+    ));
 }
 
 function normalizeWorldV2ChunkObjects(chunk, layerName, generationId = chunk?.generationId ?? 'v2') {
   const generation = getWorldGenerationConfig(generationId);
   const layer = chunk.map.layers.find((candidate) => candidate.type === 'objectgroup' && candidate.name === layerName);
+  const layerProps = getProperties(layer ?? {});
   return (layer?.objects ?? []).map((object) => ({
     ...object,
-    props: getProperties(object),
+    props: {
+      ...layerProps,
+      ...getProperties(object),
+    },
     mapId: getWorldV2MapIdFromPoint(
       chunk.offsetX + safeNumber(object.x, 0),
       chunk.offsetY + safeNumber(object.y, 0),
@@ -654,7 +1073,7 @@ function normalizeWorldV2ChunkObjects(chunk, layerName, generationId = chunk?.ge
   }));
 }
 
-function createWorldV2ChunkComposite(chunks, centerMapId, tilesets, generationId = 'v2') {
+function createWorldV2ChunkComposite(chunks, centerMapId, tilesets, generationId = 'v2', chunkIndex = null) {
   const generation = getWorldGenerationConfig(generationId);
   const loadedRegions = chunks
     .filter((chunk) => chunk?.map)
@@ -683,6 +1102,15 @@ function createWorldV2ChunkComposite(chunks, centerMapId, tilesets, generationId
   const mergeObjects = (key) => loadedRegions.flatMap((chunk) => (
     (chunk.tiled?.[key] ?? []).map((object) => offsetWorldV2Object(object, chunk))
   ));
+  const indexedGraveyards = Array.isArray(chunkIndex?.graveyards)
+    ? chunkIndex.graveyards.map((graveyard) => ({
+        ...graveyard,
+        props: graveyard?.props && typeof graveyard.props === 'object'
+          ? graveyard.props
+          : getProperties(graveyard ?? {}),
+        mapId: normalizeMapId(graveyard?.mapId ?? graveyard?.sourceMapId ?? centerMapId),
+      }))
+    : [];
 
   return {
     isRegionWorld: true,
@@ -703,11 +1131,14 @@ function createWorldV2ChunkComposite(chunks, centerMapId, tilesets, generationId
     questGivers: mergeObjects('questGivers'),
     raceStarts: mergeObjects('raceStarts'),
     interiorZones: mergeObjects('interiorZones'),
+    caveZones: mergeObjects('caveZones'),
     transitions: mergeObjects('transitions'),
-    graveyards: mergeObjects('graveyards'),
+    graveyards: indexedGraveyards.length ? indexedGraveyards : mergeObjects('graveyards'),
     regionMarkers: mergeObjects('regionMarkers'),
     roadMarkers: mergeObjects('roadMarkers'),
     landmarks: mergeObjects('landmarks'),
+    props: mergeObjects('props'),
+    lightMarkers: mergeObjects('lightMarkers'),
   };
 }
 
@@ -715,6 +1146,8 @@ export {
   getProperties,
   getQuestGiverProfile,
   normalizeQuestGiver,
+  normalizeLightMarker,
+  normalizeMapProp,
   parseTsxTileset,
   hasTileData,
   inflateBase64Zlib,
@@ -742,6 +1175,7 @@ export {
   normalizeOptionalCharacterLayerId,
   getCharacterLayerSelection,
   getCharacterLayerCacheKey,
+  getCharacterLayerAssetPath,
   loadCharacterLayer,
   loadCharacterLayersForAppearance,
   getCharacterLayerImage,
@@ -759,6 +1193,7 @@ export {
   loadWorldV2ChunkMap,
   offsetWorldV2Object,
   createWorldV2Composite,
+  normalizeWorldV2ChunkObjectsFromLayers,
   normalizeWorldV2ChunkObjects,
   createWorldV2ChunkComposite,
 };

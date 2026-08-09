@@ -18,57 +18,108 @@ const MAP_IDS = {
   DUNGEON_01: 'dungeon_01',
 };
 
+const CONTINENT_01_ID = 'continent_01';
+const CONTINENT_01_REGION_PREFIX = 'continent_01_region';
+const CONTINENT_01_REGION_PATH = 'world_map/continents/continent_01/regions';
+const WORLD_V3_HUB_MAP_ID = 'continent_01_region_0_0';
+
 const MAP_FILES = {
-  [MAP_IDS.WORLD]: 'world_map.tmj',
-  human_starting: 'human_starting_zone_v4.tmj',
-  dwarf_starting: 'dwarf_starting_zone.tmj',
-  undead_starting: 'undead_starting_zone.tmj',
-  elf_starting: 'elf_starting_zone.tmj',
-  orc_starting: 'orc_starting_zone.tmj',
-  [MAP_IDS.DUNGEON_01]: 'dungeon_01.tmj',
+  starting_human: 'starting_zones/human/starting_human.tmj',
+  starting_dwarf: 'starting_zones/dwarf/starting_dwarf.tmj',
+  starting_neutral: 'starting_zones/neutral/starting_neutral.tmj',
+  starting_elf: 'starting_zones/elf/starting_elf.tmj',
+  starting_orc: 'starting_zones/orc/starting_orc.tmj',
+  [MAP_IDS.DUNGEON_01]: 'dungeons/dungeon_01/dungeon_01.tmj',
 };
 
 const WORLD_V2_REGION_GRID = 5;
 const WORLD_V2_REGION_TILES = 800;
 const WORLD_V2_TILE_SIZE = 32;
+const WORLD_V2_REGION_PIXEL_SIZE = WORLD_V2_REGION_TILES * WORLD_V2_TILE_SIZE;
 const WORLD_V2_WORLD_PIXEL_SIZE = WORLD_V2_REGION_GRID * WORLD_V2_REGION_TILES * WORLD_V2_TILE_SIZE;
 const WORLD_STREAM_GENERATIONS = {
-  v2: { id: 'v2', mapSpaceId: 'world_v2' },
-  v3: { id: 'v3', mapSpaceId: 'world_v3' },
+  v2: { id: 'v2', mapSpaceId: CONTINENT_01_ID, aliasOf: 'v3' },
+  v3: { id: 'v3', mapSpaceId: CONTINENT_01_ID },
 };
 const WORLD_STREAM_GENERATION_IDS = Object.keys(WORLD_STREAM_GENERATIONS);
 const WORLD_V2_MAP_IDS = WORLD_STREAM_GENERATION_IDS.flatMap((generationId) => (
   Array.from({ length: WORLD_V2_REGION_GRID * WORLD_V2_REGION_GRID }, (_, index) => {
     const x = index % WORLD_V2_REGION_GRID;
     const y = Math.floor(index / WORLD_V2_REGION_GRID);
-    return `world_region_${x}_${y}_${generationId}`;
+    return generationId === 'v3'
+      ? `${CONTINENT_01_REGION_PREFIX}_${x}_${y}`
+      : `world_region_${x}_${y}_${generationId}`;
   })
 ));
 const WORLD_V2_MAP_ID_SET = new Set(WORLD_V2_MAP_IDS);
 WORLD_V2_MAP_IDS.forEach((mapId) => {
-  MAP_FILES[mapId] = `${mapId}.tmj`;
+  if (mapId.startsWith(CONTINENT_01_REGION_PREFIX)) {
+    MAP_FILES[mapId] = `${CONTINENT_01_REGION_PATH}/${mapId}.tmj`;
+  }
 });
 
 const WORLD_LIKE_MAP_IDS = new Set([
-  MAP_IDS.WORLD,
-  'human_starting',
-  'dwarf_starting',
-  'undead_starting',
-  'elf_starting',
-  'orc_starting',
+  'starting_human',
+  'starting_dwarf',
+  'starting_neutral',
+  'starting_elf',
+  'starting_orc',
 ]);
 WORLD_V2_MAP_IDS.forEach((mapId) => WORLD_LIKE_MAP_IDS.add(mapId));
 const STARTING_MAP_IDS = new Set([
-  'human_starting',
-  'dwarf_starting',
-  'undead_starting',
-  'elf_starting',
-  'orc_starting',
+  'starting_human',
+  'starting_dwarf',
+  'starting_neutral',
+  'starting_elf',
+  'starting_orc',
 ]);
 
+const MAP_ALIASES = {
+  [MAP_IDS.WORLD]: WORLD_V3_HUB_MAP_ID,
+  old_world: WORLD_V3_HUB_MAP_ID,
+  old_world_map: WORLD_V3_HUB_MAP_ID,
+  main_world: WORLD_V3_HUB_MAP_ID,
+  world_map: WORLD_V3_HUB_MAP_ID,
+  world_map_tmj: WORLD_V3_HUB_MAP_ID,
+  new_world: WORLD_V3_HUB_MAP_ID,
+  new_world_v3: WORLD_V3_HUB_MAP_ID,
+  world_v3: WORLD_V3_HUB_MAP_ID,
+  world_continent_v3: WORLD_V3_HUB_MAP_ID,
+  world_continent_v4: WORLD_V3_HUB_MAP_ID,
+  continent_01: WORLD_V3_HUB_MAP_ID,
+  human_starting: 'starting_human',
+  dwarf_starting: 'starting_dwarf',
+  undead_starting: 'starting_neutral',
+  elf_starting: 'starting_elf',
+  orc_starting: 'starting_orc',
+  starting_undead: 'starting_neutral',
+  human_starting_zone_v4: 'starting_human',
+  dwarf_starting_zone: 'starting_dwarf',
+  undead_starting_zone: 'starting_neutral',
+  elf_starting_zone: 'starting_elf',
+  orc_starting_zone: 'starting_orc',
+};
+
+for (let regionY = 0; regionY < WORLD_V2_REGION_GRID; regionY += 1) {
+  for (let regionX = 0; regionX < WORLD_V2_REGION_GRID; regionX += 1) {
+    const canonicalMapId = `${CONTINENT_01_REGION_PREFIX}_${regionX}_${regionY}`;
+    [`world_region_${regionX}_${regionY}`, `world_region_${regionX}_${regionY}_v2`, `world_region_${regionX}_${regionY}_v3`].forEach((legacyMapId) => {
+      MAP_ALIASES[legacyMapId] = canonicalMapId;
+    });
+  }
+}
+
 function normalizeMapId(mapId) {
-  const value = String(mapId ?? MAP_IDS.WORLD);
-  return MAP_FILES[value] ? value : MAP_IDS.WORLD;
+  const rawMapId = String(mapId ?? MAP_IDS.WORLD).trim().replace(/\\/g, '/').replace(/\.tmj$/i, '');
+  const bareMapId = rawMapId.split('/').pop() ?? rawMapId;
+  const aliasedMapId = MAP_ALIASES[rawMapId]
+    ?? MAP_ALIASES[rawMapId.toLowerCase()]
+    ?? MAP_ALIASES[bareMapId]
+    ?? MAP_ALIASES[bareMapId.toLowerCase()];
+  if (aliasedMapId && MAP_FILES[aliasedMapId]) return aliasedMapId;
+  if (MAP_FILES[rawMapId]) return rawMapId;
+  if (MAP_FILES[bareMapId]) return bareMapId;
+  return WORLD_V3_HUB_MAP_ID;
 }
 
 function isWorldLikeMap(mapId) {
@@ -80,7 +131,9 @@ function isWorldV2Map(mapId) {
 }
 
 function getWorldGenerationIdFromMapId(mapId, fallback = 'v2') {
-  const match = String(normalizeMapId(mapId) ?? '').match(/^world_region_\d+_\d+_(v\d+)$/);
+  const normalizedMapId = normalizeMapId(mapId);
+  if (new RegExp(`^${CONTINENT_01_REGION_PREFIX}_\\d+_\\d+$`).test(normalizedMapId)) return 'v3';
+  const match = String(normalizedMapId ?? '').match(/^world_region_\d+_\d+_(v\d+)$/);
   return WORLD_STREAM_GENERATIONS[match?.[1]] ? match[1] : fallback;
 }
 
@@ -103,24 +156,190 @@ const PLAYER = {
 };
 
 const ENEMY = {
-  maxCount: 12,
+  maxCount: 18,
   radius: 17,
-  speed: 105,
-  spawnEvery: 1800,
-  wanderSpeed: 48,
+  speed: 155,
+  spawnEvery: 1200,
+  wanderSpeed: 72,
 };
 
+const ENEMY_LEASH_GRACE_MS = 4200;
+const ENEMY_LEASH_DISTANCE = 760;
+const BOSS_LEASH_DISTANCE = 980;
+const DUNGEON_FINAL_BOSS_LEASH_DISTANCE = 1180;
+const ENEMY_AGGRO_RESET_COOLDOWN_MS = 2500;
+const ENEMY_ATTACK_ANIMATION_MS = 420;
+const ENEMY_ATTACK_IMPACT_MS = 210;
+const WORLD_BOSS_MECHANICS = Object.freeze({
+  'tideglass-matriarch': Object.freeze({
+    type: 'tidal-volley',
+    damage: 78,
+    initialDelay: 2200,
+    telegraphDuration: 520,
+    recoveryDuration: 320,
+    cooldown: 5600,
+    activationRange: 500,
+    maxTravelDistance: 680,
+    projectileSpeed: 540,
+    projectileRadius: 24,
+    projectileCountMin: 3,
+    projectileCountMax: 4,
+    projectileSpread: 0.14,
+    targetLeadMs: 140,
+    targetLeadMaxDistance: 56,
+    slowDuration: 2400,
+    slowMultiplier: 0.58,
+    rangedAttack: Object.freeze({
+      type: 'water-bolt',
+      range: 620,
+      attackStartRange: 445,
+      preferredRange: 335,
+      projectileSpeed: 680,
+      projectileRadius: 22,
+      launchDelay: 180,
+      recoveryDuration: 180,
+      cooldown: 1150,
+      targetLeadMs: 180,
+      targetLeadMaxDistance: 72,
+      slowDuration: 1800,
+      slowMultiplier: 0.68,
+    }),
+  }),
+  'old-quarry-giant': Object.freeze({
+    type: 'ground-slam',
+    radius: 175,
+    damage: 96,
+    initialDelay: 2400,
+    telegraphDuration: 900,
+    totalDuration: 1200,
+    cooldown: 7000,
+    secondary: Object.freeze({
+      type: 'boulder-toss',
+      damage: 72,
+      initialDelay: 3400,
+      telegraphDuration: 650,
+      recoveryDuration: 380,
+      cooldown: 6100,
+      activationRange: 760,
+      minRange: 105,
+      maxTravelDistance: 700,
+      projectileSpeed: 430,
+      projectileRadius: 42,
+      projectileCountMin: 3,
+      projectileCountMax: 4,
+      projectileSpread: 0.22,
+      slowDuration: 3000,
+      slowMultiplier: 0.52,
+    }),
+  }),
+});
 const WORLD_BROADCAST_MS = 50;
 const PARTY_INVITE_COOLDOWN_MS = 8000;
+const PARTY_MAX_MEMBERS = 5;
 const MAX_LEVEL = 30;
 const ADMIN_EMAILS = new Set(['romvariszabi03@gmail.com']);
+const WORLD_TIME_PHASES = new Set(['dawn', 'day', 'evening', 'night']);
+const WORLD_WEATHER_PHASES = new Set(['clear', 'cloudy', 'rain', 'storm']);
 
 const ENEMY_XP = 35;
 const BOSS_XP = 180;
 const BOSS_SPAWN_MIN = 18000;
 const BOSS_SPAWN_MAX = 34000;
+
+function getWorldBossMechanicConfig(enemy) {
+  const kind = normalizeEnemyKind(enemy?.bossType ?? enemy?.enemyKind ?? enemy?.spriteId ?? enemy?.name);
+  return WORLD_BOSS_MECHANICS[kind] ?? null;
+}
+
+function getActiveWorldBossMechanicConfig(mechanicConfig, mechanicType) {
+  if (!mechanicConfig || !mechanicType) return null;
+  if (mechanicConfig.type === mechanicType) return mechanicConfig;
+  return mechanicConfig.secondary?.type === mechanicType ? mechanicConfig.secondary : null;
+}
+
+function createBossProjectilePattern(source, target, config, now) {
+  const originX = safeNumber(source?.x, 0);
+  const originY = safeNumber(source?.y, 0);
+  const targetLeadSeconds = Math.max(0, safeNumber(config?.targetLeadMs, 0)) / 1000;
+  const targetLeadMaxDistance = Math.max(0, safeNumber(config?.targetLeadMaxDistance, 0));
+  const rawLeadX = safeNumber(target?.vx, 0) * targetLeadSeconds;
+  const rawLeadY = safeNumber(target?.vy, 0) * targetLeadSeconds;
+  const rawLeadDistance = Math.hypot(rawLeadX, rawLeadY);
+  const leadScale = rawLeadDistance > targetLeadMaxDistance && rawLeadDistance > 0
+    ? targetLeadMaxDistance / rawLeadDistance
+    : 1;
+  const targetX = safeNumber(target?.x, originX + 1) + rawLeadX * leadScale;
+  const targetY = safeNumber(target?.y, originY) + rawLeadY * leadScale;
+  const baseAngle = Math.atan2(targetY - originY, targetX - originX);
+  const targetDistance = Math.hypot(targetX - originX, targetY - originY);
+  const maxTravelDistance = Math.max(96, safeNumber(config?.maxTravelDistance, config?.activationRange ?? 720));
+  const travelDistance = clamp(targetDistance, 96, maxTravelDistance);
+  const projectileSpeed = Math.max(80, safeNumber(config?.projectileSpeed, 420));
+  const projectileCountMin = clamp(Math.floor(safeNumber(config?.projectileCountMin, config?.projectileCount ?? 1)), 1, 7);
+  const projectileCountMax = clamp(Math.floor(safeNumber(config?.projectileCountMax, projectileCountMin)), projectileCountMin, 7);
+  const projectileCount = projectileCountMin + Math.floor(Math.random() * (projectileCountMax - projectileCountMin + 1));
+  const projectileSpread = safeNumber(config?.projectileSpread, 0);
+  const launchAt = now + Math.max(0, safeNumber(config?.telegraphDuration, config?.launchDelay ?? 0));
+
+  return Array.from({ length: projectileCount }, (_, index) => {
+    const offset = index - (projectileCount - 1) / 2;
+    const angle = baseAngle + offset * projectileSpread;
+    const projectileTargetX = originX + Math.cos(angle) * travelDistance;
+    const projectileTargetY = originY + Math.sin(angle) * travelDistance;
+    return {
+      id: `${String(config?.type ?? 'projectile')}-${index}`,
+      type: String(config?.type ?? 'projectile'),
+      originX,
+      originY,
+      targetX: projectileTargetX,
+      targetY: projectileTargetY,
+      launchAt,
+      impactAt: launchAt + (travelDistance / projectileSpeed) * 1000,
+      radius: Math.max(4, safeNumber(config?.projectileRadius, 18)),
+    };
+  });
+}
+
+function getBossProjectilePoint(projectile, at) {
+  const launchAt = safeNumber(projectile?.launchAt, 0);
+  const impactAt = Math.max(launchAt + 1, safeNumber(projectile?.impactAt, launchAt + 1));
+  const progress = clamp((at - launchAt) / (impactAt - launchAt), 0, 1);
+  return {
+    x: safeNumber(projectile?.originX, 0) + (safeNumber(projectile?.targetX, 0) - safeNumber(projectile?.originX, 0)) * progress,
+    y: safeNumber(projectile?.originY, 0) + (safeNumber(projectile?.targetY, 0) - safeNumber(projectile?.originY, 0)) * progress,
+  };
+}
+
+function bossProjectileSweptHit(projectile, target, previousTime, now, extraRadius = 0) {
+  const launchAt = safeNumber(projectile?.launchAt, 0);
+  const impactAt = safeNumber(projectile?.impactAt, launchAt);
+  if (now < launchAt || previousTime > impactAt) return false;
+  const from = getBossProjectilePoint(projectile, Math.max(launchAt, Math.min(previousTime, impactAt)));
+  const to = getBossProjectilePoint(projectile, Math.max(launchAt, Math.min(now, impactAt)));
+  const segmentX = to.x - from.x;
+  const segmentY = to.y - from.y;
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+  const projection = segmentLengthSquared > 0
+    ? clamp(((safeNumber(target?.x, 0) - from.x) * segmentX + (safeNumber(target?.y, 0) - from.y) * segmentY) / segmentLengthSquared, 0, 1)
+    : 0;
+  const closestX = from.x + segmentX * projection;
+  const closestY = from.y + segmentY * projection;
+  return Math.hypot(safeNumber(target?.x, 0) - closestX, safeNumber(target?.y, 0) - closestY)
+    <= Math.max(4, safeNumber(projectile?.radius, 18)) + Math.max(0, extraRadius);
+}
 const BOSS_RESPAWN_DELAY = 60000;
 const DUNGEON_PACK_SIZE = 6;
+const DUNGEON_HP_SCALE_BY_PARTY_SIZE = new Map([
+  [1, 0.70],
+  [2, 0.82],
+  [3, 0.94],
+  [4, 1.08],
+  [5, 1.22],
+]);
+const DUNGEON_EXTRA_DPS_HP_SCALE = 0.20;
+const DUNGEON_TRINITY_HP_DISCOUNT = 0.08;
+const DUNGEON_MIN_HP_SCALE = 0.62;
+const DUNGEON_MAX_HP_SCALE = 2.20;
 
 function normalizeEmail(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -132,6 +351,22 @@ function getMessageEmail(message) {
 
 function isAdminEmail(value) {
   return ADMIN_EMAILS.has(normalizeEmail(value));
+}
+
+function normalizeWorldControlPhase(value, validPhases) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized || normalized === 'auto') return null;
+  return validPhases.has(normalized) ? normalized : undefined;
+}
+
+function normalizeWorldControlSpeed(value) {
+  return clamp(safeNumber(value, 1), 0, 600);
+}
+
+function normalizeInteriorSpaceId(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized || ['none', 'null', 'outside', 'overworld'].includes(normalized.toLowerCase())) return null;
+  return normalized;
 }
 
 function safeNumber(value, fallback = 0) {
@@ -222,24 +457,118 @@ function getSpawnDataSignature() {
     .join('|');
 }
 
-function readObjects(objectLayers, layerName, mapId = MAP_IDS.WORLD) {
+function getWorldV2RegionCoordsFromMapId(mapId) {
   const normalizedMapId = normalizeMapId(mapId);
-  return objectLayers
-    .find((layer) => layer.name === layerName)
-    ?.objects
-    ?.map((object) => ({
-      ...object,
-      mapId: normalizedMapId,
-      props: {
-        ...getProperties(object),
-        mapId: normalizedMapId,
-      },
-    })) ?? [];
+  const match = String(normalizedMapId).match(new RegExp(`^${CONTINENT_01_REGION_PREFIX}_(\\d+)_(\\d+)$`));
+  if (!match) return null;
+  return {
+    regionX: Number(match[1]),
+    regionY: Number(match[2]),
+  };
 }
 
-function loadCollisionMap(fileName) {
+function getWorldV2RegionOffset(mapId) {
+  const coords = getWorldV2RegionCoordsFromMapId(mapId);
+  if (!coords) return { x: 0, y: 0 };
+  return {
+    x: coords.regionX * WORLD_V2_REGION_PIXEL_SIZE,
+    y: coords.regionY * WORLD_V2_REGION_PIXEL_SIZE,
+  };
+}
+
+function readObjects(objectLayers, layerName, mapId = MAP_IDS.WORLD) {
+  const normalizedMapId = normalizeMapId(mapId);
+  const layer = objectLayers.find((candidate) => candidate.name === layerName);
+  const layerProps = getProperties(layer ?? {});
+  const offset = getWorldV2RegionOffset(normalizedMapId);
+  return layer
+    ?.objects
+    ?.map((object) => {
+      const localX = safeNumber(object.x, 0);
+      const localY = safeNumber(object.y, 0);
+      return {
+        ...object,
+        x: localX + offset.x,
+        y: localY + offset.y,
+        localX,
+        localY,
+        layerName,
+        regionMapId: normalizedMapId,
+        mapId: normalizedMapId,
+        props: {
+          ...layerProps,
+          ...getProperties(object),
+          mapId: normalizedMapId,
+          regionMapId: normalizedMapId,
+        },
+      };
+    }) ?? [];
+}
+
+function readObjectsFromLayers(objectLayers, layerNames, mapId = MAP_IDS.WORLD) {
+  return layerNames.flatMap((layerName) => readObjects(objectLayers, layerName, mapId));
+}
+
+function normalizeTiledLayerName(value) {
+  return String(value ?? '').toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function isInteriorCollisionLayer(layer) {
+  const name = normalizeTiledLayerName(layer?.name);
+  const props = getProperties(layer ?? {});
+  const layerType = normalizeTiledLayerName(props.type ?? props.kind);
+  return ['interiorcollision', 'cavecollision', 'cavecollisions'].includes(name)
+    || ['interiorcollision', 'cavecollision'].includes(layerType)
+    || props.collision === true;
+}
+
+function isInteriorWalkableLayer(layer) {
+  const name = normalizeTiledLayerName(layer?.name);
+  const props = getProperties(layer ?? {});
+  const layerType = normalizeTiledLayerName(props.type ?? props.kind);
+  return ['caveinteriors', 'caveentrances', 'cityinteriors', 'interiors', 'interiorfloor'].includes(name)
+    || ['caveinterior', 'caveentrance', 'cityinterior', 'interiorfloor'].includes(layerType);
+}
+
+function interiorLayerMatches(layer, activeInteriorId, predicate) {
+  const normalizedInteriorId = normalizeInteriorSpaceId(activeInteriorId);
+  if (!normalizedInteriorId || !predicate(layer)) return false;
+  const props = getProperties(layer ?? {});
+  const layerInteriorId = normalizeInteriorSpaceId(props.interiorId ?? props.caveId ?? props.targetInteriorId);
+  return !layerInteriorId || layerInteriorId === normalizedInteriorId;
+}
+
+function layerMatchesInteriorCollision(layer, activeInteriorId) {
+  return interiorLayerMatches(layer, activeInteriorId, isInteriorCollisionLayer);
+}
+
+function layerMatchesInteriorWalkable(layer, activeInteriorId) {
+  return interiorLayerMatches(layer, activeInteriorId, isInteriorWalkableLayer);
+}
+
+function offsetObjectLayer(layer, offset) {
+  if (!layer) return null;
+  return {
+    ...layer,
+    objects: (layer.objects ?? []).map((object) => ({
+      ...object,
+      x: safeNumber(object.x, 0) + offset.x,
+      y: safeNumber(object.y, 0) + offset.y,
+      localX: safeNumber(object.x, 0),
+      localY: safeNumber(object.y, 0),
+    })),
+  };
+}
+
+function loadCollisionMap(fileName, mapId = MAP_IDS.WORLD) {
   try {
-    const map = loadTiledMapFile(fileName, { decodeTiles: true, tileLayerNames: ['Collision'] });
+    const map = loadTiledMapFile(fileName, {
+      decodeTiles: true,
+      tileLayerNames: ['Collision', 'CaveCollision', 'CaveInteriors', 'CaveEntrances', 'CityInteriors'],
+    });
+    const normalizedMapId = normalizeMapId(mapId);
+    const offset = getWorldV2RegionOffset(normalizedMapId);
+    const tileLayers = (map.layers ?? []).filter((layer) => layer.type === 'tilelayer');
     return {
       width: map.width,
       height: map.height,
@@ -247,8 +576,12 @@ function loadCollisionMap(fileName) {
       tileheight: map.tileheight,
       pixelWidth: map.width * map.tilewidth,
       pixelHeight: map.height * map.tileheight,
+      offsetX: offset.x,
+      offsetY: offset.y,
       tileLayer: (map.layers ?? []).find((layer) => layer.type === 'tilelayer' && layer.name === 'Collision') ?? null,
-      objectLayer: (map.layers ?? []).find((layer) => layer.type === 'objectgroup' && layer.name === 'Collision') ?? null,
+      objectLayer: offsetObjectLayer((map.layers ?? []).find((layer) => layer.type === 'objectgroup' && layer.name === 'Collision') ?? null, offset),
+      interiorCollisionLayers: tileLayers.filter(isInteriorCollisionLayer),
+      interiorWalkableLayers: tileLayers.filter(isInteriorWalkableLayer),
     };
   } catch (error) {
     console.warn(`Collision map ${fileName} could not be loaded:`, error.message);
@@ -257,7 +590,7 @@ function loadCollisionMap(fileName) {
 }
 
 const COLLISION_MAPS = Object.fromEntries(
-  Object.entries(MAP_FILES).map(([mapId, fileName]) => [mapId, loadCollisionMap(fileName)]),
+  Object.entries(MAP_FILES).map(([mapId, fileName]) => [mapId, loadCollisionMap(fileName, mapId)]),
 );
 
 function getCollisionMap(mapId = MAP_IDS.WORLD) {
@@ -290,20 +623,42 @@ function pointIntersectsCollisionObject(object, x, y, radius) {
   return Math.hypot(x - closestX, y - closestY) <= radius;
 }
 
-function isTileBlocked(collisionMap, x, y) {
-  if (!collisionMap) return false;
+function isTileFilledInLayer(collisionMap, layer, x, y, outsideValue = false) {
+  if (!collisionMap || !layer?.data) return false;
   const tileWidth = collisionMap.tilewidth || 32;
   const tileHeight = collisionMap.tileheight || 32;
-  if (x < 0 || y < 0 || x >= collisionMap.pixelWidth || y >= collisionMap.pixelHeight) return true;
-
-  const tileLayer = collisionMap.tileLayer;
-  if (!tileLayer?.data) return false;
-  const column = Math.floor(x / tileWidth);
-  const row = Math.floor(y / tileHeight);
-  return Boolean(tileLayer.data[row * tileLayer.width + column]);
+  const localX = x - safeNumber(collisionMap.offsetX, 0);
+  const localY = y - safeNumber(collisionMap.offsetY, 0);
+  if (localX < 0 || localY < 0 || localX >= collisionMap.pixelWidth || localY >= collisionMap.pixelHeight) return outsideValue;
+  const column = Math.floor(localX / tileWidth);
+  const row = Math.floor(localY / tileHeight);
+  return Boolean(layer.data[row * layer.width + column]);
 }
 
-function canMoveToCollision(collisionMap, x, y, radius) {
+function isTileBlocked(collisionMap, x, y) {
+  return isTileFilledInLayer(collisionMap, collisionMap?.tileLayer, x, y, true);
+}
+
+function isInteriorWalkableTile(collisionMap, x, y, activeInteriorId) {
+  const normalizedInteriorId = normalizeInteriorSpaceId(activeInteriorId);
+  if (!normalizedInteriorId) return true;
+  return (collisionMap?.interiorWalkableLayers ?? [])
+    .filter((layer) => layerMatchesInteriorWalkable(layer, normalizedInteriorId))
+    .some((layer) => isTileFilledInLayer(collisionMap, layer, x, y, false));
+}
+
+function isInteriorTileBlocked(collisionMap, x, y, activeInteriorId) {
+  const normalizedInteriorId = normalizeInteriorSpaceId(activeInteriorId);
+  if (!normalizedInteriorId) return false;
+  return (collisionMap?.interiorCollisionLayers ?? [])
+    .filter((layer) => layerMatchesInteriorCollision(layer, normalizedInteriorId))
+    .some((layer) => isTileFilledInLayer(collisionMap, layer, x, y, false));
+}
+
+function canMoveToCollision(collisionMap, x, y, radius, options = {}) {
+  const activeInteriorId = normalizeInteriorSpaceId(options.activeInteriorId);
+  if (!collisionMap) return !activeInteriorId;
+
   const points = [
     { x, y },
     { x: x - radius, y },
@@ -316,9 +671,11 @@ function canMoveToCollision(collisionMap, x, y, radius) {
     { x: x + radius * 0.7, y: y + radius * 0.7 },
   ];
 
-  const tileBlocked = points.some((point) => isTileBlocked(collisionMap, point.x, point.y));
-  if (tileBlocked) return false;
+  if (activeInteriorId && points.some((point) => !isInteriorWalkableTile(collisionMap, point.x, point.y, activeInteriorId))) return false;
+  if (!options.ignoreWorldCollision && points.some((point) => isTileBlocked(collisionMap, point.x, point.y))) return false;
+  if (activeInteriorId && points.some((point) => isInteriorTileBlocked(collisionMap, point.x, point.y, activeInteriorId))) return false;
 
+  if (options.ignoreWorldCollision) return true;
   const collisionObjects = collisionMap?.objectLayer?.objects ?? [];
   return !collisionObjects.some((object) => pointIntersectsCollisionObject(object, x, y, radius));
 }
@@ -326,21 +683,24 @@ function canMoveToCollision(collisionMap, x, y, radius) {
 function moveEnemyWithCollision(enemy, nextX, nextY, bounds = null) {
   const radius = enemy.radius ?? ENEMY.radius;
   const mapBounds = getMapPixelBounds(enemy.mapId);
-  const minX = bounds ? bounds.x + radius : radius;
-  const maxX = bounds ? bounds.x + bounds.width - radius : mapBounds.width - radius;
-  const minY = bounds ? bounds.y + radius : radius;
-  const maxY = bounds ? bounds.y + bounds.height - radius : mapBounds.height - radius;
+  const interiorId = normalizeInteriorSpaceId(enemy?.interiorId);
+  const movementBounds = bounds ?? (interiorId ? enemy.spawnBounds : null);
+  const minX = movementBounds ? movementBounds.x + radius : radius;
+  const maxX = movementBounds ? movementBounds.x + movementBounds.width - radius : mapBounds.width - radius;
+  const minY = movementBounds ? movementBounds.y + radius : radius;
+  const maxY = movementBounds ? movementBounds.y + movementBounds.height - radius : mapBounds.height - radius;
   const collisionMap = getCollisionMap(enemy.mapId);
+  const collisionOptions = interiorId ? { activeInteriorId: interiorId, ignoreWorldCollision: true } : {};
   const targetX = clamp(nextX, minX, maxX);
   const targetY = clamp(nextY, minY, maxY);
 
-  if (canMoveToCollision(collisionMap, targetX, targetY, radius)) {
+  if (canMoveToCollision(collisionMap, targetX, targetY, radius, collisionOptions)) {
     return { x: targetX, y: targetY, blocked: false };
   }
-  if (canMoveToCollision(collisionMap, targetX, enemy.y, radius)) {
+  if (canMoveToCollision(collisionMap, targetX, enemy.y, radius, collisionOptions)) {
     return { x: targetX, y: enemy.y, blocked: true };
   }
-  if (canMoveToCollision(collisionMap, enemy.x, targetY, radius)) {
+  if (canMoveToCollision(collisionMap, enemy.x, targetY, radius, collisionOptions)) {
     return { x: enemy.x, y: targetY, blocked: true };
   }
   return { x: enemy.x, y: enemy.y, blocked: true };
@@ -371,8 +731,8 @@ function loadTiledSpawns() {
 
       const layers = loadMapObjectLayers(fileName);
       const spawns = [
-        ...readObjects(layers, 'Spawns', normalizedMapId),
-        ...readObjects(layers, 'BossSpawns', normalizedMapId),
+        ...readObjectsFromLayers(layers, ['Spawns', 'CaveSpawns', 'InteriorSpawns'], normalizedMapId),
+        ...readObjectsFromLayers(layers, ['BossSpawns', 'CaveBossSpawns', 'InteriorBossSpawns'], normalizedMapId),
       ];
       const bossSpawns = spawns.filter((spawn) => (
         spawn.props.bossType || objectHasAnyTag(spawn, ['boss'])
@@ -429,6 +789,97 @@ function randomPointInBounds(bounds) {
   };
 }
 
+function getObjectPolygonPoints(object) {
+  const objectX = safeNumber(object?.x, 0);
+  const objectY = safeNumber(object?.y, 0);
+  return (object?.polygon ?? []).map((point) => ({
+    x: objectX + safeNumber(point?.x, 0),
+    y: objectY + safeNumber(point?.y, 0),
+  }));
+}
+
+function getPolygonBounds(points) {
+  return {
+    x: Math.min(...points.map((point) => point.x)),
+    y: Math.min(...points.map((point) => point.y)),
+    width: Math.max(1, Math.max(...points.map((point) => point.x)) - Math.min(...points.map((point) => point.x))),
+    height: Math.max(1, Math.max(...points.map((point) => point.y)) - Math.min(...points.map((point) => point.y))),
+  };
+}
+
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const current = polygon[index];
+    const prior = polygon[previous];
+    const denominator = prior.y - current.y;
+    const safeDenominator = Math.abs(denominator) < 0.0001 ? (denominator < 0 ? -0.0001 : 0.0001) : denominator;
+    if (((current.y > point.y) !== (prior.y > point.y))
+      && point.x < ((prior.x - current.x) * (point.y - current.y)) / safeDenominator + current.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function distanceToPolygon(point, polygon) {
+  let closest = Number.POSITIVE_INFINITY;
+  polygon.forEach((start, index) => {
+    closest = Math.min(closest, distanceToSegment(point, start, polygon[(index + 1) % polygon.length]));
+  });
+  return closest;
+}
+
+function isPointInsideSpawnArea(point, spawnObject, bounds, radius = 0) {
+  if (Array.isArray(spawnObject?.polygon) && spawnObject.polygon.length >= 3) {
+    const polygon = getObjectPolygonPoints(spawnObject);
+    return pointInPolygon(point, polygon) && distanceToPolygon(point, polygon) >= radius;
+  }
+  if (spawnObject?.ellipse && bounds.width > 0 && bounds.height > 0) {
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    const radiusX = Math.max(1, bounds.width / 2 - radius);
+    const radiusY = Math.max(1, bounds.height / 2 - radius);
+    return ((point.x - centerX) / radiusX) ** 2 + ((point.y - centerY) / radiusY) ** 2 <= 1;
+  }
+  return point.x >= bounds.x + radius
+    && point.x <= bounds.x + bounds.width - radius
+    && point.y >= bounds.y + radius
+    && point.y <= bounds.y + bounds.height - radius;
+}
+
+function findSpawnAreaAnchor(spawnObject, bounds, radius = 0) {
+  const center = clampPointToBounds({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }, bounds, radius);
+  if (isPointInsideSpawnArea(center, spawnObject, bounds, radius)) return center;
+  for (let row = 0; row < 12; row += 1) {
+    for (let column = 0; column < 12; column += 1) {
+      const candidate = clampPointToBounds({
+        x: bounds.x + ((column + 0.5) / 12) * bounds.width,
+        y: bounds.y + ((row + 0.5) / 12) * bounds.height,
+      }, bounds, radius);
+      if (isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)) return candidate;
+    }
+  }
+  return center;
+}
+
+function constrainPointToSpawnArea(point, spawnObject, bounds, radius = ENEMY.radius, fallbackPoint = null) {
+  const bounded = clampPointToBounds(point, bounds, radius);
+  if (isPointInsideSpawnArea(bounded, spawnObject, bounds, radius)) return bounded;
+  const anchor = fallbackPoint && isPointInsideSpawnArea(fallbackPoint, spawnObject, bounds, radius)
+    ? fallbackPoint
+    : findSpawnAreaAnchor(spawnObject, bounds, radius);
+  if (!isPointInsideSpawnArea(anchor, spawnObject, bounds, radius)) return bounded;
+  let insidePoint = anchor;
+  let outsidePoint = bounded;
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const candidate = { x: (insidePoint.x + outsidePoint.x) / 2, y: (insidePoint.y + outsidePoint.y) / 2 };
+    if (isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)) insidePoint = candidate;
+    else outsidePoint = candidate;
+  }
+  return insidePoint;
+}
+
 function getSpawnBounds(spawnObject, fallbackPosition, fallbackSize = 360) {
   if (!spawnObject) {
     return {
@@ -437,6 +888,10 @@ function getSpawnBounds(spawnObject, fallbackPosition, fallbackSize = 360) {
       width: fallbackSize,
       height: fallbackSize,
     };
+  }
+
+  if (Array.isArray(spawnObject.polygon) && spawnObject.polygon.length >= 3) {
+    return getPolygonBounds(getObjectPolygonPoints(spawnObject));
   }
 
   return {
@@ -448,9 +903,9 @@ function getSpawnBounds(spawnObject, fallbackPosition, fallbackSize = 360) {
 }
 
 function expandBoundsAroundCenter(bounds, minWidth, minHeight, mapId = MAP_IDS.WORLD) {
-  const collisionMap = getCollisionMap(mapId);
-  const pixelWidth = collisionMap?.pixelWidth ?? WORLD.width;
-  const pixelHeight = collisionMap?.pixelHeight ?? WORLD.height;
+  const mapBounds = getMapPixelBounds(mapId);
+  const pixelWidth = mapBounds.width;
+  const pixelHeight = mapBounds.height;
   const width = Math.max(Number(bounds?.width ?? 0), minWidth);
   const height = Math.max(Number(bounds?.height ?? 0), minHeight);
   const centerX = Number(bounds?.x ?? 0) + Number(bounds?.width ?? width) / 2;
@@ -477,6 +932,24 @@ function numberProp(object, name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+const DEFAULT_ENEMY_MOVEMENT_SPEED_MULTIPLIER = 1.1;
+const MAX_ENEMY_MOVEMENT_SPEED = 1200;
+
+// Tiled enemy-spawn movementSpeed is expressed in world pixels per second.
+function getSpawnMovementSpeed(spawnObject, fallbackSpeed = ENEMY.speed) {
+  const rawValue = spawnObject?.props?.movementSpeed
+    ?? spawnObject?.props?.moveSpeed
+    ?? spawnObject?.props?.movement_speed
+    ?? spawnObject?.props?.speed;
+  const configuredSpeed = Number(rawValue);
+  if (Number.isFinite(configuredSpeed)) return clamp(configuredSpeed, 0, MAX_ENEMY_MOVEMENT_SPEED);
+  return clamp(
+    safeNumber(fallbackSpeed, ENEMY.speed) * DEFAULT_ENEMY_MOVEMENT_SPEED_MULTIPLIER,
+    0,
+    MAX_ENEMY_MOVEMENT_SPEED,
+  );
+}
+
 function getSpawnPackId(spawnObject, fallbackId = 'fallback_spawn') {
   const mapId = normalizeMapId(spawnObject?.mapId ?? spawnObject?.props?.mapId ?? MAP_IDS.WORLD);
   const baseId = String(spawnObject?.props?.spawnId ?? spawnObject?.name ?? spawnObject?.id ?? fallbackId);
@@ -488,16 +961,55 @@ function getSpawnEnemyType(spawnObject) {
   return normalizeEnemyKind(spawnObject?.props?.enemyType ?? (spawnName.includes('desert') ? 'scarab' : 'wolf'));
 }
 
+function getSpawnRecommendedLevel(spawnObject) {
+  return Math.max(0, Math.floor(numberProp(spawnObject, 'recommendedLevel', 0)));
+}
+
+function getSpawnArea(spawnObject) {
+  if (Array.isArray(spawnObject?.polygon) && spawnObject.polygon.length >= 3) {
+    const polygon = getObjectPolygonPoints(spawnObject);
+    let twiceArea = 0;
+    polygon.forEach((point, index) => {
+      const next = polygon[(index + 1) % polygon.length];
+      twiceArea += point.x * next.y - next.x * point.y;
+    });
+    return Math.abs(twiceArea) / 2;
+  }
+  const width = Math.max(0, safeNumber(spawnObject?.width, 0));
+  const height = Math.max(0, safeNumber(spawnObject?.height, 0));
+  return width * height;
+}
+
+function isAdvancedWorldSpawn(spawnObject) {
+  const mapId = normalizeMapId(spawnObject?.mapId ?? spawnObject?.props?.mapId ?? MAP_IDS.WORLD);
+  return isWorldV2Map(mapId) && getSpawnRecommendedLevel(spawnObject) >= 10;
+}
+
+function isInteriorSpawn(spawnObject) {
+  return Boolean(normalizeInteriorSpaceId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId));
+}
+
 function getSpawnMaxAlive(spawnObject) {
-  return Math.max(1, Math.floor(numberProp(spawnObject, 'maxAlive', numberProp(spawnObject, 'maxEnemies', ENEMY.maxCount))));
+  const configured = Math.max(1, Math.floor(numberProp(spawnObject, 'maxAlive', numberProp(spawnObject, 'maxEnemies', ENEMY.maxCount))));
+  if (isInteriorSpawn(spawnObject)) return configured;
+  if (!isAdvancedWorldSpawn(spawnObject)) return configured;
+
+  const scaledByArea = Math.ceil(getSpawnArea(spawnObject) / 900000);
+  const scaledConfigured = Math.ceil(configured * 1.15);
+  return clamp(Math.max(configured, scaledConfigured, scaledByArea), configured, 28);
 }
 
 function getSpawnRespawnMin(spawnObject) {
-  return Math.max(1000, numberProp(spawnObject, 'respawnMin', numberProp(spawnObject, 'respawnTime', ENEMY.spawnEvery)));
+  const configured = Math.max(1000, numberProp(spawnObject, 'respawnMin', numberProp(spawnObject, 'respawnTime', ENEMY.spawnEvery)));
+  if (isInteriorSpawn(spawnObject)) return Math.max(12000, configured);
+  return isAdvancedWorldSpawn(spawnObject) ? Math.max(7000, Math.floor(configured * 1.35)) : configured;
 }
 
 function getSpawnRespawnMax(spawnObject) {
-  return Math.max(getSpawnRespawnMin(spawnObject), numberProp(spawnObject, 'respawnMax', getSpawnRespawnMin(spawnObject)));
+  const min = getSpawnRespawnMin(spawnObject);
+  const configured = Math.max(min, numberProp(spawnObject, 'respawnMax', min));
+  if (isInteriorSpawn(spawnObject)) return Math.max(min + 3000, configured);
+  return isAdvancedWorldSpawn(spawnObject) ? Math.max(min + 3000, Math.floor(configured * 1.35)) : configured;
 }
 
 function getSpawnRespawnDelay(spawnObject) {
@@ -507,47 +1019,54 @@ function getSpawnRespawnDelay(spawnObject) {
 }
 
 const ENEMY_KIND_STATS = {
-  wolf: { name: 'Wolf', hp: 100, radius: 17, speed: 82, xp: 35 },
-  kobold: { name: 'Kobold Miner', hp: 115, radius: 17, speed: 76, xp: 40 },
-  bandit: { name: 'Field Bandit', hp: 125, radius: 18, speed: 84, xp: 42 },
-  undead: { name: 'Undead', hp: 130, radius: 18, speed: 62, xp: 45 },
-  'restless-dead': { name: 'Restless Dead', hp: 130, radius: 18, speed: 62, xp: 45 },
-  scarab: { name: 'Glass Scarab', hp: 110, radius: 16, speed: 88, xp: 38 },
-  'snow-wolf': { name: 'Snow Wolf', hp: 110, radius: 17, speed: 86, xp: 38 },
-  'frost-trogg': { name: 'Frost Trogg', hp: 145, radius: 19, speed: 66, xp: 48 },
-  'cave-spider': { name: 'Cave Spider', hp: 120, radius: 17, speed: 90, xp: 44 },
-  'grave-rat': { name: 'Grave Rat', hp: 90, radius: 15, speed: 96, xp: 34 },
-  plaguehound: { name: 'Plaguehound', hp: 125, radius: 18, speed: 86, xp: 42 },
-  'forest-sprite': { name: 'Forest Sprite', hp: 95, radius: 15, speed: 92, xp: 36 },
-  'corrupted-treant': { name: 'Corrupted Treant', hp: 165, radius: 21, speed: 54, xp: 55 },
-  nightstalker: { name: 'Nightstalker', hp: 120, radius: 17, speed: 94, xp: 43 },
-  plainstrider: { name: 'Plainstrider', hp: 115, radius: 18, speed: 96, xp: 39 },
-  scorpion: { name: 'Dust Scorpion', hp: 125, radius: 17, speed: 74, xp: 42 },
-  quilboar: { name: 'Razor Quilboar', hp: 150, radius: 20, speed: 70, xp: 50 },
-  'road-bandit': { name: 'Road Bandit', hp: 220, radius: 18, speed: 86, xp: 70 },
-  'dire-wolf': { name: 'Dire Wolf', hp: 310, radius: 19, speed: 96, xp: 90 },
-  'stone-gnoll': { name: 'Stone Gnoll', hp: 430, radius: 21, speed: 74, xp: 125 },
-  'ember-wraith': { name: 'Ember Wraith', hp: 520, radius: 20, speed: 82, xp: 155 },
-  'cave-stalker': { name: 'Cave Stalker', hp: 1100, radius: 21, speed: 98, xp: 205 },
-  'magma-crawler': { name: 'Magma Crawler', hp: 1260, radius: 22, speed: 82, xp: 230 },
-  'deep-burrower': { name: 'Deep Burrower', hp: 1180, radius: 22, speed: 88, xp: 220 },
-  'obsidian-sentinel': { name: 'Obsidian Sentinel', hp: 1520, radius: 25, speed: 64, xp: 265 },
+  wolf: { name: 'Wolf', hp: 220, radius: 17, speed: 150, xp: 45, damage: 14, attackCooldown: 820 },
+  kobold: { name: 'Kobold Miner', hp: 250, radius: 17, speed: 145, xp: 50, damage: 16, attackCooldown: 820 },
+  bandit: { name: 'Field Bandit', hp: 280, radius: 18, speed: 155, xp: 55, damage: 18, attackCooldown: 800 },
+  undead: { name: 'Undead', hp: 300, radius: 18, speed: 135, xp: 58, damage: 19, attackCooldown: 880 },
+  'restless-dead': { name: 'Restless Dead', hp: 300, radius: 18, speed: 135, xp: 58, damage: 19, attackCooldown: 880 },
+  scarab: { name: 'Glass Scarab', hp: 240, radius: 16, speed: 145, xp: 48, damage: 16, attackCooldown: 840 },
+  'snow-wolf': { name: 'Snow Wolf', hp: 240, radius: 17, speed: 160, xp: 48, damage: 15, attackCooldown: 800 },
+  'frost-trogg': { name: 'Frost Trogg', hp: 330, radius: 19, speed: 138, xp: 62, damage: 22, attackCooldown: 900 },
+  'cave-spider': { name: 'Cave Spider', hp: 260, radius: 17, speed: 170, xp: 54, damage: 18, attackCooldown: 780 },
+  'grave-rat': { name: 'Grave Rat', hp: 170, radius: 15, speed: 185, xp: 42, damage: 13, attackCooldown: 720 },
+  plaguehound: { name: 'Plaguehound', hp: 280, radius: 18, speed: 165, xp: 56, damage: 18, attackCooldown: 790 },
+  'forest-sprite': { name: 'Forest Sprite', hp: 230, radius: 15, speed: 175, xp: 48, damage: 16, attackCooldown: 760 },
+  'corrupted-treant': { name: 'Corrupted Treant', hp: 460, radius: 21, speed: 118, xp: 78, damage: 27, attackCooldown: 960 },
+  nightstalker: { name: 'Nightstalker', hp: 290, radius: 17, speed: 185, xp: 62, damage: 21, attackCooldown: 750 },
+  plainstrider: { name: 'Plainstrider', hp: 260, radius: 18, speed: 190, xp: 50, damage: 16, attackCooldown: 760 },
+  scorpion: { name: 'Dust Scorpion', hp: 285, radius: 17, speed: 135, xp: 56, damage: 19, attackCooldown: 850 },
+  quilboar: { name: 'Razor Quilboar', hp: 360, radius: 20, speed: 130, xp: 70, damage: 23, attackCooldown: 900 },
+  'road-bandit': { name: 'Road Bandit', hp: 520, radius: 18, speed: 170, xp: 110, damage: 30, attackCooldown: 790 },
+  'dire-wolf': { name: 'Dire Wolf', hp: 680, radius: 19, speed: 205, xp: 140, damage: 34, attackCooldown: 740 },
+  'stone-gnoll': { name: 'Stone Gnoll', hp: 920, radius: 21, speed: 150, xp: 180, damage: 42, attackCooldown: 900 },
+  'ember-wraith': { name: 'Ember Wraith', hp: 1050, radius: 20, speed: 165, xp: 210, damage: 48, attackCooldown: 850 },
+  'cave-stalker': { name: 'Cave Stalker', hp: 1450, radius: 21, speed: 150, xp: 255, damage: 52, attackCooldown: 820 },
+  'magma-crawler': { name: 'Magma Crawler', hp: 1600, radius: 22, speed: 130, xp: 285, damage: 58, attackCooldown: 930 },
+  'deep-burrower': { name: 'Deep Burrower', hp: 1520, radius: 22, speed: 145, xp: 275, damage: 54, attackCooldown: 880 },
+  'obsidian-sentinel': { name: 'Obsidian Sentinel', hp: 1900, radius: 25, speed: 105, xp: 330, damage: 64, attackCooldown: 980 },
+  'reedwater-marauder': { name: 'Reedwater Marauder', hp: 720, radius: 19, speed: 178, xp: 110, damage: 34, attackCooldown: 800 },
+  'bramblehide-bear': { name: 'Bramblehide Bear', hp: 1150, radius: 24, speed: 145, xp: 145, damage: 44, attackCooldown: 960 },
+  'moonbrook-prowler': { name: 'Moonbrook Prowler', hp: 780, radius: 19, speed: 210, xp: 120, damage: 36, attackCooldown: 760 },
+  'redscar-highwayman': { name: 'Redscar Highwayman', hp: 900, radius: 19, speed: 185, xp: 135, damage: 40, attackCooldown: 780 },
+  'saltspine-crawler': { name: 'Saltspine Crawler', hp: 820, radius: 18, speed: 160, xp: 120, damage: 35, attackCooldown: 820 },
 };
 
 const BOSS_KIND_STATS = {
-  'elder-briarheart': { name: 'Elder Briarheart', hp: 620, radius: 42, speed: 58, xp: 180 },
-  'granite-matriarch': { name: 'Granite Matriarch', hp: 760, radius: 44, speed: 52, xp: 210 },
-  'crypt-warden': { name: 'Crypt Warden', hp: 720, radius: 42, speed: 56, xp: 210 },
-  'moonshade-stag': { name: 'Moonshade Stag', hp: 680, radius: 40, speed: 70, xp: 210 },
-  'bloodtusk-chief': { name: 'Bloodtusk Chief', hp: 750, radius: 44, speed: 60, xp: 210 },
-  'varro-the-tollkeeper': { name: 'Varro the Tollkeeper', hp: 1300, radius: 38, speed: 70, xp: 260 },
-  'thornmaw-alpha': { name: 'Thornmaw Alpha', hp: 1700, radius: 40, speed: 78, xp: 320 },
-  'granite-ogre': { name: 'Granite Ogre', hp: 2300, radius: 46, speed: 58, xp: 390 },
-  'ash-witch': { name: 'Ash Witch', hp: 2800, radius: 38, speed: 72, xp: 460 },
-  'gloomfang-matriarch': { name: 'Gloomfang Matriarch', hp: 8600, radius: 48, speed: 78, xp: 1050 },
-  'lava-forged-warden': { name: 'Lava-Forged Warden', hp: 9800, radius: 52, speed: 60, xp: 1140 },
-  'crystal-horror': { name: 'Crystal Horror', hp: 9300, radius: 50, speed: 68, xp: 1100 },
-  'rift-heart': { name: 'Rift Heart', hp: 22000, radius: 60, speed: 56, xp: 2200 },
+  'elder-briarheart': { name: 'Elder Briarheart', hp: 1200, radius: 42, speed: 76, xp: 260, damage: 34, attackCooldown: 1050 },
+  'granite-matriarch': { name: 'Granite Matriarch', hp: 1450, radius: 44, speed: 66, xp: 290, damage: 38, attackCooldown: 1120 },
+  'crypt-warden': { name: 'Crypt Warden', hp: 1380, radius: 42, speed: 70, xp: 290, damage: 38, attackCooldown: 1080 },
+  'moonshade-stag': { name: 'Moonshade Stag', hp: 1300, radius: 40, speed: 92, xp: 290, damage: 36, attackCooldown: 980 },
+  'bloodtusk-chief': { name: 'Bloodtusk Chief', hp: 1450, radius: 44, speed: 78, xp: 290, damage: 40, attackCooldown: 1060 },
+  'varro-the-tollkeeper': { name: 'Varro the Tollkeeper', hp: 2600, radius: 38, speed: 95, xp: 360, damage: 48, attackCooldown: 980 },
+  'thornmaw-alpha': { name: 'Thornmaw Alpha', hp: 3400, radius: 40, speed: 105, xp: 440, damage: 54, attackCooldown: 940 },
+  'granite-ogre': { name: 'Granite Ogre', hp: 4600, radius: 46, speed: 78, xp: 540, damage: 62, attackCooldown: 1120 },
+  'ash-witch': { name: 'Ash Witch', hp: 5200, radius: 38, speed: 96, xp: 620, damage: 66, attackCooldown: 980 },
+  'gloomfang-matriarch': { name: 'Gloomfang Matriarch', hp: 9800, radius: 48, speed: 92, xp: 1050, damage: 68, attackCooldown: 920 },
+  'lava-forged-warden': { name: 'Lava-Forged Warden', hp: 11200, radius: 52, speed: 72, xp: 1140, damage: 76, attackCooldown: 1040 },
+  'crystal-horror': { name: 'Crystal Horror', hp: 10600, radius: 50, speed: 82, xp: 1100, damage: 72, attackCooldown: 980 },
+  'rift-heart': { name: 'Rift Heart', hp: 24000, radius: 60, speed: 64, xp: 2200, damage: 92, attackCooldown: 1080 },
+  'old-quarry-giant': { name: 'Old Quarry Giant', hp: 14000, radius: 48, speed: 70, xp: 550, damage: 72, attackCooldown: 960 },
+  'tideglass-matriarch': { name: 'Tideglass Matriarch', hp: 13200, radius: 46, speed: 86, xp: 550, damage: 74, attackCooldown: 900 },
 };
 
 function getEnemyKindStats(kind) {
@@ -556,6 +1075,18 @@ function getEnemyKindStats(kind) {
 
 function getBossKindStats(kind) {
   return BOSS_KIND_STATS[normalizeEnemyKind(kind)] ?? BOSS_KIND_STATS['elder-briarheart'];
+}
+
+function getDungeonHpMultiplier(dungeonScale) {
+  return clamp(safeNumber(dungeonScale?.hpMultiplier, 1), DUNGEON_MIN_HP_SCALE, DUNGEON_MAX_HP_SCALE);
+}
+
+function scaleDungeonStats(stats, dungeonScale) {
+  const hpMultiplier = getDungeonHpMultiplier(dungeonScale);
+  return {
+    ...stats,
+    hp: Math.max(1, Math.round(safeNumber(stats?.hp, 1) * hpMultiplier)),
+  };
 }
 
 function hashNumber(value) {
@@ -622,8 +1153,7 @@ function getSpawnMovementMode(spawnObject, slotIndex = 0) {
   if (['pause', 'wander_pause', 'roam_pause', 'stop'].includes(configured)) return 'roam-pause';
   if (['patrol', 'path', 'loop'].includes(configured)) return 'patrol';
 
-  if (slotIndex % 5 === 0) return 'sentinel';
-  if (slotIndex % 3 === 0) return 'roam-pause';
+  if (slotIndex % 4 === 0) return 'roam-pause';
   return 'patrol';
 }
 
@@ -651,43 +1181,231 @@ function buildPatrolPoints(home, bounds, slotIndex, radius = ENEMY.radius) {
   }, bounds, radius));
 }
 
-function findOpenSpawnPoint(mapId, bounds, slotIndex, maxAlive, radius = ENEMY.radius, preferredPoint = null) {
+function findOpenSpawnPoint(
+  mapId,
+  spawnObject,
+  bounds,
+  slotIndex,
+  maxAlive,
+  radius = ENEMY.radius,
+  preferredPoint = null,
+  collisionOptions = {},
+) {
   const collisionMap = getCollisionMap(mapId);
-  const basePoint = clampPointToBounds(preferredPoint ?? pointForSpawnSlot(bounds, slotIndex, maxAlive), bounds, radius);
-  if (canMoveToCollision(collisionMap, basePoint.x, basePoint.y, radius)) return basePoint;
+  const basePoint = constrainPointToSpawnArea(
+    preferredPoint ?? pointForSpawnSlot(bounds, slotIndex, maxAlive),
+    spawnObject,
+    bounds,
+    radius,
+  );
+  if (
+    isPointInsideSpawnArea(basePoint, spawnObject, bounds, radius)
+    && canMoveToCollision(collisionMap, basePoint.x, basePoint.y, radius, collisionOptions)
+  ) return basePoint;
 
   const seed = `${bounds.x}:${bounds.y}:${slotIndex}:open`;
   for (let attempt = 0; attempt < 48; attempt += 1) {
     const angle = seededUnit(seed, attempt) * Math.PI * 2;
     const spread = 18 + attempt * 8;
-    const candidate = clampPointToBounds({
+    const candidate = constrainPointToSpawnArea({
       x: basePoint.x + Math.cos(angle) * spread,
       y: basePoint.y + Math.sin(angle) * spread,
-    }, bounds, radius);
-    if (canMoveToCollision(collisionMap, candidate.x, candidate.y, radius)) return candidate;
+    }, spawnObject, bounds, radius, basePoint);
+    if (
+      isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      && canMoveToCollision(collisionMap, candidate.x, candidate.y, radius, collisionOptions)
+    ) return candidate;
+  }
+
+  // Collision-heavy forests used to send every blocked slot through the same
+  // top-left fallback cell. This slot-specific area search keeps them spread.
+  for (let attempt = 0; attempt < 128; attempt += 1) {
+    const candidate = constrainPointToSpawnArea({
+      x: bounds.x + seededUnit(seed, 1000 + attempt * 2) * bounds.width,
+      y: bounds.y + seededUnit(seed, 1001 + attempt * 2) * bounds.height,
+    }, spawnObject, bounds, radius, basePoint);
+    if (
+      isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      && canMoveToCollision(collisionMap, candidate.x, candidate.y, radius, collisionOptions)
+    ) return candidate;
   }
 
   const columns = Math.max(1, Math.floor(bounds.width / Math.max(radius * 2, 24)));
   const rows = Math.max(1, Math.floor(bounds.height / Math.max(radius * 2, 24)));
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      const candidate = clampPointToBounds({
-        x: bounds.x + ((column + 0.5) / columns) * bounds.width,
-        y: bounds.y + ((row + 0.5) / rows) * bounds.height,
-      }, bounds, radius);
-      if (canMoveToCollision(collisionMap, candidate.x, candidate.y, radius)) return candidate;
-    }
+  const cellCount = columns * rows;
+  const startCell = Math.floor(seededUnit(seed, 4001) * cellCount);
+  for (let step = 0; step < cellCount; step += 1) {
+    const cellIndex = (startCell + step) % cellCount;
+    const column = cellIndex % columns;
+    const row = Math.floor(cellIndex / columns);
+    const candidate = constrainPointToSpawnArea({
+      x: bounds.x + ((column + 0.5) / columns) * bounds.width,
+      y: bounds.y + ((row + 0.5) / rows) * bounds.height,
+    }, spawnObject, bounds, radius, basePoint);
+    if (
+      isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      && canMoveToCollision(collisionMap, candidate.x, candidate.y, radius, collisionOptions)
+    ) return candidate;
   }
 
   return basePoint;
 }
 
-function makeEnemyMovementState(spawnObject, bounds, slotIndex, maxAlive, radius = ENEMY.radius, mapId = MAP_IDS.WORLD) {
-  const home = findOpenSpawnPoint(mapId, bounds, slotIndex, maxAlive, radius);
+function isSameEnemyMovementSpace(left, right) {
+  if (!left || !right || left === right || String(left.id) === String(right.id)) return false;
+  return normalizeInteriorSpaceId(left.interiorId) === normalizeInteriorSpaceId(right.interiorId)
+    && getGameplayMapSpaceId(left.mapId ?? MAP_IDS.WORLD) === getGameplayMapSpaceId(right.mapId ?? MAP_IDS.WORLD)
+    && (left.instanceId ?? null) === (right.instanceId ?? null);
+}
+
+function getEnemySeparationVector(enemy, nearbyEnemies = []) {
+  const enemyRadius = Math.max(1, safeNumber(enemy?.radius, ENEMY.radius));
+  const crowdRadius = Math.max(170, enemyRadius * 8.5);
+  let pushX = 0;
+  let pushY = 0;
+  let personalStrength = 0;
+  const crowd = [];
+
+  nearbyEnemies.forEach((neighbor) => {
+    if (!isSameEnemyMovementSpace(enemy, neighbor) || safeNumber(neighbor.hp, 1) <= 0 || !isFinitePoint(neighbor)) return;
+    let dx = safeNumber(enemy.x) - safeNumber(neighbor.x);
+    let dy = safeNumber(enemy.y) - safeNumber(neighbor.y);
+    let separationDistance = Math.hypot(dx, dy);
+    if (separationDistance < 0.001) {
+      const enemyId = String(enemy.id ?? 'enemy');
+      const neighborId = String(neighbor.id ?? 'neighbor');
+      const orderedIds = [enemyId, neighborId].sort();
+      const angle = seededUnit(`${orderedIds[0]}:${orderedIds[1]}:separation`, 1) * Math.PI * 2;
+      const direction = enemyId === orderedIds[0] ? 1 : -1;
+      dx = Math.cos(angle) * direction;
+      dy = Math.sin(angle) * direction;
+      separationDistance = 1;
+    }
+
+    if (separationDistance < crowdRadius) crowd.push({ dx, dy, distance: separationDistance });
+    const personalDistance = Math.max(60, enemyRadius + Math.max(1, safeNumber(neighbor.radius, ENEMY.radius)) + 24);
+    if (separationDistance >= personalDistance) return;
+    const closeness = 1 - separationDistance / personalDistance;
+    const weight = 0.8 + closeness * 1.8;
+    pushX += (dx / separationDistance) * weight;
+    pushY += (dy / separationDistance) * weight;
+    personalStrength = Math.max(personalStrength, 0.55 + closeness * 1.05);
+  });
+
+  let crowdStrength = 0;
+  if (crowd.length > 3) {
+    crowdStrength = clamp((crowd.length - 3) / 3, 0, 1);
+    crowd.forEach(({ dx, dy, distance: neighborDistance }) => {
+      const falloff = 1 - neighborDistance / crowdRadius;
+      pushX += (dx / neighborDistance) * falloff * crowdStrength;
+      pushY += (dy / neighborDistance) * falloff * crowdStrength;
+    });
+  }
+
+  const pushLength = Math.hypot(pushX, pushY);
+  if (pushLength < 0.001) return { x: 0, y: 0, strength: 0, nearbyCount: crowd.length };
+  return {
+    x: pushX / pushLength,
+    y: pushY / pushLength,
+    strength: clamp(personalStrength + crowdStrength * 1.35, 0, 1.6),
+    nearbyCount: crowd.length,
+  };
+}
+
+function getMinimumDistanceFromEnemies(point, enemy, occupiedEnemies) {
+  let minimumDistance = Number.POSITIVE_INFINITY;
+  occupiedEnemies.forEach((neighbor) => {
+    if (!isSameEnemyMovementSpace(enemy, neighbor) || safeNumber(neighbor.hp, 1) <= 0 || !isFinitePoint(neighbor)) return;
+    minimumDistance = Math.min(minimumDistance, Math.hypot(point.x - neighbor.x, point.y - neighbor.y));
+  });
+  return minimumDistance;
+}
+
+function findDistributedSpawnPoint(
+  initialPoint,
+  enemy,
+  occupiedEnemies,
+  mapId,
+  spawnObject,
+  bounds,
+  slotIndex,
+  maxAlive,
+  radius,
+  collisionOptions,
+) {
+  if (!Array.isArray(occupiedEnemies) || occupiedEnemies.length === 0) return initialPoint;
+  const spacingFromArea = Math.sqrt(Math.max(1, getSpawnArea(spawnObject)) / Math.max(1, maxAlive)) * 0.5;
+  const preferredSpacing = clamp(spacingFromArea, radius * 2 + 22, 170);
+  let bestPoint = initialPoint;
+  let bestDistance = getMinimumDistanceFromEnemies(initialPoint, enemy, occupiedEnemies);
+  if (bestDistance >= preferredSpacing) return initialPoint;
+
+  const collisionMap = getCollisionMap(mapId);
+  const seed = `${getSpawnPackId(spawnObject)}:${slotIndex}:distributed`;
+  for (let attempt = 0; attempt < 128; attempt += 1) {
+    const candidate = constrainPointToSpawnArea({
+      x: bounds.x + seededUnit(seed, attempt * 2 + 1) * bounds.width,
+      y: bounds.y + seededUnit(seed, attempt * 2 + 2) * bounds.height,
+    }, spawnObject, bounds, radius, initialPoint);
+    if (
+      !isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      || !canMoveToCollision(collisionMap, candidate.x, candidate.y, radius, collisionOptions)
+    ) continue;
+    const candidateDistance = getMinimumDistanceFromEnemies(candidate, enemy, occupiedEnemies);
+    if (candidateDistance > bestDistance) {
+      bestPoint = candidate;
+      bestDistance = candidateDistance;
+    }
+    if (candidateDistance >= preferredSpacing) return candidate;
+  }
+  return bestPoint;
+}
+
+function makeEnemyMovementState(
+  spawnObject,
+  bounds,
+  slotIndex,
+  maxAlive,
+  radius = ENEMY.radius,
+  mapId = MAP_IDS.WORLD,
+  occupiedEnemies = [],
+  enemyIdentity = null,
+) {
+  const interiorId = normalizeInteriorSpaceId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId);
+  const collisionOptions = interiorId ? { activeInteriorId: interiorId, ignoreWorldCollision: true } : {};
+  const openPoint = findOpenSpawnPoint(mapId, spawnObject, bounds, slotIndex, maxAlive, radius, null, collisionOptions);
+  const home = findDistributedSpawnPoint(
+    openPoint,
+    {
+      id: enemyIdentity ?? `spawn-slot-${slotIndex}`,
+      mapId,
+      interiorId,
+      radius,
+      spawnArea: spawnObject,
+    },
+    occupiedEnemies,
+    mapId,
+    spawnObject,
+    bounds,
+    slotIndex,
+    maxAlive,
+    radius,
+    collisionOptions,
+  );
   const movementMode = getSpawnMovementMode(spawnObject, slotIndex);
   const patrolPoints = movementMode === 'sentinel'
     ? [home]
-    : buildPatrolPoints(home, bounds, slotIndex, radius);
+    : buildPatrolPoints(home, bounds, slotIndex, radius)
+      .map((point, index) => findOpenSpawnPoint(
+        mapId,
+        spawnObject,
+        bounds,
+        slotIndex + index + 1,
+        maxAlive,
+        radius,
+        point,
+        collisionOptions,
+      ));
   return {
     home,
     movementMode,
@@ -725,10 +1443,11 @@ function getReadyRespawnSlots(pack, now, occupiedSlots) {
   return readySlots;
 }
 
-function updateIdleEnemyMovement(enemy, now, delta, isBoss = false) {
+function updateIdleEnemyMovement(enemy, now, delta, isBoss = false, nearbyEnemies = []) {
   const bounds = enemy.spawnBounds;
   if (!bounds) return enemy;
 
+  const spawnArea = enemy.spawnArea ?? null;
   const radius = enemy.radius ?? ENEMY.radius;
   const mode = enemy.movementMode ?? 'patrol';
   let target = enemy.wanderTarget;
@@ -736,6 +1455,8 @@ function updateIdleEnemyMovement(enemy, now, delta, isBoss = false) {
   let pauseUntil = enemy.pauseUntil ?? 0;
   let nextWanderAt = enemy.nextWanderAt ?? 0;
   const patrolPoints = enemy.patrolPoints?.length ? enemy.patrolPoints : [enemy.home ?? randomPointInBounds(bounds)];
+  const separation = getEnemySeparationVector(enemy, nearbyEnemies);
+  let movementPaused = false;
 
   if (mode === 'sentinel') {
     if (!target || now >= nextWanderAt || distance(enemy, target) < 5) {
@@ -747,15 +1468,13 @@ function updateIdleEnemyMovement(enemy, now, delta, isBoss = false) {
       nextWanderAt = now + 3000 + Math.random() * 4000;
     }
   } else if (mode === 'roam-pause') {
-    if (pauseUntil > now && target && distance(enemy, target) < 10) {
-      return { ...enemy, pauseUntil };
-    }
-    if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
+    if (pauseUntil <= now && (!target || distance(enemy, target) < 10 || now >= nextWanderAt)) {
       patrolIndex = (patrolIndex + 1) % patrolPoints.length;
       target = patrolPoints[patrolIndex];
       pauseUntil = now + 900 + Math.random() * 1900;
       nextWanderAt = now + 6500 + Math.random() * 2500;
     }
+    movementPaused = pauseUntil > now;
   } else if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
     patrolIndex = (patrolIndex + 1) % patrolPoints.length;
     target = patrolPoints[patrolIndex];
@@ -764,24 +1483,41 @@ function updateIdleEnemyMovement(enemy, now, delta, isBoss = false) {
 
   const toTargetX = target.x - enemy.x;
   const toTargetY = target.y - enemy.y;
-  const length = Math.hypot(toTargetX, toTargetY) || 1;
+  const targetLength = Math.hypot(toTargetX, toTargetY);
+  let steeringX = movementPaused || targetLength < 0.001 ? 0 : toTargetX / targetLength;
+  let steeringY = movementPaused || targetLength < 0.001 ? 0 : toTargetY / targetLength;
+  if (separation.strength > 0) {
+    const separationWeight = movementPaused ? 1.35 : 1.1;
+    steeringX += separation.x * separation.strength * separationWeight;
+    steeringY += separation.y * separation.strength * separationWeight;
+  }
+  const steeringLength = Math.hypot(steeringX, steeringY);
+  if (steeringLength < 0.001) {
+    return { ...enemy, wanderTarget: target, patrolIndex, pauseUntil, nextWanderAt };
+  }
   const speedMultiplier = mode === 'sentinel' ? 0.24 : mode === 'roam-pause' ? 0.52 : 0.78;
-  const wanderSpeed = (isBoss ? ENEMY.wanderSpeed * 0.65 : ENEMY.wanderSpeed) * speedMultiplier;
+  const baseMovementSpeed = Math.max(0, safeNumber(enemy.speed, ENEMY.speed));
+  const wanderSpeed = baseMovementSpeed
+    * (isBoss ? 0.65 : 1)
+    * speedMultiplier
+    * (movementPaused ? 0.55 : 1);
   const movement = moveEnemyWithCollision(
     enemy,
-    enemy.x + (toTargetX / length) * wanderSpeed * delta,
-    enemy.y + (toTargetY / length) * wanderSpeed * delta,
+    enemy.x + (steeringX / steeringLength) * wanderSpeed * delta,
+    enemy.y + (steeringY / steeringLength) * wanderSpeed * delta,
     bounds,
   );
+  const nextPosition = constrainPointToSpawnArea(movement, spawnArea, bounds, radius, enemy.home);
+  const constrainedBySpawnArea = Math.abs(nextPosition.x - movement.x) > 0.01 || Math.abs(nextPosition.y - movement.y) > 0.01;
 
   return {
     ...enemy,
     wanderTarget: target,
     patrolIndex,
     pauseUntil,
-    nextWanderAt: movement.blocked ? Math.min(nextWanderAt, now + 600) : nextWanderAt,
-    x: movement.x,
-    y: movement.y,
+    nextWanderAt: movement.blocked || constrainedBySpawnArea ? Math.min(nextWanderAt, now + 600) : nextWanderAt,
+    x: nextPosition.x,
+    y: nextPosition.y,
   };
 }
 
@@ -814,12 +1550,29 @@ function nextBossDelay() {
   return BOSS_SPAWN_MIN + Math.random() * (BOSS_SPAWN_MAX - BOSS_SPAWN_MIN);
 }
 
-function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive = getSpawnMaxAlive(spawnObject)) {
+function createEnemy(
+  id,
+  spawnObject,
+  fallbackPosition,
+  spawnSlot = 0,
+  maxAlive = getSpawnMaxAlive(spawnObject),
+  occupiedEnemies = [],
+) {
   const mapId = normalizeMapId(spawnObject?.mapId ?? spawnObject?.props?.mapId ?? fallbackPosition?.mapId ?? MAP_IDS.WORLD);
+  const interiorId = normalizeInteriorSpaceId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId);
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition);
   const enemyKind = getSpawnEnemyType(spawnObject);
   const stats = getEnemyKindStats(enemyKind);
-  const movement = makeEnemyMovementState(spawnObject, spawnBounds, spawnSlot, maxAlive, stats.radius, mapId);
+  const movement = makeEnemyMovementState(
+    spawnObject,
+    spawnBounds,
+    spawnSlot,
+    maxAlive,
+    stats.radius,
+    mapId,
+    occupiedEnemies,
+    id,
+  );
   const spawnPoint = movement.home;
   const mapBounds = getMapPixelBounds(mapId);
 
@@ -830,19 +1583,23 @@ function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive 
     spriteId: enemyKind,
     mapId,
     instanceId: null,
+    interiorId,
     name: stats.name,
     spawnName: spawnObject?.name,
     spawnId: getSpawnPackId(spawnObject),
     spawnSlot,
     spawnBounds,
+    spawnArea: spawnObject,
     ...movement,
     x: clamp(spawnPoint.x, stats.radius, mapBounds.width - stats.radius),
     y: clamp(spawnPoint.y, stats.radius, mapBounds.height - stats.radius),
     radius: stats.radius,
     hp: stats.hp,
     maxHp: stats.hp,
-    speed: stats.speed,
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
+    damage: stats.damage,
+    attackCooldown: stats.attackCooldown,
     state: 'idle',
     wobble: Math.random() * Math.PI * 2,
     hitAt: 0,
@@ -851,6 +1608,7 @@ function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive 
 
 function createBoss(id, spawnObject, fallbackPosition) {
   const mapId = normalizeMapId(spawnObject?.mapId ?? spawnObject?.props?.mapId ?? fallbackPosition?.mapId ?? MAP_IDS.WORLD);
+  const interiorId = normalizeInteriorSpaceId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId);
   const bossType = normalizeEnemyKind(
     spawnObject?.props?.bossType
       ?? spawnObject?.props?.enemyType
@@ -859,7 +1617,7 @@ function createBoss(id, spawnObject, fallbackPosition) {
   );
   const stats = getBossKindStats(bossType);
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition, 620);
-  const spawnPoint = findOpenSpawnPoint(mapId, spawnBounds, 0, 1, stats.radius);
+  const spawnPoint = findOpenSpawnPoint(mapId, spawnObject, spawnBounds, 0, 1, stats.radius);
   const mapBounds = getMapPixelBounds(mapId);
 
   return {
@@ -867,6 +1625,7 @@ function createBoss(id, spawnObject, fallbackPosition) {
     type: 'boss',
     mapId,
     instanceId: null,
+    interiorId,
     bossType,
     questKind: spawnObject?.props?.enemyType ? normalizeEnemyKind(spawnObject.props.enemyType) : bossType,
     spriteId: bossType,
@@ -875,6 +1634,7 @@ function createBoss(id, spawnObject, fallbackPosition) {
     spawnId: getSpawnPackId(spawnObject),
     spawnSlot: 0,
     spawnBounds,
+    spawnPoint,
     wanderTarget: randomPointInBounds(spawnBounds),
     nextWanderAt: 0,
     x: clamp(spawnPoint.x, stats.radius, mapBounds.width - stats.radius),
@@ -882,24 +1642,36 @@ function createBoss(id, spawnObject, fallbackPosition) {
     radius: stats.radius,
     hp: stats.hp,
     maxHp: stats.hp,
-    speed: stats.speed,
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
+    damage: stats.damage,
+    attackCooldown: stats.attackCooldown,
     state: 'idle',
     wobble: Math.random() * Math.PI * 2,
     hitAt: 0,
   };
 }
 
-function createDungeonEnemy(id, spawnObject, instanceId, index) {
+function createDungeonEnemy(id, spawnObject, instanceId, index, dungeonScale = null) {
   const enemyKind = getSpawnEnemyType(spawnObject);
-  const stats = getEnemyKindStats(enemyKind);
+  const baseStats = getEnemyKindStats(enemyKind);
+  const stats = scaleDungeonStats(baseStats, dungeonScale);
   const fallbackPosition = {
     x: Number(spawnObject?.x ?? 640) + Number(spawnObject?.width ?? 260) / 2,
     y: Number(spawnObject?.y ?? 360) + Number(spawnObject?.height ?? 180) / 2,
   };
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition, 260);
   const packPoint = pointForDungeonPackSlot(spawnObject, spawnBounds, index, DUNGEON_PACK_SIZE, stats.radius);
-  const spawnPoint = findOpenSpawnPoint(MAP_IDS.DUNGEON_01, spawnBounds, index, DUNGEON_PACK_SIZE, stats.radius, packPoint);
+  const spawnPoint = findOpenSpawnPoint(
+    MAP_IDS.DUNGEON_01,
+    spawnObject,
+    spawnBounds,
+    index,
+    DUNGEON_PACK_SIZE,
+    stats.radius,
+    packPoint,
+  );
+  const dungeonBounds = getMapPixelBounds(MAP_IDS.DUNGEON_01);
 
   return {
     id: `dungeon-${instanceId}-${id}`,
@@ -919,28 +1691,41 @@ function createDungeonEnemy(id, spawnObject, instanceId, index) {
     pauseUntil: 0,
     wanderTarget: spawnPoint,
     nextWanderAt: 0,
-    x: clamp(spawnPoint.x, stats.radius, WORLD.width - stats.radius),
-    y: clamp(spawnPoint.y, stats.radius, WORLD.height - stats.radius),
+    x: clamp(spawnPoint.x, stats.radius, dungeonBounds.width - stats.radius),
+    y: clamp(spawnPoint.y, stats.radius, dungeonBounds.height - stats.radius),
     radius: stats.radius,
     hp: stats.hp,
     maxHp: stats.hp,
-    speed: stats.speed,
+    baseMaxHp: baseStats.hp,
+    dungeonHpMultiplier: getDungeonHpMultiplier(dungeonScale),
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
+    damage: stats.damage,
+    attackCooldown: stats.attackCooldown,
     state: 'idle',
     wobble: Math.random() * Math.PI * 2,
     hitAt: 0,
   };
 }
 
-function createDungeonMiniboss(id, spawnObject, instanceId) {
+function createDungeonMiniboss(id, spawnObject, instanceId, dungeonScale = null) {
   const bossType = normalizeEnemyKind(spawnObject?.props?.bossType ?? spawnObject?.props?.enemyType ?? spawnObject?.name ?? 'gloomfang-matriarch');
-  const stats = getBossKindStats(bossType);
+  const baseStats = getBossKindStats(bossType);
+  const stats = scaleDungeonStats(baseStats, dungeonScale);
   const requestedSpawnPoint = {
     x: Number(spawnObject?.x ?? 1450) + Number(spawnObject?.width ?? 0) / 2,
     y: Number(spawnObject?.y ?? 700) + Number(spawnObject?.height ?? 0) / 2,
   };
   const spawnBounds = getSpawnBounds(spawnObject, requestedSpawnPoint, 420);
-  const spawnPoint = findOpenSpawnPoint(MAP_IDS.DUNGEON_01, spawnBounds, 0, 1, stats.radius, requestedSpawnPoint);
+  const spawnPoint = findOpenSpawnPoint(
+    MAP_IDS.DUNGEON_01,
+    spawnObject,
+    spawnBounds,
+    0,
+    1,
+    stats.radius,
+    requestedSpawnPoint,
+  );
 
   return {
     id: `dungeon-${instanceId}-${id}`,
@@ -953,6 +1738,7 @@ function createDungeonMiniboss(id, spawnObject, instanceId) {
     name: stats.name,
     spawnName: spawnObject?.name,
     spawnBounds,
+    spawnPoint,
     wanderTarget: randomPointInBounds(spawnBounds),
     nextWanderAt: 0,
     nextAoEAt: Date.now() + 2200,
@@ -962,23 +1748,36 @@ function createDungeonMiniboss(id, spawnObject, instanceId) {
     radius: stats.radius,
     hp: stats.hp,
     maxHp: stats.hp,
-    speed: stats.speed,
+    baseMaxHp: baseStats.hp,
+    dungeonHpMultiplier: getDungeonHpMultiplier(dungeonScale),
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
+    damage: stats.damage,
+    attackCooldown: stats.attackCooldown,
     state: 'idle',
     wobble: Math.random() * Math.PI * 2,
     hitAt: 0,
   };
 }
 
-function createDungeonFinalBoss(id, spawnObject, instanceId) {
+function createDungeonFinalBoss(id, spawnObject, instanceId, dungeonScale = null) {
   const bossType = normalizeEnemyKind(spawnObject?.props?.bossType ?? spawnObject?.props?.enemyType ?? spawnObject?.name ?? 'rift-heart');
-  const stats = getBossKindStats(bossType);
+  const baseStats = getBossKindStats(bossType);
+  const stats = scaleDungeonStats(baseStats, dungeonScale);
   const requestedSpawnPoint = {
     x: Number(spawnObject?.x ?? 96) + Number(spawnObject?.width ?? 0) / 2,
     y: Number(spawnObject?.y ?? 590) + Number(spawnObject?.height ?? 0) / 2,
   };
   const spawnBounds = getSpawnBounds(spawnObject, requestedSpawnPoint, 460);
-  const spawnPoint = findOpenSpawnPoint(MAP_IDS.DUNGEON_01, spawnBounds, 0, 1, stats.radius, requestedSpawnPoint);
+  const spawnPoint = findOpenSpawnPoint(
+    MAP_IDS.DUNGEON_01,
+    spawnObject,
+    spawnBounds,
+    0,
+    1,
+    stats.radius,
+    requestedSpawnPoint,
+  );
 
   return {
     id: `dungeon-${instanceId}-${id}`,
@@ -991,6 +1790,7 @@ function createDungeonFinalBoss(id, spawnObject, instanceId) {
     name: stats.name,
     spawnName: spawnObject?.name,
     spawnBounds,
+    spawnPoint,
     wanderTarget: randomPointInBounds(spawnBounds),
     nextWanderAt: 0,
     nextAoEAt: Date.now() + 3200,
@@ -1001,8 +1801,12 @@ function createDungeonFinalBoss(id, spawnObject, instanceId) {
     radius: stats.radius,
     hp: stats.hp,
     maxHp: stats.hp,
-    speed: stats.speed,
+    baseMaxHp: baseStats.hp,
+    dungeonHpMultiplier: getDungeonHpMultiplier(dungeonScale),
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
+    damage: stats.damage,
+    attackCooldown: stats.attackCooldown,
     state: 'idle',
     wobble: Math.random() * Math.PI * 2,
     hitAt: 0,
@@ -1131,10 +1935,11 @@ function sanitizeBroadcastPlayer(player) {
     vy: safeNumber(player.vy, 0),
     facing: safeNumber(player.facing, 0),
     hp: clamp(player.hp ?? maxHp, 0, maxHp),
-    maxHp,
-    mapId: normalizeMapId(player.mapId),
-    instanceId: player.instanceId ?? null,
-    partyId: player.partyId ?? null,
+        maxHp,
+        mapId: normalizeMapId(player.mapId),
+        instanceId: player.instanceId ?? null,
+        interiorId: normalizeInteriorSpaceId(player.interiorId),
+        partyId: player.partyId ?? null,
     partyLeaderId: player.partyLeaderId ?? null,
     pet: player.pet && isFinitePoint(player.pet) ? {
       x: safeNumber(player.pet.x),
@@ -1166,10 +1971,13 @@ function sanitizeBroadcastEnemy(enemy) {
     maxHp,
     speed: safeNumber(enemy.speed, ENEMY.speed),
     xp: safeNumber(enemy.xp, isBoss ? BOSS_XP : ENEMY_XP),
+    damage: Math.max(1, safeNumber(enemy.damage, isBoss ? 28 : 9)),
+    attackCooldown: clamp(enemy.attackCooldown ?? (isBoss ? 1100 : 850), 250, 5000),
     facing: safeNumber(enemy.facing, 0),
     hitAt: safeNumber(enemy.hitAt, 0),
     wobble: safeNumber(enemy.wobble, 0),
     mapId: normalizeMapId(enemy.mapId),
+    interiorId: normalizeInteriorSpaceId(enemy.interiorId),
     enemyKind: enemy.enemyKind ? normalizeEnemyKind(enemy.enemyKind) : undefined,
     bossType: enemy.bossType ? normalizeEnemyKind(enemy.bossType) : undefined,
     questKind: enemy.questKind ? normalizeEnemyKind(enemy.questKind) : undefined,
@@ -1379,6 +2187,109 @@ function tickEnemyDebuffs(enemy, now) {
   return { enemy: nextEnemy, damage, sourcePlayerId };
 }
 
+function getEnemyHomePoint(enemy) {
+  if (isFinitePoint(enemy?.home)) {
+    return {
+      x: safeNumber(enemy.home.x),
+      y: safeNumber(enemy.home.y),
+    };
+  }
+
+  if (isFinitePoint(enemy?.spawnPoint)) {
+    return {
+      x: safeNumber(enemy.spawnPoint.x),
+      y: safeNumber(enemy.spawnPoint.y),
+    };
+  }
+
+  const patrolHome = Array.isArray(enemy?.patrolPoints)
+    ? enemy.patrolPoints.find((point) => isFinitePoint(point))
+    : null;
+  if (patrolHome) {
+    return {
+      x: safeNumber(patrolHome.x),
+      y: safeNumber(patrolHome.y),
+    };
+  }
+
+  if (enemy?.spawnBounds) {
+    const radius = enemy.radius ?? ENEMY.radius;
+    return clampPointToBounds({
+      x: safeNumber(enemy.spawnBounds.x) + safeNumber(enemy.spawnBounds.width, radius * 2) / 2,
+      y: safeNumber(enemy.spawnBounds.y) + safeNumber(enemy.spawnBounds.height, radius * 2) / 2,
+    }, enemy.spawnBounds, radius);
+  }
+
+  return safePoint(enemy);
+}
+
+function getEnemyLeashDistance(enemy) {
+  if (enemy?.type === 'dungeon_final_boss') return DUNGEON_FINAL_BOSS_LEASH_DISTANCE;
+  if (enemy?.type === 'boss' || enemy?.type === 'dungeon_miniboss') return BOSS_LEASH_DISTANCE;
+  return ENEMY_LEASH_DISTANCE;
+}
+
+function clearEnemyCombatEffects(enemy) {
+  const nextEnemy = { ...enemy };
+  [
+    'poisonDebuff',
+    'burnDebuff',
+    'bleedDebuff',
+    'coldUntil',
+    'coldMultiplier',
+    'slowUntil',
+    'slowMultiplier',
+    'frozenUntil',
+    'stunnedUntil',
+    'damageTakenMultiplier',
+    'damageTakenUntil',
+  ].forEach((key) => {
+    delete nextEnemy[key];
+  });
+  return nextEnemy;
+}
+
+function resetEnemyAggro(enemy, now = Date.now()) {
+  const home = getEnemyHomePoint(enemy);
+  const maxHp = Math.max(1, safeNumber(enemy.maxHp, enemy.hp ?? 1));
+  return {
+    ...clearEnemyCombatEffects(enemy),
+    state: 'idle',
+    targetPlayerId: null,
+    firstHitPlayerId: null,
+    leashStartedAt: null,
+    aggroStartedAt: null,
+    aggroDisabledUntil: now + ENEMY_AGGRO_RESET_COOLDOWN_MS,
+    nextAttackAt: now + clamp(enemy.attackCooldown ?? 850, 250, 5000),
+    attackStartedAt: 0,
+    attackType: null,
+    attackLaunchAt: 0,
+    attackImpactAt: 0,
+    attackUntil: 0,
+    attackResolved: true,
+    nextMechanicAt: null,
+    nextSecondaryMechanicAt: null,
+    mechanicType: null,
+    mechanicStartedAt: 0,
+    mechanicLaunchAt: 0,
+    mechanicImpactAt: 0,
+    mechanicUntil: 0,
+    mechanicRadius: 0,
+    mechanicProjectiles: [],
+    mechanicHitPlayerIds: [],
+    mechanicResolved: true,
+    hp: maxHp,
+    x: home.x,
+    y: home.y,
+    home,
+    targetX: home.x,
+    targetY: home.y,
+    wanderTarget: home,
+    pauseUntil: now + 500,
+    nextWanderAt: now + 1400,
+  };
+}
+
 class WorldRoom extends Room {
   maxClients = 40;
 
@@ -1399,10 +2310,22 @@ class WorldRoom extends Room {
     this.spawnData = loadTiledSpawns();
     this.worldSpawnPacks = createWorldSpawnPacks(this.spawnData.enemySpawns);
     this.bossSpawnPacks = createBossSpawnPacks(this.spawnData.bossSpawns);
+    this.worldControls = {
+      time: {
+        forcedPhase: null,
+        speedMultiplier: 1,
+      },
+      weather: {
+        forcedWeather: null,
+        speedMultiplier: 1,
+      },
+    };
 
     this.onMessage('joinGame', (client, message) => {
       const character = message?.character ?? {};
       const authEmail = getMessageEmail(message);
+      const requestedMapId = normalizeMapId(message?.mapId);
+      const requestedMapBounds = getMapPixelBounds(requestedMapId);
       this.disconnectExistingAccountSession(authEmail, client.sessionId);
       this.players.set(client.sessionId, {
         id: client.sessionId,
@@ -1414,12 +2337,13 @@ class WorldRoom extends Room {
         appearance: character.appearance ?? {},
         talents: character.talents ?? { spec: null },
         level: character.level ?? 1,
-        x: clamp(message?.x ?? 420, PLAYER.radius, WORLD.width - PLAYER.radius),
-        y: clamp(message?.y ?? 420, PLAYER.radius, WORLD.height - PLAYER.radius),
+        x: clamp(message?.x ?? 420, PLAYER.radius, requestedMapBounds.width - PLAYER.radius),
+        y: clamp(message?.y ?? 420, PLAYER.radius, requestedMapBounds.height - PLAYER.radius),
         facing: safeNumber(message?.facing, 0),
         hp: clamp(message?.hp ?? message?.maxHp ?? 100, 0, Math.max(1, safeNumber(message?.maxHp, 100))),
         maxHp: Math.max(1, safeNumber(message?.maxHp, 100)),
-        mapId: normalizeMapId(message?.mapId),
+        mapId: requestedMapId,
+        interiorId: normalizeInteriorSpaceId(message?.interiorId),
         instanceId: null,
         overrideInstanceId: null,
         partyId: null,
@@ -1433,6 +2357,109 @@ class WorldRoom extends Room {
         this.updateWorldSpawnPacks(now, joinedPlayer);
         this.updateWorldBossSpawns(now, joinedPlayer);
       }
+      this.sendWorldControls(client);
+    });
+
+    this.onMessage('adminSetWorldTime', (client, message) => {
+      const player = this.players.get(client.sessionId);
+      if (!this.isAuthorizedAdminRequest(player, message)) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'worldTime',
+          error: 'Not authorized',
+        });
+        return;
+      }
+
+      const forcedPhase = normalizeWorldControlPhase(message?.phase, WORLD_TIME_PHASES);
+      if (forcedPhase === undefined) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'worldTime',
+          error: 'Invalid world time phase',
+        });
+        return;
+      }
+
+      this.worldControls.time.forcedPhase = forcedPhase;
+      this.broadcastWorldControls();
+      client.send('adminResult', {
+        ok: true,
+        action: 'worldTime',
+        phase: forcedPhase ?? 'auto',
+      });
+    });
+
+    this.onMessage('adminSetWorldTimeSpeed', (client, message) => {
+      const player = this.players.get(client.sessionId);
+      if (!this.isAuthorizedAdminRequest(player, message)) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'worldTimeSpeed',
+          error: 'Not authorized',
+        });
+        return;
+      }
+
+      const speedMultiplier = normalizeWorldControlSpeed(message?.multiplier);
+      this.worldControls.time.speedMultiplier = speedMultiplier;
+      this.broadcastWorldControls();
+      client.send('adminResult', {
+        ok: true,
+        action: 'worldTimeSpeed',
+        multiplier: speedMultiplier,
+      });
+    });
+
+    this.onMessage('adminSetWeather', (client, message) => {
+      const player = this.players.get(client.sessionId);
+      if (!this.isAuthorizedAdminRequest(player, message)) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'weather',
+          error: 'Not authorized',
+        });
+        return;
+      }
+
+      const forcedWeather = normalizeWorldControlPhase(message?.weather, WORLD_WEATHER_PHASES);
+      if (forcedWeather === undefined) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'weather',
+          error: 'Invalid weather',
+        });
+        return;
+      }
+
+      this.worldControls.weather.forcedWeather = forcedWeather;
+      this.broadcastWorldControls();
+      client.send('adminResult', {
+        ok: true,
+        action: 'weather',
+        weather: forcedWeather ?? 'auto',
+      });
+    });
+
+    this.onMessage('adminSetWeatherSpeed', (client, message) => {
+      const player = this.players.get(client.sessionId);
+      if (!this.isAuthorizedAdminRequest(player, message)) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'weatherSpeed',
+          error: 'Not authorized',
+        });
+        return;
+      }
+
+      const speedMultiplier = normalizeWorldControlSpeed(message?.multiplier);
+      this.worldControls.weather.speedMultiplier = speedMultiplier;
+      this.broadcastWorldControls();
+      client.send('adminResult', {
+        ok: true,
+        action: 'weatherSpeed',
+        multiplier: speedMultiplier,
+      });
     });
 
     this.onMessage('adminSetMaxLevel', (client, message) => {
@@ -1522,6 +2549,7 @@ class WorldRoom extends Room {
           maxHp: onlinePlayer.maxHp,
           mapId: normalizeMapId(onlinePlayer.mapId),
           instanceId: onlinePlayer.instanceId ?? null,
+          interiorId: normalizeInteriorSpaceId(onlinePlayer.interiorId),
           partyId: onlinePlayer.partyId ?? null,
           x: onlinePlayer.x,
           y: onlinePlayer.y,
@@ -1571,6 +2599,44 @@ class WorldRoom extends Room {
         ok: true,
         action: 'teleportTo',
         targetName: target.name,
+      });
+      this.broadcastWorld();
+    });
+
+    this.onMessage('adminTeleportToLocation', (client, message) => {
+      const admin = this.players.get(client.sessionId);
+      if (!this.isAuthorizedAdminRequest(admin, message)) {
+        client.send('adminResult', {
+          ok: false,
+          action: 'teleportToLocation',
+          error: 'Not authorized',
+        });
+        return;
+      }
+
+      const targetMapId = normalizeMapId(message?.mapId ?? admin.mapId);
+      const bounds = getMapPixelBounds(targetMapId);
+      admin.mapId = targetMapId;
+      admin.overrideInstanceId = targetMapId === MAP_IDS.DUNGEON_01
+        ? message?.instanceId ?? admin.instanceId ?? admin.overrideInstanceId ?? null
+        : null;
+      admin.instanceId = admin.overrideInstanceId;
+      admin.x = clamp(safeNumber(message?.x, admin.x), PLAYER.radius, bounds.width - PLAYER.radius);
+      admin.y = clamp(safeNumber(message?.y, admin.y), PLAYER.radius, bounds.height - PLAYER.radius);
+      admin.updatedAt = Date.now();
+      this.updatePlayerInstance(admin);
+      client.send('adminTeleport', {
+        mapId: admin.mapId,
+        instanceId: admin.instanceId,
+        x: admin.x,
+        y: admin.y,
+        message: `Teleported to ${Math.round(admin.x)}, ${Math.round(admin.y)}`,
+      });
+      client.send('adminResult', {
+        ok: true,
+        action: 'teleportToLocation',
+        x: admin.x,
+        y: admin.y,
       });
       this.broadcastWorld();
     });
@@ -1629,6 +2695,7 @@ class WorldRoom extends Room {
       const previousX = player.x;
       const previousY = player.y;
       const previousMapId = player.mapId;
+      const previousHp = safeNumber(player.hp, player.maxHp ?? 100);
       const elapsed = Math.max(16, now - (player.updatedAt ?? now));
       player.facing = safeNumber(message?.facing, player.facing ?? 0);
       player.name = message?.name ?? player.name;
@@ -1639,8 +2706,12 @@ class WorldRoom extends Room {
       player.level = message?.level ?? player.level;
       player.maxHp = Math.max(1, safeNumber(message?.maxHp, player.maxHp ?? 100));
       player.hp = clamp(message?.hp ?? player.hp ?? player.maxHp, 0, player.maxHp);
+      if (previousHp > 0 && player.hp <= 0) {
+        this.dropPlayerAggro(client.sessionId, now);
+      }
       const requestedMapId = normalizeMapId(message?.mapId ?? player.mapId);
       const requestedMapBounds = getMapPixelBounds(requestedMapId);
+      player.interiorId = normalizeInteriorSpaceId(message?.interiorId);
       player.pet = player.classId === 'hunter' && message?.pet && isFinitePoint(message.pet)
         ? {
           x: clamp(Number(message.pet.x), PLAYER.radius, requestedMapBounds.width - PLAYER.radius),
@@ -1693,6 +2764,14 @@ class WorldRoom extends Room {
         client.send('notice', { text: `${targetPlayer.name} is already in your party` });
         return;
       }
+      if (fromPlayer.partyId && targetPlayer.partyId && fromPlayer.partyId !== targetPlayer.partyId) {
+        client.send('notice', { text: `${targetPlayer.name} is already in another party` });
+        return;
+      }
+      if (this.getProspectivePartyMembers(fromPlayer, targetPlayer).length > PARTY_MAX_MEMBERS) {
+        client.send('notice', { text: `Party is full (max ${PARTY_MAX_MEMBERS})` });
+        return;
+      }
 
       const now = Date.now();
       const inviteKey = `${client.sessionId}:${targetId}`;
@@ -1719,6 +2798,19 @@ class WorldRoom extends Room {
       if (!expiresAt || expiresAt < Date.now() || !inviter || !accepter) return;
 
       this.pendingInvites.delete(inviteKey);
+      if (inviter.partyId && accepter.partyId && inviter.partyId !== accepter.partyId) {
+        client.send('notice', { text: 'You are already in another party' });
+        const inviterClient = this.clients.find((candidate) => candidate.sessionId === fromId);
+        inviterClient?.send('notice', { text: `${accepter.name} is already in another party` });
+        return;
+      }
+      if (this.getProspectivePartyMembers(inviter, accepter).length > PARTY_MAX_MEMBERS) {
+        client.send('notice', { text: `Party is full (max ${PARTY_MAX_MEMBERS})` });
+        const inviterClient = this.clients.find((candidate) => candidate.sessionId === fromId);
+        inviterClient?.send('notice', { text: `Party is full (max ${PARTY_MAX_MEMBERS})` });
+        return;
+      }
+
       const partyId = inviter.partyId ?? accepter.partyId ?? `party-${this.nextPartyId++}`;
       const partyLeaderId = inviter.partyLeaderId ?? accepter.partyLeaderId ?? inviter.id;
       inviter.partyId = partyId;
@@ -1795,8 +2887,9 @@ class WorldRoom extends Room {
       if (distance(healer, target) > 140) return;
 
       target.hp = Math.max(1, Math.ceil((target.maxHp ?? 100) * 0.45));
-      target.x = clamp(healer.x + 34, PLAYER.radius, WORLD.width - PLAYER.radius);
-      target.y = clamp(healer.y + 18, PLAYER.radius, WORLD.height - PLAYER.radius);
+      const healerMapBounds = getMapPixelBounds(healer.mapId);
+      target.x = clamp(healer.x + 34, PLAYER.radius, healerMapBounds.width - PLAYER.radius);
+      target.y = clamp(healer.y + 18, PLAYER.radius, healerMapBounds.height - PLAYER.radius);
       target.updatedAt = Date.now();
       const targetClient = this.clients.find((candidate) => candidate.sessionId === target.id);
       targetClient?.send('resurrected', {
@@ -1864,6 +2957,9 @@ class WorldRoom extends Room {
               hp: enemy.hp - finalDamage,
               state: 'aggro',
               targetPlayerId: focusTargetId,
+              aggroStartedAt: now,
+              leashStartedAt: null,
+              aggroDisabledUntil: null,
               hitAt: now,
             };
             return damagedEnemy.hp > 0
@@ -1974,16 +3070,42 @@ class WorldRoom extends Room {
         this.partyInviteCooldowns.delete(key);
       }
     });
-    this.enemies = this.enemies.map((enemy) => (
-      enemy.targetPlayerId === client.sessionId ? { ...enemy, state: 'idle', targetPlayerId: null } : enemy
-    ));
+    this.dropPlayerAggro(client.sessionId);
     if (oldPartyId) this.normalizeParty(oldPartyId);
     this.resetEmptyDungeonInstances();
+  }
+
+  dropPlayerAggro(sessionId, now = Date.now()) {
+    const playerId = String(sessionId ?? '');
+    if (!playerId) return;
+    this.enemies = this.enemies.map((enemy) => {
+      const targetPlayerId = enemy.targetPlayerId == null ? null : String(enemy.targetPlayerId);
+      const firstHitPlayerId = enemy.firstHitPlayerId == null ? null : String(enemy.firstHitPlayerId);
+      return targetPlayerId === playerId || firstHitPlayerId === playerId
+        ? resetEnemyAggro(enemy, now)
+        : enemy;
+    });
   }
 
   getPartyMembers(partyId) {
     if (!partyId) return [];
     return [...this.players.values()].filter((player) => player.partyId === partyId);
+  }
+
+  getPartyOrSoloMembers(player) {
+    if (!player) return [];
+    return player.partyId ? this.getPartyMembers(player.partyId) : [player];
+  }
+
+  getProspectivePartyMembers(inviter, accepter) {
+    const membersById = new Map();
+    const addMember = (member) => {
+      if (member?.id) membersById.set(member.id, member);
+    };
+
+    this.getPartyOrSoloMembers(inviter).forEach(addMember);
+    this.getPartyOrSoloMembers(accepter).forEach(addMember);
+    return [...membersById.values()];
   }
 
   normalizeParty(partyId) {
@@ -2017,9 +3139,7 @@ class WorldRoom extends Room {
       .forEach(([sessionId, player]) => {
         const oldPartyId = player.partyId ?? null;
         this.players.delete(sessionId);
-        this.enemies = this.enemies.map((enemy) => (
-          enemy.targetPlayerId === sessionId ? { ...enemy, state: 'idle', targetPlayerId: null } : enemy
-        ));
+        this.dropPlayerAggro(sessionId);
         const oldClient = this.clients.find((candidate) => candidate.sessionId === sessionId);
         oldClient?.send('accountReplaced', { text: 'This account logged in elsewhere' });
         try {
@@ -2052,7 +3172,7 @@ class WorldRoom extends Room {
     }
 
     player.instanceId = player.overrideInstanceId ?? (player.partyId ? `party:${player.partyId}` : `solo:${player.id}`);
-    this.ensureDungeonInstance(player.instanceId);
+    this.ensureDungeonInstance(player.instanceId, this.getDungeonBalanceProfile(player));
   }
 
   isAuthorizedAdminRequest(player, message) {
@@ -2061,30 +3181,106 @@ class WorldRoom extends Room {
     return !requestEmail || requestEmail === player.email;
   }
 
-  ensureDungeonInstance(instanceId) {
+  getWorldControlsMessage() {
+    return {
+      time: {
+        forcedPhase: this.worldControls?.time?.forcedPhase ?? null,
+        speedMultiplier: normalizeWorldControlSpeed(this.worldControls?.time?.speedMultiplier ?? 1),
+      },
+      weather: {
+        forcedWeather: this.worldControls?.weather?.forcedWeather ?? null,
+        speedMultiplier: normalizeWorldControlSpeed(this.worldControls?.weather?.speedMultiplier ?? 1),
+      },
+    };
+  }
+
+  sendWorldControls(client) {
+    if (!client) return;
+    client.send('worldControls', this.getWorldControlsMessage());
+  }
+
+  broadcastWorldControls() {
+    this.broadcast('worldControls', this.getWorldControlsMessage());
+  }
+
+  getDungeonBalanceProfile(player) {
+    const members = this.getPartyOrSoloMembers(player).slice(0, PARTY_MAX_MEMBERS);
+    const partySize = clamp(members.length || 1, 1, PARTY_MAX_MEMBERS);
+    const tanks = members.filter((member) => this.isTankPlayer(member)).length;
+    const healers = members.filter((member) => this.isHealerPlayer(member)).length;
+    const damage = Math.max(0, members.length - tanks - healers);
+    const baseHpMultiplier = DUNGEON_HP_SCALE_BY_PARTY_SIZE.get(partySize) ?? 1;
+    const extraDpsMultiplier = Math.max(0, damage - 1) * DUNGEON_EXTRA_DPS_HP_SCALE;
+    const trinityDiscount = partySize === 3 && tanks >= 1 && healers >= 1 && damage >= 1
+      ? DUNGEON_TRINITY_HP_DISCOUNT
+      : 0;
+    const hpMultiplier = clamp(
+      baseHpMultiplier + extraDpsMultiplier - trinityDiscount,
+      DUNGEON_MIN_HP_SCALE,
+      DUNGEON_MAX_HP_SCALE,
+    );
+
+    return {
+      partySize,
+      tanks,
+      healers,
+      damage,
+      hpMultiplier,
+    };
+  }
+
+  rescaleDungeonInstance(instanceId, dungeonScale) {
+    const hpMultiplier = getDungeonHpMultiplier(dungeonScale);
+    this.enemies = this.enemies.map((enemy) => {
+      if (enemy.instanceId !== instanceId) return enemy;
+
+      const currentMaxHp = Math.max(1, safeNumber(enemy.maxHp, 1));
+      const previousMultiplier = Math.max(0.01, safeNumber(enemy.dungeonHpMultiplier, 1));
+      const baseMaxHp = Math.max(1, safeNumber(enemy.baseMaxHp, currentMaxHp / previousMultiplier));
+      const hpRatio = clamp(safeNumber(enemy.hp, currentMaxHp) / currentMaxHp, 0, 1);
+      const nextMaxHp = Math.max(1, Math.round(baseMaxHp * hpMultiplier));
+
+      return {
+        ...enemy,
+        baseMaxHp,
+        dungeonHpMultiplier: hpMultiplier,
+        maxHp: nextMaxHp,
+        hp: Math.min(nextMaxHp, Math.max(0, Math.ceil(nextMaxHp * hpRatio))),
+      };
+    });
+  }
+
+  ensureDungeonInstance(instanceId, dungeonScale = null) {
     if (!instanceId) return;
     this.refreshSpawnDataIfChanged();
+    const scale = dungeonScale ?? { hpMultiplier: 1 };
     const existingInstance = this.dungeonInstances.get(instanceId);
     if (existingInstance) {
       existingInstance.resetAt = 0;
+      const previousHpMultiplier = getDungeonHpMultiplier(existingInstance.scale);
+      const nextHpMultiplier = getDungeonHpMultiplier(scale);
+      existingInstance.scale = scale;
+      if (Math.abs(previousHpMultiplier - nextHpMultiplier) > 0.001) {
+        this.rescaleDungeonInstance(instanceId, scale);
+      }
       return;
     }
-    this.dungeonInstances.set(instanceId, { resetAt: 0, createdAt: Date.now() });
+    this.dungeonInstances.set(instanceId, { resetAt: 0, createdAt: Date.now(), scale });
 
     this.spawnData.dungeonPacks.forEach((pack, packIndex) => {
       for (let index = 0; index < DUNGEON_PACK_SIZE; index += 1) {
-        this.enemies.push(createDungeonEnemy(this.nextEnemyId, pack, instanceId, index));
+        this.enemies.push(createDungeonEnemy(this.nextEnemyId, pack, instanceId, index, scale));
         this.nextEnemyId += 1;
       }
     });
 
     this.spawnData.dungeonMinibosses.forEach((spawn) => {
-      this.enemies.push(createDungeonMiniboss(this.nextEnemyId, spawn, instanceId));
+      this.enemies.push(createDungeonMiniboss(this.nextEnemyId, spawn, instanceId, scale));
       this.nextEnemyId += 1;
     });
 
     this.spawnData.dungeonFinalBosses.forEach((spawn) => {
-      this.enemies.push(createDungeonFinalBoss(this.nextEnemyId, spawn, instanceId));
+      this.enemies.push(createDungeonFinalBoss(this.nextEnemyId, spawn, instanceId, scale));
       this.nextEnemyId += 1;
     });
   }
@@ -2137,8 +3333,12 @@ class WorldRoom extends Room {
     const mapId = normalizeMapId(a.mapId);
     const otherMapId = normalizeMapId(b.mapId);
     if (getGameplayMapSpaceId(mapId) !== getGameplayMapSpaceId(otherMapId)) return false;
-    if (mapId !== MAP_IDS.DUNGEON_01 && otherMapId !== MAP_IDS.DUNGEON_01) return true;
-    return a.instanceId && a.instanceId === b.instanceId;
+    if (mapId === MAP_IDS.DUNGEON_01 || otherMapId === MAP_IDS.DUNGEON_01) {
+      return a.instanceId && a.instanceId === b.instanceId;
+    }
+    const interiorId = normalizeInteriorSpaceId(a.interiorId);
+    const otherInteriorId = normalizeInteriorSpaceId(b.interiorId);
+    return interiorId === otherInteriorId;
   }
 
   applyTargetedEnemyDamage(client, message) {
@@ -2179,6 +3379,9 @@ class WorldRoom extends Room {
           hp: enemy.hp - finalDamage,
           state: 'aggro',
           targetPlayerId: focusTargetId,
+          aggroStartedAt: now,
+          leashStartedAt: null,
+          aggroDisabledUntil: null,
           hitAt: now,
         };
         return damagedEnemy.hp > 0
@@ -2296,7 +3499,14 @@ class WorldRoom extends Room {
       readySlots.forEach((slotIndex) => {
         if (aliveCount >= pack.maxAlive) return;
         occupiedSlots.add(slotIndex);
-        this.enemies.push(createEnemy(this.nextEnemyId, pack.spawn, fallbackPlayer, slotIndex, pack.maxAlive));
+        this.enemies.push(createEnemy(
+          this.nextEnemyId,
+          pack.spawn,
+          fallbackPlayer,
+          slotIndex,
+          pack.maxAlive,
+          this.enemies,
+        ));
         this.nextEnemyId += 1;
         aliveCount += 1;
       });
@@ -2313,7 +3523,14 @@ class WorldRoom extends Room {
           continue;
         }
         occupiedSlots.add(openSlot);
-        this.enemies.push(createEnemy(this.nextEnemyId, pack.spawn, fallbackPlayer, openSlot, pack.maxAlive));
+        this.enemies.push(createEnemy(
+          this.nextEnemyId,
+          pack.spawn,
+          fallbackPlayer,
+          openSlot,
+          pack.maxAlive,
+          this.enemies,
+        ));
         this.nextEnemyId += 1;
         aliveCount += 1;
       }
@@ -2366,10 +3583,31 @@ class WorldRoom extends Room {
       this.awardXpForEnemyKill(firstHitPlayerId, award.amount, award.bossKills, award.kills);
     });
 
-    this.enemies = this.enemies.map((enemy) => {
+    const enemyMovementSnapshot = this.enemies;
+    this.enemies = enemyMovementSnapshot.map((enemy) => {
       let targetPlayer = enemy.targetPlayerId ? this.players.get(enemy.targetPlayerId) : null;
-      if ((!targetPlayer || !this.canShareSpace(enemy, targetPlayer)) && enemy.state === 'aggro') {
-        return { ...enemy, state: 'idle', targetPlayerId: null };
+      if (enemy.state === 'aggro') {
+        if (
+          !targetPlayer
+          || !this.canShareSpace(enemy, targetPlayer)
+          || safeNumber(targetPlayer.hp, targetPlayer.maxHp ?? 100) <= 0
+        ) {
+          return resetEnemyAggro(enemy, now);
+        }
+
+        const leashDistance = getEnemyLeashDistance(enemy);
+        const distanceToTarget = distance(enemy, targetPlayer);
+        const distanceFromHome = distance(enemy, getEnemyHomePoint(enemy));
+        const outsideLeash = distanceToTarget > leashDistance || distanceFromHome > leashDistance * 1.25;
+        if (outsideLeash) {
+          const leashStartedAt = enemy.leashStartedAt ?? now;
+          if (now - leashStartedAt >= ENEMY_LEASH_GRACE_MS || distanceFromHome > leashDistance * 1.8) {
+            return resetEnemyAggro(enemy, now);
+          }
+          enemy = { ...enemy, leashStartedAt };
+        } else if (enemy.leashStartedAt != null) {
+          enemy = { ...enemy, leashStartedAt: null };
+        }
       }
 
       if (enemy.state === 'aggro') {
@@ -2391,9 +3629,10 @@ class WorldRoom extends Room {
           (enemy.type === 'enemy' || this.isBossEnemy(enemy))
           && isWorldLikeMap(enemy.mapId)
         ) || isDungeonEnemy;
-        if (canAutoAggro) {
+        if (canAutoAggro && now >= safeNumber(enemy.aggroDisabledUntil, 0)) {
           const aggroRange = enemy.type === 'dungeon_final_boss' ? 480 : this.isBossEnemy(enemy) ? 400 : 320;
           const aggroTarget = this.getPlayersInEnemySpace(enemy)
+            .filter((player) => safeNumber(player.hp, player.maxHp ?? 100) > 0)
             .filter((player) => distance(player, enemy) < aggroRange)
             .sort((a, b) => distance(a, enemy) - distance(b, enemy))[0];
           if (aggroTarget) {
@@ -2402,18 +3641,21 @@ class WorldRoom extends Room {
               state: 'aggro',
               targetPlayerId: this.findTankTauntTarget(enemy, aggroTarget)?.id ?? aggroTarget.id,
               firstHitPlayerId: enemy.firstHitPlayerId ?? aggroTarget.id,
+              aggroStartedAt: now,
+              leashStartedAt: null,
+              aggroDisabledUntil: null,
             };
             targetPlayer = this.players.get(enemy.targetPlayerId) ?? aggroTarget;
           } else {
-            return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy));
+            return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy), enemyMovementSnapshot);
           }
         } else {
-          return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy));
+          return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy), enemyMovementSnapshot);
         }
       }
 
       if (enemy.state !== 'aggro') {
-        return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy));
+        return updateIdleEnemyMovement(enemy, now, delta, this.isBossEnemy(enemy), enemyMovementSnapshot);
       }
 
       const toPlayerX = targetPlayer.x - enemy.x;
@@ -2422,9 +3664,16 @@ class WorldRoom extends Room {
       const drift = Math.sin(now / 520 + enemy.wobble) * 0.35;
       const dirX = toPlayerX / length;
       const dirY = toPlayerY / length;
-      const attackRange = (enemy.radius ?? ENEMY.radius) + PLAYER.radius + 8;
+      const separation = getEnemySeparationVector(enemy, enemyMovementSnapshot);
+      const meleeAttackRange = (enemy.radius ?? ENEMY.radius) + PLAYER.radius + 8;
       const nextAttackAt = enemy.nextAttackAt ?? 0;
       const movementMultiplier = getEnemyMovementMultiplier(enemy, now);
+      const mechanicConfig = getWorldBossMechanicConfig(enemy);
+      const rangedAttackConfig = mechanicConfig?.rangedAttack ?? null;
+      const attackRange = rangedAttackConfig?.range ?? meleeAttackRange;
+      const rangedAttackStartRange = rangedAttackConfig
+        ? Math.min(attackRange, safeNumber(rangedAttackConfig.attackStartRange, attackRange))
+        : attackRange;
 
       if (movementMultiplier <= 0) {
         return {
@@ -2434,21 +3683,259 @@ class WorldRoom extends Room {
         };
       }
 
-      if (length <= attackRange && now >= nextAttackAt) {
-        const damage = this.getEnemyAttackDamage(enemy);
-        targetPlayer.hp = clamp((targetPlayer.hp ?? targetPlayer.maxHp ?? 100) - damage, 0, targetPlayer.maxHp ?? 100);
-        targetPlayer.updatedAt = now;
-        const targetClient = this.clients.find((client) => client.sessionId === enemy.targetPlayerId);
-        targetClient?.send('hit', { damage });
-        return {
+      if (mechanicConfig && !Number.isFinite(enemy.nextMechanicAt)) {
+        enemy = {
           ...enemy,
-          nextAttackAt: now + (this.isBossEnemy(enemy) ? 1100 : 850),
+          nextMechanicAt: now + mechanicConfig.initialDelay,
         };
       }
+      if (mechanicConfig?.secondary && !Number.isFinite(enemy.nextSecondaryMechanicAt)) {
+        enemy = {
+          ...enemy,
+          nextSecondaryMechanicAt: now + mechanicConfig.secondary.initialDelay,
+        };
+      }
+
+      const mechanicUntil = safeNumber(enemy.mechanicUntil, 0);
+      const activeMechanicConfig = getActiveWorldBossMechanicConfig(mechanicConfig, enemy.mechanicType);
+      if (activeMechanicConfig && now < mechanicUntil) {
+        const mechanicImpactAt = safeNumber(enemy.mechanicImpactAt, mechanicUntil);
+        const projectiles = Array.isArray(enemy.mechanicProjectiles) ? enemy.mechanicProjectiles : [];
+        if (projectiles.length > 0 && !enemy.mechanicResolved) {
+          const previousTickAt = now - Math.max(1, delta * 1000);
+          const hitPlayerIds = new Set(Array.isArray(enemy.mechanicHitPlayerIds) ? enemy.mechanicHitPlayerIds : []);
+          this.getPlayersInEnemySpace(enemy).forEach((player) => {
+            if (hitPlayerIds.has(player.id) || safeNumber(player.hp, player.maxHp ?? 100) <= 0) return;
+            const projectileHit = projectiles.some((projectile) => (
+              bossProjectileSweptHit(projectile, player, previousTickAt, now, PLAYER.radius)
+            ));
+            if (!projectileHit) return;
+            hitPlayerIds.add(player.id);
+            const damage = Math.max(1, Math.round(safeNumber(activeMechanicConfig.damage, 1)));
+            player.hp = clamp((player.hp ?? player.maxHp ?? 100) - damage, 0, player.maxHp ?? 100);
+            player.updatedAt = now;
+            const victimClient = this.clients.find((client) => client.sessionId === player.id);
+            victimClient?.send('hit', {
+              damage,
+              slowDuration: activeMechanicConfig.slowDuration,
+              slowMultiplier: activeMechanicConfig.slowMultiplier,
+              effect: 'slow',
+            });
+          });
+          return {
+            ...enemy,
+            mechanicHitPlayerIds: [...hitPlayerIds],
+            mechanicResolved: now >= mechanicImpactAt,
+            attackResolved: now >= mechanicImpactAt,
+            targetX: targetPlayer.x,
+            targetY: targetPlayer.y,
+          };
+        }
+        if (!enemy.mechanicResolved && now >= mechanicImpactAt) {
+          const victims = this.getPlayersInEnemySpace(enemy).filter((player) => (
+            safeNumber(player.hp, player.maxHp ?? 100) > 0
+            && distance(player, enemy) <= activeMechanicConfig.radius
+          ));
+          victims.forEach((player) => {
+            const damage = Math.max(1, Math.round(safeNumber(activeMechanicConfig.damage, 1)));
+            player.hp = clamp((player.hp ?? player.maxHp ?? 100) - damage, 0, player.maxHp ?? 100);
+            player.updatedAt = now;
+            const victimClient = this.clients.find((client) => client.sessionId === player.id);
+            victimClient?.send('hit', { damage });
+          });
+          return {
+            ...enemy,
+            mechanicResolved: true,
+            attackResolved: true,
+            targetX: targetPlayer.x,
+            targetY: targetPlayer.y,
+          };
+        }
+        return {
+          ...enemy,
+          targetX: targetPlayer.x,
+          targetY: targetPlayer.y,
+        };
+      }
+
+      const primaryActivationRange = mechanicConfig?.activationRange ?? safeNumber(mechanicConfig?.radius, 0) * 1.35;
+      const primaryReady = Boolean(
+        mechanicConfig
+        && length <= primaryActivationRange
+        && now >= safeNumber(enemy.nextMechanicAt, Number.POSITIVE_INFINITY)
+      );
+      const secondaryConfig = mechanicConfig?.secondary ?? null;
+      const secondaryReady = Boolean(
+        secondaryConfig
+        && length >= safeNumber(secondaryConfig.minRange, 0)
+        && length <= safeNumber(secondaryConfig.activationRange, 0)
+        && now >= safeNumber(enemy.nextSecondaryMechanicAt, Number.POSITIVE_INFINITY)
+      );
+      const selectedMechanicConfig = secondaryReady && (!primaryReady || length > primaryActivationRange)
+        ? secondaryConfig
+        : primaryReady
+          ? mechanicConfig
+          : null;
+
+      if (selectedMechanicConfig) {
+        const mechanicProjectiles = selectedMechanicConfig.projectileSpeed
+          ? createBossProjectilePattern(enemy, targetPlayer, selectedMechanicConfig, now)
+          : [];
+        const mechanicLaunchAt = mechanicProjectiles[0]?.launchAt
+          ?? now + selectedMechanicConfig.telegraphDuration;
+        const mechanicImpactAt = mechanicProjectiles.length > 0
+          ? Math.max(...mechanicProjectiles.map((projectile) => projectile.impactAt))
+          : now + selectedMechanicConfig.telegraphDuration;
+        const mechanicUntilAt = mechanicProjectiles.length > 0
+          ? mechanicImpactAt + safeNumber(selectedMechanicConfig.recoveryDuration, 300)
+          : now + selectedMechanicConfig.totalDuration;
+        const cooldownField = selectedMechanicConfig === secondaryConfig
+          ? 'nextSecondaryMechanicAt'
+          : 'nextMechanicAt';
+        return {
+          ...enemy,
+          [cooldownField]: now + selectedMechanicConfig.cooldown,
+          mechanicType: selectedMechanicConfig.type,
+          mechanicStartedAt: now,
+          mechanicLaunchAt,
+          mechanicImpactAt,
+          mechanicUntil: mechanicUntilAt,
+          mechanicRadius: safeNumber(selectedMechanicConfig.radius, 0),
+          mechanicProjectiles,
+          mechanicHitPlayerIds: [],
+          mechanicResolved: false,
+          nextAttackAt: Math.max(safeNumber(enemy.nextAttackAt, 0), mechanicUntilAt + 250),
+          attackStartedAt: now,
+          attackType: selectedMechanicConfig.type,
+          attackLaunchAt: mechanicLaunchAt,
+          attackImpactAt: mechanicLaunchAt,
+          attackUntil: mechanicUntilAt,
+          attackResolved: false,
+          targetX: targetPlayer.x,
+          targetY: targetPlayer.y,
+        };
+      }
+
+      const attackUntil = safeNumber(enemy.attackUntil, 0);
+      if (now < attackUntil) {
+        const attackImpactAt = safeNumber(enemy.attackImpactAt, attackUntil);
+        if (enemy.attackType === 'water-bolt' && !enemy.attackResolved) {
+          const attackProjectile = {
+            originX: enemy.attackOriginX,
+            originY: enemy.attackOriginY,
+            targetX: enemy.attackTargetX,
+            targetY: enemy.attackTargetY,
+            launchAt: enemy.attackLaunchAt,
+            impactAt: enemy.attackImpactAt,
+            radius: enemy.attackProjectileRadius,
+          };
+          const previousTickAt = now - Math.max(1, delta * 1000);
+          const attackHit = bossProjectileSweptHit(attackProjectile, targetPlayer, previousTickAt, now, PLAYER.radius);
+          if (attackHit) {
+            const damage = this.getEnemyAttackDamage(enemy);
+            targetPlayer.hp = clamp((targetPlayer.hp ?? targetPlayer.maxHp ?? 100) - damage, 0, targetPlayer.maxHp ?? 100);
+            targetPlayer.updatedAt = now;
+            const targetClient = this.clients.find((client) => client.sessionId === enemy.targetPlayerId);
+            targetClient?.send('hit', {
+              damage,
+              slowDuration: rangedAttackConfig?.slowDuration,
+              slowMultiplier: rangedAttackConfig?.slowMultiplier,
+              effect: 'slow',
+            });
+          }
+          if (attackHit || now >= attackImpactAt) {
+            return {
+              ...enemy,
+              attackResolved: true,
+              targetX: targetPlayer.x,
+              targetY: targetPlayer.y,
+            };
+          }
+          return {
+            ...enemy,
+            targetX: targetPlayer.x,
+            targetY: targetPlayer.y,
+          };
+        }
+        if (!enemy.attackResolved && now >= attackImpactAt) {
+          const attackHit = length <= meleeAttackRange;
+          if (attackHit) {
+            const damage = this.getEnemyAttackDamage(enemy);
+            targetPlayer.hp = clamp((targetPlayer.hp ?? targetPlayer.maxHp ?? 100) - damage, 0, targetPlayer.maxHp ?? 100);
+            targetPlayer.updatedAt = now;
+            const targetClient = this.clients.find((client) => client.sessionId === enemy.targetPlayerId);
+            targetClient?.send('hit', { damage });
+          }
+          return {
+            ...enemy,
+            attackResolved: true,
+            targetX: targetPlayer.x,
+            targetY: targetPlayer.y,
+          };
+        }
+        return {
+          ...enemy,
+          targetX: targetPlayer.x,
+          targetY: targetPlayer.y,
+        };
+      }
+      if (length <= rangedAttackStartRange && now >= nextAttackAt) {
+        if (rangedAttackConfig) {
+          const [attackProjectile] = createBossProjectilePattern(enemy, targetPlayer, {
+            ...rangedAttackConfig,
+            telegraphDuration: rangedAttackConfig.launchDelay,
+            maxTravelDistance: rangedAttackConfig.range,
+            projectileCount: 1,
+            projectileSpread: 0,
+          }, now);
+          const attackUntilAt = attackProjectile.impactAt + safeNumber(rangedAttackConfig.recoveryDuration, 180);
+          return {
+            ...enemy,
+            nextAttackAt: now + safeNumber(rangedAttackConfig.cooldown, 1350),
+            attackStartedAt: now,
+            attackType: rangedAttackConfig.type,
+            attackLaunchAt: attackProjectile.launchAt,
+            attackImpactAt: attackProjectile.impactAt,
+            attackUntil: attackUntilAt,
+            attackResolved: false,
+            attackOriginX: attackProjectile.originX,
+            attackOriginY: attackProjectile.originY,
+            attackTargetX: attackProjectile.targetX,
+            attackTargetY: attackProjectile.targetY,
+            attackProjectileRadius: attackProjectile.radius,
+            targetX: targetPlayer.x,
+            targetY: targetPlayer.y,
+          };
+        }
+        return {
+          ...enemy,
+          nextAttackAt: now + clamp(enemy.attackCooldown ?? (this.isBossEnemy(enemy) ? 1100 : 850), 250, 5000),
+          attackStartedAt: now,
+          attackType: 'melee',
+          attackLaunchAt: 0,
+          attackImpactAt: now + ENEMY_ATTACK_IMPACT_MS,
+          attackUntil: now + ENEMY_ATTACK_ANIMATION_MS,
+          attackResolved: false,
+          targetX: targetPlayer.x,
+          targetY: targetPlayer.y,
+        };
+      }
+      if (rangedAttackConfig && length <= safeNumber(rangedAttackConfig.preferredRange, rangedAttackConfig.range)) {
+        return {
+          ...enemy,
+          targetX: targetPlayer.x,
+          targetY: targetPlayer.y,
+        };
+      }
+      let chaseX = dirX - dirY * drift + separation.x * separation.strength * 0.95;
+      let chaseY = dirY + dirX * drift + separation.y * separation.strength * 0.95;
+      const chaseLength = Math.hypot(chaseX, chaseY) || 1;
+      chaseX /= chaseLength;
+      chaseY /= chaseLength;
       const movement = moveEnemyWithCollision(
         enemy,
-        enemy.x + (dirX - dirY * drift) * (enemy.speed ?? ENEMY.speed) * movementMultiplier * delta,
-        enemy.y + (dirY + dirX * drift) * (enemy.speed ?? ENEMY.speed) * movementMultiplier * delta,
+        enemy.x + chaseX * (enemy.speed ?? ENEMY.speed) * movementMultiplier * delta,
+        enemy.y + chaseY * (enemy.speed ?? ENEMY.speed) * movementMultiplier * delta,
       );
 
       return {
@@ -2466,11 +3953,12 @@ class WorldRoom extends Room {
   }
 
   getEnemyAttackDamage(enemy) {
-    if (enemy?.type === 'dungeon_final_boss') return 74;
-    if (enemy?.type === 'dungeon_miniboss') return 54;
-    if (enemy?.type === 'boss') return 28;
-    if (enemy?.type === 'dungeon_enemy') return 34;
-    return 9;
+    let fallback = 9;
+    if (enemy?.type === 'dungeon_final_boss') fallback = 74;
+    else if (enemy?.type === 'dungeon_miniboss') fallback = 54;
+    else if (enemy?.type === 'boss') fallback = 28;
+    else if (enemy?.type === 'dungeon_enemy') fallback = 34;
+    return Math.max(1, Math.round(safeNumber(enemy?.damage, fallback)));
   }
 
   getPlayersInEnemySpace(enemy) {
@@ -2480,6 +3968,10 @@ class WorldRoom extends Room {
   isTankPlayer(player) {
     return (player?.classId === 'paladin' && player?.talents?.spec === 'aegis')
       || (player?.classId === 'warrior' && player?.talents?.spec === 'ironward');
+  }
+
+  isHealerPlayer(player) {
+    return player?.classId === 'priest' && player?.talents?.spec === 'light';
   }
 
   getDungeonEntryError(player) {
@@ -2494,6 +3986,7 @@ class WorldRoom extends Room {
     const partyId = currentTarget?.partyId ?? null;
     const eligibleTanks = players
       .filter((player) => this.isTankPlayer(player))
+      .filter((player) => safeNumber(player.hp, player.maxHp ?? 100) > 0)
       .filter((player) => (partyId ? player.partyId === partyId : player.id === currentTarget?.id))
       .filter((player) => distance(player, enemy) < 420);
 
@@ -2727,6 +4220,7 @@ class WorldRoom extends Room {
           maxHp: Math.max(1, player.maxHp ?? 100),
           mapId: normalizeMapId(player.mapId),
           instanceId: player.instanceId ?? null,
+          interiorId: normalizeInteriorSpaceId(player.interiorId),
           partyId: player.partyId,
           partyLeaderId: player.partyLeaderId,
         })),

@@ -1,0 +1,43 @@
+{
+  "copiedStartingMaps": [
+    {
+      "oldSource": "public/maps_old/human_starting_zone_v4.tmj",
+      "newDestination": "public/maps/starting_zones/human/starting_human.tmj",
+      "mapId": "starting_human"
+    },
+    {
+      "oldSource": "public/maps_old/dwarf_starting_zone.tmj",
+      "newDestination": "public/maps/starting_zones/dwarf/starting_dwarf.tmj",
+      "mapId": "starting_dwarf"
+    },
+    {
+      "oldSource": "public/maps_old/elf_starting_zone.tmj",
+      "newDestination": "public/maps/starting_zones/elf/starting_elf.tmj",
+      "mapId": "starting_elf"
+    },
+    {
+      "oldSource": "public/maps_old/orc_starting_zone.tmj",
+      "newDestination": "public/maps/starting_zones/orc/starting_orc.tmj",
+      "mapId": "starting_orc"
+    },
+    {
+      "oldSource": "public/maps_old/undead_starting_zone.tmj",
+      "newDestination": "public/maps/starting_zones/neutral/starting_neutral.tmj",
+      "mapId": "starting_neutral"
+    }
+  ],
+  "copiedDungeon": {
+    "oldSource": "public/maps_old/dungeon_01.tmj",
+    "newDestination": "public/maps/dungeons/dungeon_01/dungeon_01.tmj",
+    "mapId": "dungeon_01"
+  },
+  "generatedRegions": 25,
+  "generatedChunks": 1024,
+  "manifests": [
+    "public/maps/world_map/world_map_manifest.json",
+    "public/maps/world_map/continents/continent_01/continent_01_manifest.json",
+    "public/maps/world_map/continents/continent_01/continent_01_regions.json",
+    "public/maps/world_map/continents/continent_01/markers/major_zones.json",
+    "public/maps/world_map/continents/continent_01/markers/poi_placeholders.json"
+  ]
+}

@@ -71,7 +71,7 @@ $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 $LatestJson = @{
   version = $Version
-  url = "http://localhost:2567/updates/$([uri]::EscapeDataString($UpdatePackageName))"
+  url = [uri]::EscapeDataString($UpdatePackageName)
   notes = "Version $Version"
 } | ConvertTo-Json -Depth 4
 
@@ -85,7 +85,7 @@ Write-Host "Update manifest:" -ForegroundColor Cyan
 Write-Host "  version: $Version"
 Write-Host "  path: $UpdatePackageName"
 Write-Host "  installer: $($Installer.Name)"
-Write-Host "  latest.json url: http://localhost:2567/updates/$([uri]::EscapeDataString($UpdatePackageName))"
+Write-Host "  latest.json url: $([uri]::EscapeDataString($UpdatePackageName))"
 Write-Host ""
 Write-Host "Upload these files to Firebase Hosting or any static host, then set the launcher update URL to:"
 Write-Host "  https://your-site.web.app/updates/latest.yml" -ForegroundColor Green

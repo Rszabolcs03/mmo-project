@@ -358,7 +358,7 @@ function makeDungeonMap() {
 
   const transitions = [
     pointObject(50, 'dungeon_01_start', 56 * TILE + 16, 15 * TILE + 16, [property('type', 'string', 'spawn'), property('facing', 'float', 1.5708)]),
-    rectObject(51, 'dungeon_01_exit', 85 * TILE, 162 * TILE, 8 * TILE, 10 * TILE, [property('type', 'string', 'dungeon_exit'), property('targetMapId', 'string', 'world'), property('targetSpawn', 'string', 'dungeon_01_entrance')]),
+    rectObject(51, 'dungeon_01_exit', 85 * TILE, 162 * TILE, 8 * TILE, 10 * TILE, [property('type', 'string', 'dungeon_exit'), property('targetMapId', 'string', 'continent_01_region_1_0'), property('targetSpawn', 'string', 'dungeon_01_entrance')]),
   ];
 
   const zones = [

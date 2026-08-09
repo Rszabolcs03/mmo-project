@@ -1,0 +1,413 @@
+{
+  "model": "adventurer-fresh-v6",
+  "version": 6,
+  "race": "human",
+  "allowedClasses": [
+    "mage",
+    "hunter",
+    "paladin",
+    "warrior",
+    "priest",
+    "rogue"
+  ],
+  "provenance": "Authored from scratch by scripts/generate-human-fresh-assets.mjs using the v6 shared directional rig; reads no prior character sprite files.",
+  "frame": {
+    "size": 96,
+    "logicalSize": 96,
+    "pixelScale": 1,
+    "designSize": 48,
+    "detailScale": 2,
+    "columns": 9,
+    "rows": 8,
+    "directions": [
+      "down",
+      "down-right",
+      "right",
+      "up-right",
+      "up",
+      "up-left",
+      "left",
+      "down-left"
+    ],
+    "idle": [
+      0
+    ],
+    "walk": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "attack": [
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "architecture": {
+    "layers": [
+      "cape",
+      "body",
+      "outfit",
+      "face",
+      "heritage",
+      "beard",
+      "hair",
+      "headwear",
+      "offhand",
+      "weapon"
+    ],
+    "anchorContract": "Every race and layer is drawn independently from one v6 eight-direction screen-space skeleton with shared head, hand, hip, shoulder, and foot anchors.",
+    "faceContract": "Front, diagonal, profile, rear-diagonal, and back skull volumes are authored separately; faces use expressive multi-tone eyes and never render through rear views.",
+    "headwearContract": "Every class owns an independent headwear layer that rotates in eight directions while preserving readable hair and face customization.",
+    "colorContract": "Exact canonical palettes are replaced at runtime for race skin, eyes, hair, clothing, trim, and weapon finish."
+  },
+  "bodies": {
+    "male": "bodies/male.png",
+    "female": "bodies/female.png"
+  },
+  "faces": {
+    "male": {
+      "natural": "faces/male/natural.png",
+      "focused": "faces/male/focused.png",
+      "scarred": "faces/male/scarred.png",
+      "cheerful": "faces/male/cheerful.png"
+    },
+    "female": {
+      "natural": "faces/female/natural.png",
+      "focused": "faces/female/focused.png",
+      "freckled": "faces/female/freckled.png",
+      "cheerful": "faces/female/cheerful.png"
+    }
+  },
+  "heritage": {
+    "road-freckles": "heritage/road-freckles.png",
+    "temple-scar": "heritage/temple-scar.png",
+    "guild-mark": "heritage/guild-mark.png"
+  },
+  "hair": {
+    "male": {
+      "cropped": "hair/male/cropped.png",
+      "windswept": "hair/male/windswept.png",
+      "tousled": "hair/male/tousled.png",
+      "tied": "hair/male/tied.png"
+    },
+    "female": {
+      "long": "hair/female/long.png",
+      "side-bangs": "hair/female/side-bangs.png",
+      "bun": "hair/female/bun.png",
+      "ponytail": "hair/female/ponytail.png"
+    }
+  },
+  "beards": {
+    "short": "beards/short.png",
+    "full": "beards/full.png"
+  },
+  "capes": {
+    "short": "capes/short.png",
+    "long": "capes/long.png"
+  },
+  "classes": {
+    "mage": {
+      "male": {
+        "outfits": {
+          "classic": "classes/mage/male/outfits/classic.png",
+          "veteran": "classes/mage/male/outfits/veteran.png",
+          "runed": "classes/mage/male/outfits/runed.png",
+          "dark": "classes/mage/male/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/mage/male/headwear/classic.png",
+          "veteran": "classes/mage/male/headwear/veteran.png",
+          "runed": "classes/mage/male/headwear/runed.png",
+          "dark": "classes/mage/male/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/mage/male/weapons/classic.png",
+          "veteran": "classes/mage/male/weapons/veteran.png",
+          "runed": "classes/mage/male/weapons/runed.png",
+          "ornate": "classes/mage/male/weapons/ornate.png",
+          "shadow": "classes/mage/male/weapons/shadow.png"
+        },
+        "offhands": {}
+      },
+      "female": {
+        "outfits": {
+          "classic": "classes/mage/female/outfits/classic.png",
+          "veteran": "classes/mage/female/outfits/veteran.png",
+          "runed": "classes/mage/female/outfits/runed.png",
+          "dark": "classes/mage/female/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/mage/female/headwear/classic.png",
+          "veteran": "classes/mage/female/headwear/veteran.png",
+          "runed": "classes/mage/female/headwear/runed.png",
+          "dark": "classes/mage/female/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/mage/female/weapons/classic.png",
+          "veteran": "classes/mage/female/weapons/veteran.png",
+          "runed": "classes/mage/female/weapons/runed.png",
+          "ornate": "classes/mage/female/weapons/ornate.png",
+          "shadow": "classes/mage/female/weapons/shadow.png"
+        },
+        "offhands": {}
+      }
+    },
+    "hunter": {
+      "male": {
+        "outfits": {
+          "classic": "classes/hunter/male/outfits/classic.png",
+          "veteran": "classes/hunter/male/outfits/veteran.png",
+          "runed": "classes/hunter/male/outfits/runed.png",
+          "dark": "classes/hunter/male/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/hunter/male/headwear/classic.png",
+          "veteran": "classes/hunter/male/headwear/veteran.png",
+          "runed": "classes/hunter/male/headwear/runed.png",
+          "dark": "classes/hunter/male/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/hunter/male/weapons/classic.png",
+          "veteran": "classes/hunter/male/weapons/veteran.png",
+          "runed": "classes/hunter/male/weapons/runed.png",
+          "ornate": "classes/hunter/male/weapons/ornate.png",
+          "shadow": "classes/hunter/male/weapons/shadow.png"
+        },
+        "offhands": {}
+      },
+      "female": {
+        "outfits": {
+          "classic": "classes/hunter/female/outfits/classic.png",
+          "veteran": "classes/hunter/female/outfits/veteran.png",
+          "runed": "classes/hunter/female/outfits/runed.png",
+          "dark": "classes/hunter/female/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/hunter/female/headwear/classic.png",
+          "veteran": "classes/hunter/female/headwear/veteran.png",
+          "runed": "classes/hunter/female/headwear/runed.png",
+          "dark": "classes/hunter/female/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/hunter/female/weapons/classic.png",
+          "veteran": "classes/hunter/female/weapons/veteran.png",
+          "runed": "classes/hunter/female/weapons/runed.png",
+          "ornate": "classes/hunter/female/weapons/ornate.png",
+          "shadow": "classes/hunter/female/weapons/shadow.png"
+        },
+        "offhands": {}
+      }
+    },
+    "paladin": {
+      "male": {
+        "outfits": {
+          "classic": "classes/paladin/male/outfits/classic.png",
+          "veteran": "classes/paladin/male/outfits/veteran.png",
+          "runed": "classes/paladin/male/outfits/runed.png",
+          "dark": "classes/paladin/male/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/paladin/male/headwear/classic.png",
+          "veteran": "classes/paladin/male/headwear/veteran.png",
+          "runed": "classes/paladin/male/headwear/runed.png",
+          "dark": "classes/paladin/male/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/paladin/male/weapons/classic.png",
+          "veteran": "classes/paladin/male/weapons/veteran.png",
+          "runed": "classes/paladin/male/weapons/runed.png",
+          "ornate": "classes/paladin/male/weapons/ornate.png",
+          "shadow": "classes/paladin/male/weapons/shadow.png"
+        },
+        "offhands": {
+          "classic": "classes/paladin/male/offhands/classic.png",
+          "veteran": "classes/paladin/male/offhands/veteran.png",
+          "runed": "classes/paladin/male/offhands/runed.png",
+          "ornate": "classes/paladin/male/offhands/ornate.png",
+          "shadow": "classes/paladin/male/offhands/shadow.png"
+        }
+      },
+      "female": {
+        "outfits": {
+          "classic": "classes/paladin/female/outfits/classic.png",
+          "veteran": "classes/paladin/female/outfits/veteran.png",
+          "runed": "classes/paladin/female/outfits/runed.png",
+          "dark": "classes/paladin/female/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/paladin/female/headwear/classic.png",
+          "veteran": "classes/paladin/female/headwear/veteran.png",
+          "runed": "classes/paladin/female/headwear/runed.png",
+          "dark": "classes/paladin/female/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/paladin/female/weapons/classic.png",
+          "veteran": "classes/paladin/female/weapons/veteran.png",
+          "runed": "classes/paladin/female/weapons/runed.png",
+          "ornate": "classes/paladin/female/weapons/ornate.png",
+          "shadow": "classes/paladin/female/weapons/shadow.png"
+        },
+        "offhands": {
+          "classic": "classes/paladin/female/offhands/classic.png",
+          "veteran": "classes/paladin/female/offhands/veteran.png",
+          "runed": "classes/paladin/female/offhands/runed.png",
+          "ornate": "classes/paladin/female/offhands/ornate.png",
+          "shadow": "classes/paladin/female/offhands/shadow.png"
+        }
+      }
+    },
+    "warrior": {
+      "male": {
+        "outfits": {
+          "classic": "classes/warrior/male/outfits/classic.png",
+          "veteran": "classes/warrior/male/outfits/veteran.png",
+          "runed": "classes/warrior/male/outfits/runed.png",
+          "dark": "classes/warrior/male/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/warrior/male/headwear/classic.png",
+          "veteran": "classes/warrior/male/headwear/veteran.png",
+          "runed": "classes/warrior/male/headwear/runed.png",
+          "dark": "classes/warrior/male/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/warrior/male/weapons/classic.png",
+          "veteran": "classes/warrior/male/weapons/veteran.png",
+          "runed": "classes/warrior/male/weapons/runed.png",
+          "ornate": "classes/warrior/male/weapons/ornate.png",
+          "shadow": "classes/warrior/male/weapons/shadow.png"
+        },
+        "offhands": {
+          "classic": "classes/warrior/male/offhands/classic.png",
+          "veteran": "classes/warrior/male/offhands/veteran.png",
+          "runed": "classes/warrior/male/offhands/runed.png",
+          "ornate": "classes/warrior/male/offhands/ornate.png",
+          "shadow": "classes/warrior/male/offhands/shadow.png"
+        }
+      },
+      "female": {
+        "outfits": {
+          "classic": "classes/warrior/female/outfits/classic.png",
+          "veteran": "classes/warrior/female/outfits/veteran.png",
+          "runed": "classes/warrior/female/outfits/runed.png",
+          "dark": "classes/warrior/female/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/warrior/female/headwear/classic.png",
+          "veteran": "classes/warrior/female/headwear/veteran.png",
+          "runed": "classes/warrior/female/headwear/runed.png",
+          "dark": "classes/warrior/female/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/warrior/female/weapons/classic.png",
+          "veteran": "classes/warrior/female/weapons/veteran.png",
+          "runed": "classes/warrior/female/weapons/runed.png",
+          "ornate": "classes/warrior/female/weapons/ornate.png",
+          "shadow": "classes/warrior/female/weapons/shadow.png"
+        },
+        "offhands": {
+          "classic": "classes/warrior/female/offhands/classic.png",
+          "veteran": "classes/warrior/female/offhands/veteran.png",
+          "runed": "classes/warrior/female/offhands/runed.png",
+          "ornate": "classes/warrior/female/offhands/ornate.png",
+          "shadow": "classes/warrior/female/offhands/shadow.png"
+        }
+      }
+    },
+    "priest": {
+      "male": {
+        "outfits": {
+          "classic": "classes/priest/male/outfits/classic.png",
+          "veteran": "classes/priest/male/outfits/veteran.png",
+          "runed": "classes/priest/male/outfits/runed.png",
+          "dark": "classes/priest/male/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/priest/male/headwear/classic.png",
+          "veteran": "classes/priest/male/headwear/veteran.png",
+          "runed": "classes/priest/male/headwear/runed.png",
+          "dark": "classes/priest/male/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/priest/male/weapons/classic.png",
+          "veteran": "classes/priest/male/weapons/veteran.png",
+          "runed": "classes/priest/male/weapons/runed.png",
+          "ornate": "classes/priest/male/weapons/ornate.png",
+          "shadow": "classes/priest/male/weapons/shadow.png"
+        },
+        "offhands": {}
+      },
+      "female": {
+        "outfits": {
+          "classic": "classes/priest/female/outfits/classic.png",
+          "veteran": "classes/priest/female/outfits/veteran.png",
+          "runed": "classes/priest/female/outfits/runed.png",
+          "dark": "classes/priest/female/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/priest/female/headwear/classic.png",
+          "veteran": "classes/priest/female/headwear/veteran.png",
+          "runed": "classes/priest/female/headwear/runed.png",
+          "dark": "classes/priest/female/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/priest/female/weapons/classic.png",
+          "veteran": "classes/priest/female/weapons/veteran.png",
+          "runed": "classes/priest/female/weapons/runed.png",
+          "ornate": "classes/priest/female/weapons/ornate.png",
+          "shadow": "classes/priest/female/weapons/shadow.png"
+        },
+        "offhands": {}
+      }
+    },
+    "rogue": {
+      "male": {
+        "outfits": {
+          "classic": "classes/rogue/male/outfits/classic.png",
+          "veteran": "classes/rogue/male/outfits/veteran.png",
+          "runed": "classes/rogue/male/outfits/runed.png",
+          "dark": "classes/rogue/male/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/rogue/male/headwear/classic.png",
+          "veteran": "classes/rogue/male/headwear/veteran.png",
+          "runed": "classes/rogue/male/headwear/runed.png",
+          "dark": "classes/rogue/male/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/rogue/male/weapons/classic.png",
+          "veteran": "classes/rogue/male/weapons/veteran.png",
+          "runed": "classes/rogue/male/weapons/runed.png",
+          "ornate": "classes/rogue/male/weapons/ornate.png",
+          "shadow": "classes/rogue/male/weapons/shadow.png"
+        },
+        "offhands": {}
+      },
+      "female": {
+        "outfits": {
+          "classic": "classes/rogue/female/outfits/classic.png",
+          "veteran": "classes/rogue/female/outfits/veteran.png",
+          "runed": "classes/rogue/female/outfits/runed.png",
+          "dark": "classes/rogue/female/outfits/dark.png"
+        },
+        "headwear": {
+          "classic": "classes/rogue/female/headwear/classic.png",
+          "veteran": "classes/rogue/female/headwear/veteran.png",
+          "runed": "classes/rogue/female/headwear/runed.png",
+          "dark": "classes/rogue/female/headwear/dark.png"
+        },
+        "weapons": {
+          "classic": "classes/rogue/female/weapons/classic.png",
+          "veteran": "classes/rogue/female/weapons/veteran.png",
+          "runed": "classes/rogue/female/weapons/runed.png",
+          "ornate": "classes/rogue/female/weapons/ornate.png",
+          "shadow": "classes/rogue/female/weapons/shadow.png"
+        },
+        "offhands": {}
+      }
+    }
+  }
+}

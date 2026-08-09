@@ -267,6 +267,7 @@ const ENEMY_PALETTES = {
   'thornmaw-alpha': ['#365314', '#14220a', '#f97316'],
   'granite-ogre': ['#57534e', '#1c1917', '#fde68a'],
   'ash-witch': ['#581c87', '#1e102e', '#fb7185'],
+  'redscar-captain': ['#7f1d1d', '#2b0b0b', '#facc15'],
   'reedwater-marauder': ['#2f6f7a', '#12343c', '#67e8f9'],
   'bramblehide-bear': ['#7c4a2d', '#3f2418', '#fbbf24'],
   'moonbrook-prowler': ['#3f4658', '#111827', '#93c5fd'],
@@ -286,7 +287,7 @@ const NORMAL_ENEMIES = [
 const BOSS_ENEMIES = [
   'elder-briarheart', 'granite-matriarch', 'crypt-warden', 'moonshade-stag', 'bloodtusk-chief',
   'varro-the-tollkeeper', 'thornmaw-alpha', 'granite-ogre', 'ash-witch',
-  'old-quarry-giant', 'tideglass-matriarch',
+  'redscar-captain', 'old-quarry-giant', 'tideglass-matriarch',
 ];
 
 function drawBeastFrame(buffer, canvasWidth, canvasHeight, frame, ox, oy, palette, kind) {
@@ -484,6 +485,32 @@ function drawTamziaBossFrame(buffer, canvasWidth, canvasHeight, frame, ox, oy, p
   const pulse = frame % 2 ? -2 : 0;
   const cx = ox + 48;
 
+  if (kind.includes('redscar')) {
+    ellipse(buffer, canvasWidth, canvasHeight, cx, oy + 82, 33, 8, '#000000', 82);
+    rect(buffer, canvasWidth, canvasHeight, cx - 17, oy + 31 + pulse, 34, 40, outline);
+    rect(buffer, canvasWidth, canvasHeight, cx - 12, oy + 35 + pulse, 24, 32, body);
+    rect(buffer, canvasWidth, canvasHeight, cx - 18, oy + 45 + pulse, 36, 7, accent, 210);
+    rect(buffer, canvasWidth, canvasHeight, cx - 15, oy + 14 + pulse, 30, 21, outline);
+    rect(buffer, canvasWidth, canvasHeight, cx - 11, oy + 17 + pulse, 22, 15, '#991b1b');
+    rect(buffer, canvasWidth, canvasHeight, cx - 8, oy + 24 + pulse, 5, 5, accent);
+    rect(buffer, canvasWidth, canvasHeight, cx + 3, oy + 24 + pulse, 5, 5, accent);
+    rect(buffer, canvasWidth, canvasHeight, cx - 20, oy + 16 + pulse, 11, 5, accent);
+    rect(buffer, canvasWidth, canvasHeight, cx + 9, oy + 16 + pulse, 11, 5, accent);
+    line(buffer, canvasWidth, canvasHeight, cx - 17, oy + 39 + pulse, cx - 36, oy + 57 + step, 7, outline);
+    line(buffer, canvasWidth, canvasHeight, cx + 17, oy + 39 + pulse, cx + 34, oy + 56 - step, 7, outline);
+    line(buffer, canvasWidth, canvasHeight, cx - 16, oy + 39 + pulse, cx - 34, oy + 56 + step, 4, body);
+    line(buffer, canvasWidth, canvasHeight, cx + 16, oy + 39 + pulse, cx + 32, oy + 55 - step, 4, body);
+    rect(buffer, canvasWidth, canvasHeight, cx - 13, oy + 69 + pulse, 10, 17 - step / 2, outline);
+    rect(buffer, canvasWidth, canvasHeight, cx + 3, oy + 69 + pulse, 10, 17 + step / 2, outline);
+    line(buffer, canvasWidth, canvasHeight, cx + 31, oy + 20 + pulse, cx + 39, oy + 74 - step, 5, outline);
+    line(buffer, canvasWidth, canvasHeight, cx + 31, oy + 20 + pulse, cx + 39, oy + 74 - step, 2, '#fef3c7');
+    rect(buffer, canvasWidth, canvasHeight, cx + 25, oy + 17 + pulse, 15, 5, accent);
+    line(buffer, canvasWidth, canvasHeight, cx - 28, oy + 25 + pulse, cx - 41, oy + 64 + step, 4, outline);
+    line(buffer, canvasWidth, canvasHeight, cx - 28, oy + 25 + pulse, cx - 41, oy + 64 + step, 2, '#d6b15f');
+    rect(buffer, canvasWidth, canvasHeight, cx - 47, oy + 61 + step, 13, 6, accent);
+    return;
+  }
+
   if (kind.includes('old-quarry')) {
     ellipse(buffer, canvasWidth, canvasHeight, cx, oy + 82, 34, 8, '#000000', 82);
     rect(buffer, canvasWidth, canvasHeight, cx - 18, oy + 32 + pulse, 36, 38, outline);
@@ -533,7 +560,7 @@ function drawEnemyFrameByKind(kind, boss = false) {
   const frameSize = boss ? 96 : 64;
   return drawSheet(frameSize, frameSize, 4, (buffer, width, height, frame, ox, oy) => {
     const palette = ENEMY_PALETTES[kind] ?? ['#64748b', '#1f2937', '#f8fafc'];
-    if (boss && (kind.includes('old-quarry') || kind.includes('tideglass'))) {
+    if (boss && (kind.includes('old-quarry') || kind.includes('tideglass') || kind.includes('redscar'))) {
       drawTamziaBossFrame(buffer, width, height, frame, ox, oy, palette, kind);
       return;
     }
@@ -614,12 +641,24 @@ const PET_PALETTES = {
   orc: ['#5f6f37', '#323d1f', '#c2410c'],
 };
 
+const HAND_AUTHORED_ENEMIES = new Set([
+  'wolf',
+  'bramblehide-bear',
+  'moonbrook-prowler',
+  'redscar-highwayman',
+  'redscar-captain',
+  'old-quarry-giant',
+  'tideglass-matriarch',
+]);
+
 for (const kind of NORMAL_ENEMIES) {
+  if (HAND_AUTHORED_ENEMIES.has(kind)) continue;
   const sheet = drawEnemyFrameByKind(kind, false);
   savePng(join(ENEMIES_DIR, `${kind}.png`), sheet.buffer, sheet.width, sheet.height);
 }
 
 for (const kind of BOSS_ENEMIES) {
+  if (HAND_AUTHORED_ENEMIES.has(kind)) continue;
   const sheet = drawEnemyFrameByKind(kind, true);
   savePng(join(ENEMIES_DIR, `${kind}.png`), sheet.buffer, sheet.width, sheet.height);
 }

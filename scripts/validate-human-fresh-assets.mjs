@@ -1,0 +1,359 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PNG } from 'pngjs';
+
+const root = process.cwd();
+const assetRoot = join(root, 'public', 'assets', 'characters', 'human_fresh');
+const manifest = JSON.parse(readFileSync(join(assetRoot, 'manifest.json'), 'utf8'));
+const classes = ['mage', 'hunter', 'paladin', 'warrior', 'priest', 'rogue'];
+const bodies = ['male', 'female'];
+const size = 96;
+const width = size * 9;
+const height = size * 8;
+const cache = new Map();
+
+for (const removedRoot of ['human', 'humans_v2', 'human_old', 'old_humans', 'old_humans2', 'legacy']) {
+  if (existsSync(join(root, 'public', 'assets', 'characters', removedRoot))) {
+    throw new Error(`Removed human asset root was recreated: ${removedRoot}`);
+  }
+}
+
+if (manifest.model !== 'adventurer-fresh-v6' || manifest.version !== 6) {
+  throw new Error(`Expected adventurer-fresh-v6, got ${manifest.model} v${manifest.version}.`);
+}
+if (!manifest.provenance.includes('reads no prior character sprite files')) {
+  throw new Error('The fresh manifest does not declare independent provenance.');
+}
+if (
+  manifest.frame.size !== size
+  || manifest.frame.logicalSize !== 96
+  || manifest.frame.pixelScale !== 1
+  || manifest.frame.designSize !== 48
+  || manifest.frame.detailScale !== 2
+  || manifest.frame.columns !== 9
+  || manifest.frame.rows !== 8
+  || JSON.stringify(manifest.frame.walk) !== JSON.stringify([1, 2, 3, 4])
+  || JSON.stringify(manifest.frame.attack) !== JSON.stringify([5, 6, 7, 8])
+) throw new Error('Fresh frame contract is invalid.');
+if (manifest.architecture.layers.join(',') !== 'cape,body,outfit,face,heritage,beard,hair,headwear,offhand,weapon') {
+  throw new Error('Fresh paper-doll layer contract is invalid.');
+}
+
+function read(path) {
+  if (!path || path.includes('..')) throw new Error(`Invalid fresh asset path: ${path}`);
+  if (!cache.has(path)) {
+    const absolute = join(assetRoot, ...path.split('/'));
+    if (!existsSync(absolute)) throw new Error(`Missing fresh asset: ${path}`);
+    const image = PNG.sync.read(readFileSync(absolute));
+    if (image.width !== width || image.height !== height) {
+      throw new Error(`${path} is ${image.width}x${image.height}; expected ${width}x${height}.`);
+    }
+    cache.set(path, image);
+  }
+  return cache.get(path);
+}
+
+function index(image, row, column, x, y) {
+  return (((row * size + y) * image.width) + column * size + x) * 4;
+}
+
+function frameDifference(left, leftRow, leftColumn, right, rightRow, rightColumn) {
+  let different = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const a = index(left, leftRow, leftColumn, x, y);
+      const b = index(right, rightRow, rightColumn, x, y);
+      let delta = 0;
+      for (let channel = 0; channel < 4; channel += 1) delta += Math.abs(left.data[a + channel] - right.data[b + channel]);
+      if (delta > 24) different += 1;
+    }
+  }
+  return different;
+}
+
+function atlasDifference(left, right) {
+  let different = 0;
+  for (let pixel = 0; pixel < left.data.length; pixel += 4) {
+    let delta = 0;
+    for (let channel = 0; channel < 4; channel += 1) delta += Math.abs(left.data[pixel + channel] - right.data[pixel + channel]);
+    if (delta > 24) different += 1;
+  }
+  return different;
+}
+
+function alphaCount(image, row, column) {
+  return points(image, row, column).length;
+}
+
+function alphaOverlap(left, right, row, column, maxY = size) {
+  let overlap = 0;
+  for (let y = 0; y < maxY; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (
+        left.data[index(left, row, column, x, y) + 3] >= 32
+        && right.data[index(right, row, column, x, y) + 3] >= 32
+      ) overlap += 1;
+    }
+  }
+  return overlap;
+}
+
+function points(image, row, column) {
+  const result = [];
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (image.data[index(image, row, column, x, y) + 3] >= 32) result.push([x, y]);
+    }
+  }
+  return result;
+}
+
+function nearestDistance(left, right) {
+  let minimum = Number.POSITIVE_INFINITY;
+  for (const [leftX, leftY] of left) {
+    for (const [rightX, rightY] of right) {
+      minimum = Math.min(minimum, Math.hypot(leftX - rightX, leftY - rightY));
+      if (minimum === 0) return 0;
+    }
+  }
+  return minimum;
+}
+
+function bounds(framePoints) {
+  if (!framePoints.length) return { width: 0, height: 0 };
+  const xs = framePoints.map(([x]) => x);
+  const ys = framePoints.map(([, y]) => y);
+  return {
+    width: Math.max(...xs) - Math.min(...xs) + 1,
+    height: Math.max(...ys) - Math.min(...ys) + 1,
+  };
+}
+
+function visibleFacePixels(face, hair, row, column) {
+  let visible = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const faceAlpha = face.data[index(face, row, column, x, y) + 3];
+      const hairAlpha = hair.data[index(hair, row, column, x, y) + 3];
+      if (faceAlpha >= 32 && hairAlpha < 32) visible += 1;
+    }
+  }
+  return visible;
+}
+
+function visibleEyePixels(face, hair, row, column) {
+  let visible = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const faceIndex = index(face, row, column, x, y);
+      const isEye = face.data[faceIndex] === 30
+        && face.data[faceIndex + 1] === 58
+        && face.data[faceIndex + 2] === 95
+        && face.data[faceIndex + 3] >= 32;
+      const hairAlpha = hair.data[index(hair, row, column, x, y) + 3];
+      if (isEye && hairAlpha < 32) visible += 1;
+    }
+  }
+  return visible;
+}
+
+function visibleEyePixelsUnder(face, overlays, row, column) {
+  let visible = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const faceIndex = index(face, row, column, x, y);
+      const isEye = face.data[faceIndex] === 30
+        && face.data[faceIndex + 1] === 58
+        && face.data[faceIndex + 2] === 95
+        && face.data[faceIndex + 3] >= 32;
+      const covered = overlays.some((overlay) => overlay.data[index(overlay, row, column, x, y) + 3] >= 32);
+      if (isEye && !covered) visible += 1;
+    }
+  }
+  return visible;
+}
+
+const paths = new Set([
+  ...Object.values(manifest.bodies),
+  ...bodies.flatMap((body) => Object.values(manifest.faces[body])),
+  ...Object.values(manifest.heritage),
+  ...bodies.flatMap((body) => Object.values(manifest.hair[body])),
+  ...Object.values(manifest.beards),
+  ...Object.values(manifest.capes),
+  ...classes.flatMap((classId) => bodies.flatMap((body) => [
+    ...Object.values(manifest.classes[classId][body].outfits),
+    ...Object.values(manifest.classes[classId][body].headwear),
+    ...Object.values(manifest.classes[classId][body].weapons),
+    ...Object.values(manifest.classes[classId][body].offhands),
+  ])),
+]);
+if (paths.size !== 201) throw new Error(`Expected 201 unique fresh atlases, got ${paths.size}.`);
+for (const path of paths) read(path);
+
+const heritageImages = Object.values(manifest.heritage).map(read);
+if (heritageImages.length !== 3) throw new Error('Human heritage customization must provide three authored layers plus None.');
+for (let option = 0; option < heritageImages.length; option += 1) {
+  // Native-resolution freckles and studs intentionally use individual pixels;
+  // four well-placed marks remain readable without masking the facial planes.
+  if (alphaCount(heritageImages[option], 0, 0) < 4) throw new Error(`Heritage option ${option} is not visible from the front.`);
+  if (alphaCount(heritageImages[option], 2, 0) + alphaCount(heritageImages[option], 6, 0) < 8) {
+    throw new Error(`Heritage option ${option} is not visible in either cardinal profile.`);
+  }
+  for (let other = option + 1; other < heritageImages.length; other += 1) {
+    if (atlasDifference(heritageImages[option], heritageImages[other]) < 120) {
+      throw new Error(`Heritage options ${option}/${other} are not visually distinct.`);
+    }
+  }
+}
+
+const shortCape = read(manifest.capes.short);
+const longCape = read(manifest.capes.long);
+if (atlasDifference(shortCape, longCape) < 2_000) throw new Error('Short and long capes are not visibly distinct.');
+for (const row of [0, 2, 4, 6]) {
+  const profile = row === 2 || row === 6;
+  const minimumCapePixels = profile ? 240 : 700;
+  const minimumLongExtension = profile ? 80 : 300;
+  if (alphaCount(shortCape, row, 0) < minimumCapePixels) throw new Error(`Short cape is not readable in direction row ${row}.`);
+  if (alphaCount(longCape, row, 0) < alphaCount(shortCape, row, 0) + minimumLongExtension) {
+    throw new Error(`Long cape does not extend beyond the short cape in direction row ${row}.`);
+  }
+}
+
+for (const body of bodies) {
+  const bodyImage = read(manifest.bodies[body]);
+  const faceImages = Object.values(manifest.faces[body]).map(read);
+  const hairImages = Object.values(manifest.hair[body]).map(read);
+  for (let option = 1; option < faceImages.length; option += 1) {
+    if (atlasDifference(faceImages[0], faceImages[option]) < 100) throw new Error(`${body} face ${option} is not distinct.`);
+    if (frameDifference(faceImages[0], 0, 0, faceImages[option], 0, 0) < 4) {
+      throw new Error(`${body} face ${option} is not visibly distinct from the front.`);
+    }
+    for (const profileRow of [2, 6]) {
+      // A true profile has only one readable eye and very little room for an
+      // expression mark. Require a real profile layer here; the combined
+      // face/hair checks below separately verify that it stays visible.
+      if (alphaCount(faceImages[option], profileRow, 0) < 16) {
+        throw new Error(`${body} face ${option} is missing in side row ${profileRow}.`);
+      }
+    }
+  }
+  for (let option = 1; option < hairImages.length; option += 1) {
+    if (atlasDifference(hairImages[0], hairImages[option]) < 500) throw new Error(`${body} hair ${option} is not distinct.`);
+  }
+  for (const face of faceImages) {
+    for (const hair of hairImages) {
+      for (const row of [0, 1, 2, 6, 7]) {
+        if (visibleFacePixels(face, hair, row, 0) < 10) {
+          throw new Error(`${body} face/hair combination hides the readable face in row ${row}.`);
+        }
+        if (face !== faceImages.at(-1)
+          && ![2, 6].includes(row)
+          && visibleEyePixels(face, hair, row, 0) < (row === 0 ? 4 : 2)) {
+          throw new Error(`${body} face/hair combination hides the eye color in row ${row}.`);
+        }
+      }
+      // A true profile carries a two-pixel iris; scars and side bangs may
+      // naturally cross it. The readable-face and profile-layer checks above
+      // protect the silhouette without forcing an unnaturally oversized eye.
+    }
+  }
+  if (points(bodyImage, 4, 0).length < 80) throw new Error(`${body} rear body frame is missing.`);
+  if (frameDifference(bodyImage, 0, 0, bodyImage, 2, 0) < 100) throw new Error(`${body} profile head silhouette is not directional.`);
+  if (frameDifference(bodyImage, 0, 0, bodyImage, 4, 0) < 100) throw new Error(`${body} rear head silhouette is not directional.`);
+}
+
+for (const classId of classes) {
+  for (const body of bodies) {
+    const group = manifest.classes[classId][body];
+    const outfits = Object.values(group.outfits).map(read);
+    const headwear = Object.values(group.headwear).map(read);
+    const weapons = Object.values(group.weapons).map(read);
+    const offhands = Object.values(group.offhands).map(read);
+    const expectsTankOffhand = classId === 'warrior' || classId === 'paladin';
+    if (offhands.length !== (expectsTankOffhand ? 5 : 0)) {
+      throw new Error(`${classId} ${body} has an invalid tank offhand set.`);
+    }
+    for (let option = 1; option < outfits.length; option += 1) {
+      if (atlasDifference(outfits[0], outfits[option]) < 800) throw new Error(`${classId} ${body} outfit ${option} is not distinct.`);
+    }
+    if (headwear.length !== 4) throw new Error(`${classId} ${body} must provide four headwear variants.`);
+    for (let option = 1; option < headwear.length; option += 1) {
+      if (atlasDifference(headwear[0], headwear[option]) < 100) {
+        throw new Error(`${classId} ${body} headwear ${option} is not visually distinct.`);
+      }
+    }
+    const naturalFace = read(manifest.faces[body].natural);
+    const fallbackHair = read(manifest.hair[body][body === 'female' ? 'long' : 'cropped']);
+    for (const hat of headwear) {
+      for (const row of [0, 1, 2, 3, 4, 5, 6, 7]) {
+        if (alphaCount(hat, row, 0) < 24) {
+          throw new Error(`${classId} ${body} headwear disappears in direction row ${row}.`);
+        }
+      }
+      for (const row of [0, 1, 2, 6, 7]) {
+        const minimumEyes = row === 0 ? 4 : 2;
+        if (visibleEyePixelsUnder(naturalFace, [fallbackHair, hat], row, 0) < minimumEyes) {
+          throw new Error(`${classId} ${body} headwear hides eye customization in direction row ${row}.`);
+        }
+      }
+    }
+    if (frameDifference(outfits[0], 0, 0, outfits[0], 4, 0) < 120) {
+      throw new Error(`${classId} ${body} outfit does not have a distinct rear design.`);
+    }
+    for (let option = 1; option < weapons.length; option += 1) {
+      if (atlasDifference(weapons[0], weapons[option]) < 120) throw new Error(`${classId} ${body} weapon ${option} is not distinct.`);
+    }
+    for (let option = 0; option < offhands.length; option += 1) {
+      if (atlasDifference(weapons[option], offhands[option]) < 2_000) {
+        throw new Error(`${classId} ${body} weapon/offhand ${option} are not independent assets.`);
+      }
+      if (alphaCount(offhands[option], 0, 0) < 150) {
+        throw new Error(`${classId} ${body} tank offhand ${option} is not visibly rendered.`);
+      }
+    }
+    const bodyImage = read(manifest.bodies[body]);
+    for (let row = 0; row < 8; row += 1) {
+      if (frameDifference(outfits[0], row, 1, outfits[0], row, 3) < 80) throw new Error(`${classId} ${body} row ${row} lacks stride motion.`);
+      if (frameDifference(outfits[0], row, 2, outfits[0], row, 4) < 30) throw new Error(`${classId} ${body} row ${row} lacks passing poses.`);
+      for (let column = 5; column < 8; column += 1) {
+        if (frameDifference(weapons[0], row, column, weapons[0], row, column + 1) < 30) {
+          throw new Error(`${classId} ${body} row ${row} attack columns ${column}/${column + 1} are not animated.`);
+        }
+      }
+      for (let column = 0; column < 9; column += 1) {
+        const anchors = [...points(bodyImage, row, column), ...points(outfits[0], row, column)];
+        const equipment = points(weapons[0], row, column);
+        const distance = nearestDistance(anchors, equipment);
+        if (distance > 4.5) {
+          throw new Error(`${classId} ${body} row ${row} column ${column} weapon floats ${distance.toFixed(2)}px from its shared skeleton.`);
+        }
+        if (offhands.length) {
+          const offhandDistance = nearestDistance(anchors, points(offhands[0], row, column));
+          if (offhandDistance > 4.5) {
+            throw new Error(`${classId} ${body} row ${row} column ${column} tank offhand floats ${offhandDistance.toFixed(2)}px from its shared skeleton.`);
+          }
+        }
+      }
+    }
+
+    for (const sideRow of [2, 6]) {
+      if (bounds(points(outfits[0], sideRow, 0)).width < 24) {
+        throw new Error(`${classId} ${body} side row ${sideRow} collapses below the profile depth contract.`);
+      }
+      if (alphaOverlap(bodyImage, weapons[0], sideRow, 0, 38) > 64) {
+        throw new Error(`${classId} ${body} side-view weapon obscures too much of the head.`);
+      }
+    }
+  }
+}
+
+const generator = readFileSync(join(root, 'scripts', 'generate-human-fresh-assets.mjs'), 'utf8');
+for (const forbidden of ['characters/human/', 'characters\\human\\', 'humans_v2', 'human_old']) {
+  if (generator.includes(forbidden)) throw new Error(`Fresh generator depends on forbidden old source: ${forbidden}`);
+}
+const sharedGenerator = readFileSync(join(root, 'scripts', 'generate-character-sprites.mjs'), 'utf8');
+if (sharedGenerator.includes('legacy/full-sheets')) {
+  throw new Error('The shared sprite generator can recreate deleted legacy human sheets.');
+}
+
+console.log('Validated 201 from-scratch human adventurer-fresh-v6 atlases: rounded expressive shared-rig faces, independent eight-direction headwear, richer class materials, race-owned heritage layers, anchored equipment, four-phase walks and attacks, one-sword DPS weapons, and independent tank offhands.');

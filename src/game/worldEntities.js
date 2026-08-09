@@ -1,8 +1,9 @@
-import { clamp, safeNumber } from './math';
+import { clamp, isFinitePoint, safeNumber } from './math';
 import {
   WORLD,
   MAP_FILES,
   WORLD_V3_HUB_MAP_ID,
+  WORLD_V3_HUB_ARRIVAL,
   WORLD_V3_QUEST_GIVER_ID,
   WORLD_V3_HUB_TURN_IN_MARKER,
   WORLD_MAP_VERSION,
@@ -18,6 +19,7 @@ import {
   getWorldGenerationConfig,
   isStartingMapId,
   getWorldV2MapIdFromPoint,
+  getWorldV2RegionOffset,
   getRaceStartMapId,
 } from './world';
 import {
@@ -31,6 +33,8 @@ import {
   SHOPKEEPER,
   RACES,
   CLASSES,
+  FRESH_RACE_HERITAGE_STYLE_CHOICES,
+  FRESH_RACE_DEFAULT_HERITAGE,
   CLASS_NAME_POOLS,
   ENEMY_SPRITE_CONFIG,
 } from './gameData';
@@ -51,7 +55,7 @@ import {
   getTiledWorldPixelWidth,
   moveEnemyWithCollision,
 } from './collision';
-import { getQuestGiverProfile, normalizeEnemyKind, loadWorldV2Registry } from './mapAssets';
+import { getQuestGiverProfile, normalizeEnemyKind, loadWorldV2Registry, hasTileData } from './mapAssets';
 
 function normalizeCharacter(character) {
   const classId = character.classId ?? 'warrior';
@@ -281,11 +285,12 @@ function getSpawnBounds(object, fallbackPosition, fallbackSize = 420) {
     };
   }
 
+  const bounds = getObjectBounds(object);
   return {
-    x: object.x,
-    y: object.y,
-    width: Math.max(object.width ?? 0, 1),
-    height: Math.max(object.height ?? 0, 1),
+    x: bounds.x,
+    y: bounds.y,
+    width: Math.max(bounds.width, 1),
+    height: Math.max(bounds.height, 1),
   };
 }
 
@@ -301,6 +306,24 @@ function numberProp(object, name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+const DEFAULT_ENEMY_MOVEMENT_SPEED_MULTIPLIER = 1.1;
+const MAX_ENEMY_MOVEMENT_SPEED = 1200;
+
+// Tiled enemy-spawn movementSpeed is expressed in world pixels per second.
+function getSpawnMovementSpeed(spawnObject, fallbackSpeed = ENEMY.speed) {
+  const rawValue = spawnObject?.props?.movementSpeed
+    ?? spawnObject?.props?.moveSpeed
+    ?? spawnObject?.props?.movement_speed
+    ?? spawnObject?.props?.speed;
+  const configuredSpeed = Number(rawValue);
+  if (Number.isFinite(configuredSpeed)) return clamp(configuredSpeed, 0, MAX_ENEMY_MOVEMENT_SPEED);
+  return clamp(
+    safeNumber(fallbackSpeed, ENEMY.speed) * DEFAULT_ENEMY_MOVEMENT_SPEED_MULTIPLIER,
+    0,
+    MAX_ENEMY_MOVEMENT_SPEED,
+  );
+}
+
 function getSpawnPackId(spawnObject, fallbackId = 'fallback_spawn') {
   const mapId = normalizeMapId(spawnObject?.mapId ?? 'world');
   const baseId = String(spawnObject?.props?.spawnId ?? spawnObject?.name ?? spawnObject?.id ?? fallbackId);
@@ -312,17 +335,40 @@ function getSpawnEnemyType(spawnObject) {
   return normalizeEnemyKind(spawnObject?.props?.enemyType ?? (spawnName.includes('desert') ? 'scarab' : 'wolf'));
 }
 
+function getSpawnRecommendedLevel(spawnObject) {
+  return Math.max(0, Math.floor(numberProp(spawnObject, 'recommendedLevel', 0)));
+}
+
+function getSpawnArea(spawnObject) {
+  const bounds = getObjectBounds(spawnObject);
+  return Math.max(0, bounds.width) * Math.max(0, bounds.height);
+}
+
+function isAdvancedWorldSpawn(spawnObject) {
+  const mapId = normalizeMapId(spawnObject?.mapId ?? spawnObject?.props?.mapId ?? 'world');
+  return isWorldV2Map(mapId) && getSpawnRecommendedLevel(spawnObject) >= 10;
+}
+
+function isInteriorSpawn(spawnObject) {
+  return Boolean(normalizeInteriorId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId));
+}
+
 function getSpawnMaxAlive(spawnObject) {
-  return Math.max(1, Math.floor(numberProp(spawnObject, 'maxAlive', numberProp(spawnObject, 'maxEnemies', ENEMY.maxCount))));
+  const configured = Math.max(1, Math.floor(numberProp(spawnObject, 'maxAlive', numberProp(spawnObject, 'maxEnemies', ENEMY.maxCount))));
+  return configured;
 }
 
 function getSpawnRespawnMin(spawnObject) {
-  return Math.max(1000, numberProp(spawnObject, 'respawnMin', numberProp(spawnObject, 'respawnTime', ENEMY.spawnEvery)));
+  const configured = Math.max(1000, numberProp(spawnObject, 'respawnMin', numberProp(spawnObject, 'respawnTime', ENEMY.spawnEvery)));
+  if (isInteriorSpawn(spawnObject)) return Math.max(12000, configured);
+  return isAdvancedWorldSpawn(spawnObject) ? Math.max(7000, Math.floor(configured * 1.35)) : configured;
 }
 
 function getSpawnRespawnMax(spawnObject) {
   const min = getSpawnRespawnMin(spawnObject);
-  return Math.max(min, numberProp(spawnObject, 'respawnMax', min));
+  const configured = Math.max(min, numberProp(spawnObject, 'respawnMax', min));
+  if (isInteriorSpawn(spawnObject)) return Math.max(min + 3000, configured);
+  return isAdvancedWorldSpawn(spawnObject) ? Math.max(min + 3000, Math.floor(configured * 1.35)) : configured;
 }
 
 function getSpawnRespawnDelay(spawnObject) {
@@ -332,54 +378,55 @@ function getSpawnRespawnDelay(spawnObject) {
 }
 
 const ENEMY_KIND_STATS = {
-  wolf: { name: 'Wolf', hp: 100, radius: 18, speed: 82, xp: 35 },
-  kobold: { name: 'Kobold', hp: 110, radius: 17, speed: 76, xp: 40 },
-  bandit: { name: 'Bandit', hp: 130, radius: 18, speed: 78, xp: 45 },
-  undead: { name: 'Undead', hp: 120, radius: 18, speed: 58, xp: 45 },
-  'restless-dead': { name: 'Restless Dead', hp: 120, radius: 18, speed: 58, xp: 45 },
-  'snow-wolf': { name: 'Snow Wolf', hp: 120, radius: 18, speed: 86, xp: 40 },
-  'frost-trogg': { name: 'Frost Trogg', hp: 150, radius: 20, speed: 60, xp: 48 },
-  'cave-spider': { name: 'Cave Spider', hp: 105, radius: 17, speed: 80, xp: 42 },
-  'grave-rat': { name: 'Grave Rat', hp: 85, radius: 15, speed: 92, xp: 32 },
-  plaguehound: { name: 'Plaguehound', hp: 125, radius: 18, speed: 84, xp: 42 },
-  'forest-sprite': { name: 'Forest Sprite', hp: 95, radius: 16, speed: 88, xp: 36 },
-  'corrupted-treant': { name: 'Corrupted Treant', hp: 170, radius: 22, speed: 45, xp: 55 },
-  nightstalker: { name: 'Nightstalker', hp: 130, radius: 18, speed: 86, xp: 46 },
-  plainstrider: { name: 'Plainstrider', hp: 115, radius: 18, speed: 88, xp: 38 },
-  scorpion: { name: 'Scorpion', hp: 125, radius: 18, speed: 70, xp: 42 },
-  quilboar: { name: 'Quilboar', hp: 145, radius: 19, speed: 66, xp: 48 },
-  scarab: { name: 'Scarab', hp: 105, radius: 16, speed: 74, xp: 38 },
-  'road-bandit': { name: 'Road Bandit', hp: 220, radius: 18, speed: 86, xp: 70 },
-  'dire-wolf': { name: 'Dire Wolf', hp: 310, radius: 19, speed: 96, xp: 90 },
-  'stone-gnoll': { name: 'Stone Gnoll', hp: 430, radius: 21, speed: 74, xp: 125 },
-  'ember-wraith': { name: 'Ember Wraith', hp: 520, radius: 20, speed: 82, xp: 155 },
-  'cave-stalker': { name: 'Cave Stalker', hp: 1100, radius: 21, speed: 98, xp: 205 },
-  'magma-crawler': { name: 'Magma Crawler', hp: 1260, radius: 22, speed: 82, xp: 230 },
-  'deep-burrower': { name: 'Deep Burrower', hp: 1180, radius: 22, speed: 88, xp: 220 },
-  'obsidian-sentinel': { name: 'Obsidian Sentinel', hp: 1520, radius: 25, speed: 64, xp: 265 },
-  'reedwater-marauder': { name: 'Reedwater Marauder', hp: 260, radius: 19, speed: 82, xp: 16 },
-  'bramblehide-bear': { name: 'Bramblehide Bear', hp: 420, radius: 24, speed: 62, xp: 22 },
-  'moonbrook-prowler': { name: 'Moonbrook Prowler', hp: 300, radius: 19, speed: 96, xp: 18 },
-  'redscar-highwayman': { name: 'Redscar Highwayman', hp: 360, radius: 19, speed: 86, xp: 20 },
-  'saltspine-crawler': { name: 'Saltspine Crawler', hp: 330, radius: 18, speed: 72, xp: 18 },
+  wolf: { name: 'Wolf', hp: 220, radius: 17, speed: 150, xp: 45, damage: 14, attackCooldown: 820 },
+  kobold: { name: 'Kobold', hp: 250, radius: 17, speed: 145, xp: 50, damage: 16, attackCooldown: 820 },
+  bandit: { name: 'Bandit', hp: 280, radius: 18, speed: 155, xp: 55, damage: 18, attackCooldown: 800 },
+  undead: { name: 'Undead', hp: 300, radius: 18, speed: 135, xp: 58, damage: 19, attackCooldown: 880 },
+  'restless-dead': { name: 'Restless Dead', hp: 300, radius: 18, speed: 135, xp: 58, damage: 19, attackCooldown: 880 },
+  'snow-wolf': { name: 'Snow Wolf', hp: 240, radius: 17, speed: 160, xp: 48, damage: 15, attackCooldown: 800 },
+  'frost-trogg': { name: 'Frost Trogg', hp: 330, radius: 19, speed: 138, xp: 62, damage: 22, attackCooldown: 900 },
+  'cave-spider': { name: 'Cave Spider', hp: 260, radius: 17, speed: 170, xp: 54, damage: 18, attackCooldown: 780 },
+  'grave-rat': { name: 'Grave Rat', hp: 170, radius: 15, speed: 185, xp: 42, damage: 13, attackCooldown: 720 },
+  plaguehound: { name: 'Plaguehound', hp: 280, radius: 18, speed: 165, xp: 56, damage: 18, attackCooldown: 790 },
+  'forest-sprite': { name: 'Forest Sprite', hp: 230, radius: 15, speed: 175, xp: 48, damage: 16, attackCooldown: 760 },
+  'corrupted-treant': { name: 'Corrupted Treant', hp: 460, radius: 21, speed: 118, xp: 78, damage: 27, attackCooldown: 960 },
+  nightstalker: { name: 'Nightstalker', hp: 290, radius: 17, speed: 185, xp: 62, damage: 21, attackCooldown: 750 },
+  plainstrider: { name: 'Plainstrider', hp: 260, radius: 18, speed: 190, xp: 50, damage: 16, attackCooldown: 760 },
+  scorpion: { name: 'Scorpion', hp: 285, radius: 17, speed: 135, xp: 56, damage: 19, attackCooldown: 850 },
+  quilboar: { name: 'Quilboar', hp: 360, radius: 20, speed: 130, xp: 70, damage: 23, attackCooldown: 900 },
+  scarab: { name: 'Scarab', hp: 240, radius: 16, speed: 145, xp: 48, damage: 16, attackCooldown: 840 },
+  'road-bandit': { name: 'Road Bandit', hp: 520, radius: 18, speed: 170, xp: 110, damage: 30, attackCooldown: 790 },
+  'dire-wolf': { name: 'Dire Wolf', hp: 680, radius: 19, speed: 205, xp: 140, damage: 34, attackCooldown: 740 },
+  'stone-gnoll': { name: 'Stone Gnoll', hp: 920, radius: 21, speed: 150, xp: 180, damage: 42, attackCooldown: 900 },
+  'ember-wraith': { name: 'Ember Wraith', hp: 1050, radius: 20, speed: 165, xp: 210, damage: 48, attackCooldown: 850 },
+  'cave-stalker': { name: 'Cave Stalker', hp: 1450, radius: 21, speed: 150, xp: 255, damage: 52, attackCooldown: 820 },
+  'magma-crawler': { name: 'Magma Crawler', hp: 1600, radius: 22, speed: 130, xp: 285, damage: 58, attackCooldown: 930 },
+  'deep-burrower': { name: 'Deep Burrower', hp: 1520, radius: 22, speed: 145, xp: 275, damage: 54, attackCooldown: 880 },
+  'obsidian-sentinel': { name: 'Obsidian Sentinel', hp: 1900, radius: 25, speed: 105, xp: 330, damage: 64, attackCooldown: 980 },
+  'reedwater-marauder': { name: 'Reedwater Marauder', hp: 720, radius: 19, speed: 178, xp: 110, damage: 34, attackCooldown: 800 },
+  'bramblehide-bear': { name: 'Bramblehide Bear', hp: 1150, radius: 24, speed: 145, xp: 145, damage: 44, attackCooldown: 960 },
+  'moonbrook-prowler': { name: 'Moonbrook Prowler', hp: 780, radius: 19, speed: 210, xp: 120, damage: 36, attackCooldown: 760 },
+  'redscar-highwayman': { name: 'Redscar Highwayman', hp: 900, radius: 19, speed: 185, xp: 135, damage: 40, attackCooldown: 780 },
+  'saltspine-crawler': { name: 'Saltspine Crawler', hp: 820, radius: 18, speed: 160, xp: 120, damage: 35, attackCooldown: 820 },
 };
 
 const BOSS_KIND_STATS = {
-  'elder-briarheart': { name: 'Elder Briarheart', hp: 620, radius: 36, speed: 54, xp: BOSS_XP },
-  'granite-matriarch': { name: 'Granite Matriarch', hp: 720, radius: 40, speed: 44, xp: BOSS_XP },
-  'crypt-warden': { name: 'Crypt Warden', hp: 690, radius: 38, speed: 50, xp: BOSS_XP },
-  'moonshade-stag': { name: 'Moonshade Stag', hp: 660, radius: 36, speed: 66, xp: BOSS_XP },
-  'bloodtusk-chief': { name: 'Bloodtusk Chief', hp: 740, radius: 40, speed: 58, xp: BOSS_XP },
-  'varro-the-tollkeeper': { name: 'Varro the Tollkeeper', hp: 1300, radius: 34, speed: 70, xp: 220 },
-  'thornmaw-alpha': { name: 'Thornmaw Alpha', hp: 1700, radius: 35, speed: 78, xp: 270 },
-  'granite-ogre': { name: 'Granite Ogre', hp: 2300, radius: 39, speed: 58, xp: 330 },
-  'ash-witch': { name: 'Ash Witch', hp: 2800, radius: 34, speed: 72, xp: 400 },
-  'gloomfang-matriarch': { name: 'Gloomfang Matriarch', hp: 8600, radius: 48, speed: 78, xp: 1050 },
-  'lava-forged-warden': { name: 'Lava-Forged Warden', hp: 9800, radius: 52, speed: 60, xp: 1140 },
-  'crystal-horror': { name: 'Crystal Horror', hp: 9300, radius: 50, speed: 68, xp: 1100 },
-  'rift-heart': { name: 'Rift Heart', hp: 22000, radius: 60, speed: 56, xp: 2200 },
-  'old-quarry-giant': { name: 'Old Quarry Giant', hp: 9800, radius: 48, speed: 58, xp: 180, damage: 42, attackCooldown: 980 },
-  'tideglass-matriarch': { name: 'Tideglass Matriarch', hp: 9200, radius: 46, speed: 72, xp: 180, damage: 44, attackCooldown: 920 },
+  'elder-briarheart': { name: 'Elder Briarheart', hp: 1200, radius: 36, speed: 76, xp: BOSS_XP + 80, damage: 34, attackCooldown: 1050 },
+  'granite-matriarch': { name: 'Granite Matriarch', hp: 1450, radius: 40, speed: 66, xp: BOSS_XP + 110, damage: 38, attackCooldown: 1120 },
+  'crypt-warden': { name: 'Crypt Warden', hp: 1380, radius: 38, speed: 70, xp: BOSS_XP + 110, damage: 38, attackCooldown: 1080 },
+  'moonshade-stag': { name: 'Moonshade Stag', hp: 1300, radius: 36, speed: 92, xp: BOSS_XP + 110, damage: 36, attackCooldown: 980 },
+  'bloodtusk-chief': { name: 'Bloodtusk Chief', hp: 1450, radius: 40, speed: 78, xp: BOSS_XP + 110, damage: 40, attackCooldown: 1060 },
+  'varro-the-tollkeeper': { name: 'Varro the Tollkeeper', hp: 2600, radius: 34, speed: 95, xp: 360, damage: 48, attackCooldown: 980 },
+  'thornmaw-alpha': { name: 'Thornmaw Alpha', hp: 3400, radius: 35, speed: 105, xp: 440, damage: 54, attackCooldown: 940 },
+  'granite-ogre': { name: 'Granite Ogre', hp: 4600, radius: 39, speed: 78, xp: 540, damage: 62, attackCooldown: 1120 },
+  'ash-witch': { name: 'Ash Witch', hp: 5200, radius: 34, speed: 96, xp: 620, damage: 66, attackCooldown: 980 },
+  'redscar-captain': { name: 'Redscar Captain Varn', hp: 3600, radius: 34, speed: 118, xp: 440, damage: 54, attackCooldown: 900 },
+  'gloomfang-matriarch': { name: 'Gloomfang Matriarch', hp: 9800, radius: 48, speed: 92, xp: 1050, damage: 68, attackCooldown: 920 },
+  'lava-forged-warden': { name: 'Lava-Forged Warden', hp: 11200, radius: 52, speed: 72, xp: 1140, damage: 76, attackCooldown: 1040 },
+  'crystal-horror': { name: 'Crystal Horror', hp: 10600, radius: 50, speed: 82, xp: 1100, damage: 72, attackCooldown: 980 },
+  'rift-heart': { name: 'Rift Heart', hp: 24000, radius: 60, speed: 64, xp: 2200, damage: 92, attackCooldown: 1080 },
+  'old-quarry-giant': { name: 'Old Quarry Giant', hp: 14000, radius: 48, speed: 70, xp: 550, damage: 72, attackCooldown: 960 },
+  'tideglass-matriarch': { name: 'Tideglass Matriarch', hp: 13200, radius: 46, speed: 86, xp: 550, damage: 74, attackCooldown: 900 },
 };
 
 function getEnemyKindStats(kind) {
@@ -414,18 +461,38 @@ function getQuestGiverNear(tiledWorld, point) {
     .sort((a, b) => distance(point, a) - distance(point, b))[0] ?? null;
 }
 
+const ACTIVE_WORLD_TRANSITION_KEYS = [
+  'world',
+  'world_map',
+  'old_world',
+  'old_world_map',
+  'main_world',
+  'new_world',
+  'new_world_v3',
+  'world_v2',
+  'world_v3',
+  'world_continent_v2',
+  'world_continent_v3',
+  'world_continent_v4',
+  'continent_01',
+];
+
+function isActiveWorldTransitionKey(value) {
+  return ACTIVE_WORLD_TRANSITION_KEYS.includes(normalizeTransitionTargetKey(value));
+}
+
 function getWorldTransitionForQuest(tiledWorld, character) {
   const raceId = getCharacterRaceId(character);
   return (tiledWorld?.transitions ?? []).find((transition) => {
     const targetMapId = getTransitionTargetMapId(transition);
     const targetKey = normalizeTransitionTargetKey(getTransitionRawTarget(transition));
     const name = String(transition.name ?? '').toLowerCase();
-    return (targetMapId === 'world' || ['new_world', 'new_world_v3', 'world_v3', 'world_continent_v3'].includes(targetKey))
+    return (isWorldV2Map(targetMapId) || isActiveWorldTransitionKey(targetKey))
       && (name.includes(raceId) || name.includes('world'));
   }) ?? (tiledWorld?.transitions ?? []).find((transition) => {
     const targetKey = normalizeTransitionTargetKey(getTransitionRawTarget(transition));
-    return getTransitionTargetMapId(transition) === 'world'
-      || ['new_world', 'new_world_v3', 'world_v3', 'world_continent_v3'].includes(targetKey);
+    return isWorldV2Map(getTransitionTargetMapId(transition))
+      || isActiveWorldTransitionKey(targetKey);
   }) ?? null;
 }
 
@@ -536,7 +603,7 @@ const TAMZIA_ASSISTANT_QUEST_GIVER_ID = 'tamzia_town_hall_assistant';
 const TAMZIA_WANTED_BOARD_QUEST_GIVER_ID = 'tamzia_wanted_board';
 const TAMZIA_MEET_ASSISTANT_QUEST_ID = 'world_region_0_0_v3:town-hall:meet-assistant';
 const TAMZIA_TO_BRIGHTWATER_QUEST_ID = 'world_region_0_0_v3:tamzia:continue-to-brightwater-ford';
-const BRIGHTWATER_FORD_MAP_ID = 'world_region_1_0_v3';
+const BRIGHTWATER_FORD_MAP_ID = 'continent_01_region_1_0';
 const BRIGHTWATER_FORD_QUEST_GIVER_ID = 'brightwater_ford_pathfinder';
 const BRIGHTWATER_FORD_TURN_IN_MARKER = {
   type: 'point',
@@ -589,11 +656,11 @@ const TAMZIA_MOONBROOK_MARKER = {
 const TAMZIA_REDSCAR_MARKER = {
   type: 'area',
   mapId: WORLD_V3_HUB_MAP_ID,
-  x: 22788,
-  y: 22556,
-  width: 1220,
-  height: 1076,
-  label: 'Redscar Roadblock',
+  x: 22216,
+  y: 21784,
+  width: 2368,
+  height: 2190,
+  label: 'Redscar Hideout',
 };
 const TAMZIA_SALTSPINE_MARKER = {
   type: 'area',
@@ -718,12 +785,16 @@ const TAMZIA_FIELD_QUEST_DEFINITIONS = [
     type: 'kill',
     title: 'Redscar Roadblock',
     dialogue: "The Redscar crew is brave enough to rob the mayoral courier. That makes them everyone's problem.",
-    description: 'Redscar Highwaymen have made a hard camp on the southern road.',
-    objectiveText: 'Defeat 12 Redscar Highwaymen',
+    description: 'Redscar Highwaymen have made a hard camp on the southern road. Break the camp and bring down Captain Varn inside the hideout.',
+    objectiveText: 'Defeat 12 Redscar Highwaymen and Redscar Captain Varn',
     enemyKind: 'redscar-highwayman',
-    required: 12,
+    required: 13,
+    objectives: [
+      { enemyKind: 'redscar-highwayman', required: 12, label: 'Highwaymen' },
+      { enemyKind: 'redscar-captain', required: 1, label: 'Captain Varn' },
+    ],
     minLevel: 13,
-    xpReward: 1050,
+    xpReward: 1250,
     xpRewardLocked: true,
     requiredLocked: true,
     marker: TAMZIA_REDSCAR_MARKER,
@@ -830,6 +901,11 @@ function getTamziaTownHallQuestDefinitions(character) {
     definitions.push(...TAMZIA_BOUNTY_QUEST_DEFINITIONS);
   }
   return definitions;
+}
+
+function getTamziaWantedBoardQuestDefinitions(character) {
+  if (!hasCompletedStartingTravelQuest(character)) return [];
+  return TAMZIA_BOUNTY_QUEST_DEFINITIONS;
 }
 
 function createWorldKillQuest({
@@ -982,7 +1058,10 @@ function getAvailableQuestOffers(character, tiledWorld, giver) {
   if (!character || !giver) return [];
   const mapId = normalizeMapId(tiledWorld?.mapId);
   if (mapId === WORLD_V3_HUB_MAP_ID) {
-    return getTamziaTownHallQuestDefinitions(character)
+    const definitions = String(giver.id) === TAMZIA_WANTED_BOARD_QUEST_GIVER_ID
+      ? getTamziaWantedBoardQuestDefinitions(character)
+      : getTamziaTownHallQuestDefinitions(character);
+    return definitions
       .filter((quest) => String(quest.giverId) === String(giver.id))
       .filter((quest) => !isQuestCompleted(character, quest.id) && !getActiveQuest(character, quest.id));
   }
@@ -1049,10 +1128,41 @@ function getMainQuest(character) {
   return null;
 }
 
+function getQuestKillObjectives(quest) {
+  if (!quest || quest.type !== 'kill') return [];
+  const explicitObjectives = Array.isArray(quest.objectives)
+    ? quest.objectives
+      .map((objective) => {
+        const enemyKind = normalizeEnemyKind(objective?.enemyKind ?? objective?.kind ?? objective?.id);
+        const required = Math.max(1, Math.floor(safeNumber(objective?.required, 1)));
+        return enemyKind ? {
+          ...objective,
+          enemyKind,
+          required,
+          label: String(objective?.label ?? getEnemyKindName(enemyKind)),
+        } : null;
+      })
+      .filter(Boolean)
+    : [];
+  if (explicitObjectives.length > 0) return explicitObjectives;
+  const enemyKind = normalizeEnemyKind(quest.enemyKind);
+  return enemyKind ? [{ enemyKind, required: Math.max(1, Math.floor(safeNumber(quest.required, 1))), label: getEnemyKindName(enemyKind) }] : [];
+}
+
 function getQuestProgressText(activeQuest, quest) {
   if (!quest) return '';
   if (activeQuest?.status === 'ready') return 'Ready to turn in';
-  if (quest.type === 'kill') return `${safeNumber(activeQuest?.progress, 0)} / ${quest.required}`;
+  if (quest.type === 'kill') {
+    const objectives = getQuestKillObjectives(quest);
+    if (objectives.length > 1) {
+      const progressByKind = activeQuest?.progressByKind ?? activeQuest?.objectiveProgress ?? {};
+      return objectives.map((objective) => {
+        const progress = Math.min(objective.required, Math.max(0, Math.floor(safeNumber(progressByKind[objective.enemyKind], 0))));
+        return `${objective.label} ${progress}/${objective.required}`;
+      }).join(' | ');
+    }
+    return `${safeNumber(activeQuest?.progress, 0)} / ${quest.required}`;
+  }
   return 'In progress';
 }
 
@@ -1209,6 +1319,82 @@ function pointForSpawnSlot(bounds, slotIndex, maxAlive) {
   };
 }
 
+function isPointInsideSpawnArea(point, spawnObject, bounds, radius = 0) {
+  if (!spawnObject || !point) return true;
+
+  if (Array.isArray(spawnObject.polygon) && spawnObject.polygon.length >= 3) {
+    const polygon = getObjectPolygonPoints(spawnObject);
+    return pointInPolygon(point, polygon) && distanceToPolygon(point, polygon) >= radius;
+  }
+
+  return (
+    point.x >= bounds.x + radius
+    && point.x <= bounds.x + bounds.width - radius
+    && point.y >= bounds.y + radius
+    && point.y <= bounds.y + bounds.height - radius
+  );
+}
+
+function findSpawnAreaAnchor(spawnObject, bounds, radius = 0) {
+  const center = clampPointToBounds({
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  }, bounds, radius);
+  if (isPointInsideSpawnArea(center, spawnObject, bounds, radius)) return center;
+
+  const columns = 12;
+  const rows = 12;
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const candidate = clampPointToBounds({
+        x: bounds.x + ((column + 0.5) / columns) * bounds.width,
+        y: bounds.y + ((row + 0.5) / rows) * bounds.height,
+      }, bounds, radius);
+      if (isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)) return candidate;
+    }
+  }
+
+  return center;
+}
+
+function constrainPointToSpawnArea(point, spawnObject, bounds, radius = ENEMY.radius, fallbackPoint = null) {
+  const bounded = clampPointToBounds(point, bounds, radius);
+  if (isPointInsideSpawnArea(bounded, spawnObject, bounds, radius)) return bounded;
+
+  const anchor = fallbackPoint && isPointInsideSpawnArea(fallbackPoint, spawnObject, bounds, radius)
+    ? fallbackPoint
+    : findSpawnAreaAnchor(spawnObject, bounds, radius);
+  if (!isPointInsideSpawnArea(anchor, spawnObject, bounds, radius)) return bounded;
+
+  let insidePoint = anchor;
+  let outsidePoint = bounded;
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const candidate = {
+      x: (insidePoint.x + outsidePoint.x) / 2,
+      y: (insidePoint.y + outsidePoint.y) / 2,
+    };
+    if (isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)) insidePoint = candidate;
+    else outsidePoint = candidate;
+  }
+  return insidePoint;
+}
+
+function pointForSpawnSlotInArea(spawnObject, bounds, slotIndex, maxAlive, radius = ENEMY.radius) {
+  const gridPoint = clampPointToBounds(pointForSpawnSlot(bounds, slotIndex, maxAlive), bounds, radius);
+  if (isPointInsideSpawnArea(gridPoint, spawnObject, bounds, radius)) return gridPoint;
+
+  const seed = `${getSpawnPackId(spawnObject)}:${slotIndex}:area`;
+  for (let attempt = 0; attempt < 96; attempt += 1) {
+    const candidate = clampPointToBounds({
+      x: bounds.x + seededUnit(seed, attempt * 2 + 1) * bounds.width,
+      y: bounds.y + seededUnit(seed, attempt * 2 + 2) * bounds.height,
+    }, bounds, radius);
+    if (isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)) return candidate;
+  }
+
+  return constrainPointToSpawnArea(gridPoint, spawnObject, bounds, radius);
+}
+
 function getSpawnMovementMode(spawnObject, slotIndex = 0) {
   const configured = String(
     spawnObject?.props?.movement
@@ -1219,8 +1405,7 @@ function getSpawnMovementMode(spawnObject, slotIndex = 0) {
   if (['still', 'stationary', 'guard', 'sentinel'].includes(configured)) return 'sentinel';
   if (['pause', 'wander_pause', 'roam_pause', 'stop'].includes(configured)) return 'roam-pause';
   if (['patrol', 'path', 'loop'].includes(configured)) return 'patrol';
-  if (slotIndex % 5 === 0) return 'sentinel';
-  if (slotIndex % 3 === 0) return 'roam-pause';
+  if (slotIndex % 4 === 0) return 'roam-pause';
   return 'patrol';
 }
 
@@ -1231,7 +1416,7 @@ function clampPointToBounds(point, bounds, radius = ENEMY.radius) {
   };
 }
 
-function buildPatrolPoints(home, bounds, slotIndex, radius = ENEMY.radius) {
+function buildPatrolPoints(home, spawnObject, bounds, slotIndex, radius = ENEMY.radius, tiledWorld = null, collisionOptions = {}) {
   const seed = `${bounds.x}:${bounds.y}:${slotIndex}:patrol`;
   const spreadX = Math.min(Math.max(bounds.width * 0.12, 36), 170);
   const spreadY = Math.min(Math.max(bounds.height * 0.12, 36), 140);
@@ -1242,15 +1427,41 @@ function buildPatrolPoints(home, bounds, slotIndex, radius = ENEMY.radius) {
     { x: spreadX, y: spreadY * 0.45 },
     { x: -spreadX * 0.55, y: spreadY },
   ];
-  return offsets.map((offset, index) => clampPointToBounds({
-    x: home.x + offset.x * direction + (seededUnit(seed, index) - 0.5) * 18,
-    y: home.y + offset.y + (seededUnit(seed, index + 10) - 0.5) * 18,
-  }, bounds, radius));
+  return offsets.map((offset, index) => findOpenSpawnPoint(
+    tiledWorld,
+    spawnObject,
+    bounds,
+    slotIndex * 10 + index,
+    4,
+    radius,
+    {
+      x: home.x + offset.x * direction + (seededUnit(seed, index) - 0.5) * 18,
+      y: home.y + offset.y + (seededUnit(seed, index + 10) - 0.5) * 18,
+    },
+    collisionOptions,
+  ));
 }
 
-function findOpenSpawnPoint(tiledWorld, bounds, slotIndex, maxAlive, radius = ENEMY.radius, preferredPoint = null) {
-  const basePoint = clampPointToBounds(preferredPoint ?? pointForSpawnSlot(bounds, slotIndex, maxAlive), bounds, radius);
-  if (!tiledWorld || canEnemyMoveTo(tiledWorld, basePoint.x, basePoint.y, radius)) return basePoint;
+function findOpenSpawnPoint(
+  tiledWorld,
+  spawnObject,
+  bounds,
+  slotIndex,
+  maxAlive,
+  radius = ENEMY.radius,
+  preferredPoint = null,
+  collisionOptions = {},
+) {
+  const basePoint = constrainPointToSpawnArea(
+    preferredPoint ?? pointForSpawnSlotInArea(spawnObject, bounds, slotIndex, maxAlive, radius),
+    spawnObject,
+    bounds,
+    radius,
+  );
+  if (
+    isPointInsideSpawnArea(basePoint, spawnObject, bounds, radius)
+    && (!tiledWorld || canEnemyMoveTo(tiledWorld, basePoint.x, basePoint.y, radius, collisionOptions))
+  ) return basePoint;
 
   const seed = `${bounds.x}:${bounds.y}:${slotIndex}:open`;
   for (let attempt = 0; attempt < 48; attempt += 1) {
@@ -1260,28 +1471,209 @@ function findOpenSpawnPoint(tiledWorld, bounds, slotIndex, maxAlive, radius = EN
       x: basePoint.x + Math.cos(angle) * spread,
       y: basePoint.y + Math.sin(angle) * spread,
     }, bounds, radius);
-    if (canEnemyMoveTo(tiledWorld, candidate.x, candidate.y, radius)) return candidate;
+    if (
+      isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      && canEnemyMoveTo(tiledWorld, candidate.x, candidate.y, radius, collisionOptions)
+    ) return candidate;
+  }
+
+  // If a forest prop or another collision-heavy feature blocks the slot's cell,
+  // search the whole spawn area with a slot-specific sequence. The old shared
+  // top-left scan made every blocked slot collapse onto the same open tile.
+  for (let attempt = 0; attempt < 128; attempt += 1) {
+    const candidate = clampPointToBounds({
+      x: bounds.x + seededUnit(seed, 1000 + attempt * 2) * bounds.width,
+      y: bounds.y + seededUnit(seed, 1001 + attempt * 2) * bounds.height,
+    }, bounds, radius);
+    if (
+      isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      && canEnemyMoveTo(tiledWorld, candidate.x, candidate.y, radius, collisionOptions)
+    ) return candidate;
   }
 
   const columns = Math.max(1, Math.floor(bounds.width / Math.max(radius * 2, 24)));
   const rows = Math.max(1, Math.floor(bounds.height / Math.max(radius * 2, 24)));
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      const candidate = clampPointToBounds({
-        x: bounds.x + ((column + 0.5) / columns) * bounds.width,
-        y: bounds.y + ((row + 0.5) / rows) * bounds.height,
-      }, bounds, radius);
-      if (canEnemyMoveTo(tiledWorld, candidate.x, candidate.y, radius)) return candidate;
-    }
+  const cellCount = columns * rows;
+  const startCell = Math.floor(seededUnit(seed, 4001) * cellCount);
+  for (let step = 0; step < cellCount; step += 1) {
+    const cellIndex = (startCell + step) % cellCount;
+    const column = cellIndex % columns;
+    const row = Math.floor(cellIndex / columns);
+    const candidate = clampPointToBounds({
+      x: bounds.x + ((column + 0.5) / columns) * bounds.width,
+      y: bounds.y + ((row + 0.5) / rows) * bounds.height,
+    }, bounds, radius);
+    if (
+      isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      && canEnemyMoveTo(tiledWorld, candidate.x, candidate.y, radius, collisionOptions)
+    ) return candidate;
   }
 
   return basePoint;
 }
 
-function makeEnemyMovementState(spawnObject, bounds, slotIndex, maxAlive, radius = ENEMY.radius, tiledWorld = null) {
-  const home = findOpenSpawnPoint(tiledWorld, bounds, slotIndex, maxAlive, radius);
+function isSameEnemyMovementSpace(left, right) {
+  if (!left || !right || left === right || String(left.id) === String(right.id)) return false;
+  const leftInteriorId = normalizeInteriorId(left.interiorId ?? left.spawnArea?.props?.interiorId ?? left.spawnArea?.props?.caveId);
+  const rightInteriorId = normalizeInteriorId(right.interiorId ?? right.spawnArea?.props?.interiorId ?? right.spawnArea?.props?.caveId);
+  return leftInteriorId === rightInteriorId
+    && getGameplayMapSpaceId(left.mapId ?? 'world') === getGameplayMapSpaceId(right.mapId ?? 'world');
+}
+
+function getEnemySeparationVector(enemy, nearbyEnemies = []) {
+  if (!enemy || !Array.isArray(nearbyEnemies) || nearbyEnemies.length === 0) {
+    return { x: 0, y: 0, strength: 0, nearbyCount: 0 };
+  }
+
+  const enemyRadius = Math.max(1, safeNumber(enemy.radius, ENEMY.radius));
+  const crowdRadius = Math.max(170, enemyRadius * 8.5);
+  const comfortableNeighborCount = 3; // The enemy plus three neighbours still forms a natural four-unit pack.
+  let pushX = 0;
+  let pushY = 0;
+  let personalStrength = 0;
+  const crowd = [];
+
+  nearbyEnemies.forEach((neighbor) => {
+    if (
+      !isSameEnemyMovementSpace(enemy, neighbor)
+      || safeNumber(neighbor.hp, 1) <= 0
+      || !isFinitePoint(neighbor)
+    ) return;
+
+    let dx = safeNumber(enemy.x) - safeNumber(neighbor.x);
+    let dy = safeNumber(enemy.y) - safeNumber(neighbor.y);
+    let separationDistance = Math.hypot(dx, dy);
+    if (separationDistance < 0.001) {
+      const enemyId = String(enemy.id ?? 'enemy');
+      const neighborId = String(neighbor.id ?? 'neighbor');
+      const orderedIds = [enemyId, neighborId].sort();
+      const angle = seededUnit(`${orderedIds[0]}:${orderedIds[1]}:separation`, 1) * Math.PI * 2;
+      const direction = enemyId === orderedIds[0] ? 1 : -1;
+      dx = Math.cos(angle) * direction;
+      dy = Math.sin(angle) * direction;
+      separationDistance = 1;
+    }
+
+    if (separationDistance < crowdRadius) crowd.push({ dx, dy, distance: separationDistance });
+
+    const neighborRadius = Math.max(1, safeNumber(neighbor.radius, ENEMY.radius));
+    const personalDistance = Math.max(60, enemyRadius + neighborRadius + 24);
+    if (separationDistance >= personalDistance) return;
+    const closeness = 1 - separationDistance / personalDistance;
+    const weight = 0.8 + closeness * 1.8;
+    pushX += (dx / separationDistance) * weight;
+    pushY += (dy / separationDistance) * weight;
+    personalStrength = Math.max(personalStrength, 0.55 + closeness * 1.05);
+  });
+
+  let crowdStrength = 0;
+  if (crowd.length > comfortableNeighborCount) {
+    crowdStrength = clamp((crowd.length - comfortableNeighborCount) / 3, 0, 1);
+    crowd.forEach(({ dx, dy, distance: neighborDistance }) => {
+      const falloff = 1 - neighborDistance / crowdRadius;
+      pushX += (dx / neighborDistance) * falloff * crowdStrength;
+      pushY += (dy / neighborDistance) * falloff * crowdStrength;
+    });
+  }
+
+  const pushLength = Math.hypot(pushX, pushY);
+  if (pushLength < 0.001) {
+    return { x: 0, y: 0, strength: 0, nearbyCount: crowd.length };
+  }
+  return {
+    x: pushX / pushLength,
+    y: pushY / pushLength,
+    strength: clamp(personalStrength + crowdStrength * 1.35, 0, 1.6),
+    nearbyCount: crowd.length,
+  };
+}
+
+function getMinimumDistanceFromEnemies(point, enemy, occupiedEnemies) {
+  let minimumDistance = Number.POSITIVE_INFINITY;
+  occupiedEnemies.forEach((neighbor) => {
+    if (!isSameEnemyMovementSpace(enemy, neighbor) || safeNumber(neighbor.hp, 1) <= 0 || !isFinitePoint(neighbor)) return;
+    minimumDistance = Math.min(minimumDistance, Math.hypot(point.x - neighbor.x, point.y - neighbor.y));
+  });
+  return minimumDistance;
+}
+
+function findDistributedSpawnPoint(
+  initialPoint,
+  enemy,
+  occupiedEnemies,
+  tiledWorld,
+  spawnObject,
+  bounds,
+  slotIndex,
+  maxAlive,
+  radius,
+  collisionOptions,
+) {
+  if (!Array.isArray(occupiedEnemies) || occupiedEnemies.length === 0) return initialPoint;
+  const spacingFromArea = Math.sqrt(Math.max(1, bounds.width * bounds.height) / Math.max(1, maxAlive)) * 0.5;
+  const preferredSpacing = clamp(spacingFromArea, radius * 2 + 22, 170);
+  let bestPoint = initialPoint;
+  let bestDistance = getMinimumDistanceFromEnemies(initialPoint, enemy, occupiedEnemies);
+  if (bestDistance >= preferredSpacing) return initialPoint;
+
+  const seed = `${getSpawnPackId(spawnObject)}:${slotIndex}:distributed`;
+  for (let attempt = 0; attempt < 128; attempt += 1) {
+    const rawPoint = {
+      x: bounds.x + seededUnit(seed, attempt * 2 + 1) * bounds.width,
+      y: bounds.y + seededUnit(seed, attempt * 2 + 2) * bounds.height,
+    };
+    const candidate = constrainPointToSpawnArea(rawPoint, spawnObject, bounds, radius, initialPoint);
+    if (
+      !isPointInsideSpawnArea(candidate, spawnObject, bounds, radius)
+      || !canEnemyMoveTo(tiledWorld, candidate.x, candidate.y, radius, collisionOptions)
+    ) continue;
+    const candidateDistance = getMinimumDistanceFromEnemies(candidate, enemy, occupiedEnemies);
+    if (candidateDistance > bestDistance) {
+      bestPoint = candidate;
+      bestDistance = candidateDistance;
+    }
+    if (candidateDistance >= preferredSpacing) return candidate;
+  }
+  return bestPoint;
+}
+
+function makeEnemyMovementState(
+  spawnObject,
+  bounds,
+  slotIndex,
+  maxAlive,
+  radius = ENEMY.radius,
+  tiledWorld = null,
+  occupiedEnemies = [],
+  enemyIdentity = null,
+) {
+  const interiorId = normalizeInteriorId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId);
+  const collisionOptions = interiorId
+    ? { activeInteriorId: interiorId, ignoreWorldCollision: true }
+    : {};
+  const openPoint = findOpenSpawnPoint(tiledWorld, spawnObject, bounds, slotIndex, maxAlive, radius, null, collisionOptions);
+  const home = findDistributedSpawnPoint(
+    openPoint,
+    {
+      id: enemyIdentity ?? `spawn-slot-${slotIndex}`,
+      mapId: spawnObject?.mapId ?? 'world',
+      interiorId,
+      radius,
+      spawnArea: spawnObject,
+    },
+    occupiedEnemies,
+    tiledWorld,
+    spawnObject,
+    bounds,
+    slotIndex,
+    maxAlive,
+    radius,
+    collisionOptions,
+  );
   const movementMode = getSpawnMovementMode(spawnObject, slotIndex);
-  const patrolPoints = movementMode === 'sentinel' ? [home] : buildPatrolPoints(home, bounds, slotIndex, radius);
+  const patrolPoints = movementMode === 'sentinel'
+    ? [home]
+    : buildPatrolPoints(home, spawnObject, bounds, slotIndex, radius, tiledWorld, collisionOptions);
   return {
     home,
     movementMode,
@@ -1317,9 +1709,10 @@ function getReadyRespawnSlots(pack, now, occupiedSlots) {
   return readySlots;
 }
 
-function updateIdleEnemyMovement(enemy, now, delta, isBoss = false, tiledWorld = null) {
+function updateIdleEnemyMovement(enemy, now, delta, isBoss = false, tiledWorld = null, nearbyEnemies = []) {
   const bounds = enemy.spawnBounds;
   if (!bounds) return enemy;
+  const spawnArea = enemy.spawnArea ?? null;
   const radius = enemy.radius ?? ENEMY.radius;
   const mode = enemy.movementMode ?? 'patrol';
   let target = enemy.wanderTarget;
@@ -1327,26 +1720,26 @@ function updateIdleEnemyMovement(enemy, now, delta, isBoss = false, tiledWorld =
   let pauseUntil = enemy.pauseUntil ?? 0;
   let nextWanderAt = enemy.nextWanderAt ?? 0;
   const patrolPoints = enemy.patrolPoints?.length ? enemy.patrolPoints : [enemy.home ?? randomPointInBounds(bounds)];
+  const separation = getEnemySeparationVector(enemy, nearbyEnemies);
+  let movementPaused = false;
 
   if (mode === 'sentinel') {
     if (!target || now >= nextWanderAt || distance(enemy, target) < 5) {
       const home = enemy.home ?? patrolPoints[0];
-      target = clampPointToBounds({
+      target = constrainPointToSpawnArea({
         x: home.x + (seededUnit(`${enemy.id}:${Math.floor(now / 1000)}`, 1) - 0.5) * 34,
         y: home.y + (seededUnit(`${enemy.id}:${Math.floor(now / 1000)}`, 2) - 0.5) * 34,
-      }, bounds, radius);
+      }, spawnArea, bounds, radius, home);
       nextWanderAt = now + 3000 + Math.random() * 4000;
     }
   } else if (mode === 'roam-pause') {
-    if (pauseUntil > now && target && distance(enemy, target) < 10) {
-      return { ...enemy, pauseUntil };
-    }
-    if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
+    if (pauseUntil <= now && (!target || distance(enemy, target) < 10 || now >= nextWanderAt)) {
       patrolIndex = (patrolIndex + 1) % patrolPoints.length;
       target = patrolPoints[patrolIndex];
       pauseUntil = now + 900 + Math.random() * 1900;
       nextWanderAt = now + 6500 + Math.random() * 2500;
     }
+    movementPaused = pauseUntil > now;
   } else if (!target || distance(enemy, target) < 10 || now >= nextWanderAt) {
     patrolIndex = (patrolIndex + 1) % patrolPoints.length;
     target = patrolPoints[patrolIndex];
@@ -1355,25 +1748,138 @@ function updateIdleEnemyMovement(enemy, now, delta, isBoss = false, tiledWorld =
 
   const toTargetX = target.x - enemy.x;
   const toTargetY = target.y - enemy.y;
-  const length = Math.hypot(toTargetX, toTargetY) || 1;
+  const targetLength = Math.hypot(toTargetX, toTargetY);
+  let steeringX = movementPaused || targetLength < 0.001 ? 0 : toTargetX / targetLength;
+  let steeringY = movementPaused || targetLength < 0.001 ? 0 : toTargetY / targetLength;
+  if (separation.strength > 0) {
+    const separationWeight = movementPaused ? 1.35 : 1.1;
+    steeringX += separation.x * separation.strength * separationWeight;
+    steeringY += separation.y * separation.strength * separationWeight;
+  }
+  const steeringLength = Math.hypot(steeringX, steeringY);
+  if (steeringLength < 0.001) {
+    return {
+      ...enemy,
+      wanderTarget: target,
+      patrolIndex,
+      pauseUntil,
+      nextWanderAt,
+    };
+  }
   const speedMultiplier = mode === 'sentinel' ? 0.24 : mode === 'roam-pause' ? 0.52 : 0.78;
-  const wanderSpeed = (isBoss ? ENEMY.wanderSpeed * 0.65 : ENEMY.wanderSpeed) * speedMultiplier;
+  const pauseMultiplier = movementPaused ? 0.55 : 1;
+  const baseMovementSpeed = Math.max(0, safeNumber(enemy.speed, ENEMY.speed));
+  const wanderSpeed = baseMovementSpeed * (isBoss ? 0.65 : 1) * speedMultiplier * pauseMultiplier;
   const movement = moveEnemyWithCollision(
     tiledWorld,
     enemy,
-    enemy.x + (toTargetX / length) * wanderSpeed * delta,
-    enemy.y + (toTargetY / length) * wanderSpeed * delta,
+    enemy.x + (steeringX / steeringLength) * wanderSpeed * delta,
+    enemy.y + (steeringY / steeringLength) * wanderSpeed * delta,
     bounds,
   );
+  const nextPosition = constrainPointToSpawnArea(movement, spawnArea, bounds, radius, enemy.home);
+  const constrainedBySpawnArea = Math.abs(nextPosition.x - movement.x) > 0.01 || Math.abs(nextPosition.y - movement.y) > 0.01;
 
   return {
     ...enemy,
     wanderTarget: target,
     patrolIndex,
     pauseUntil,
-    nextWanderAt: movement.blocked ? Math.min(nextWanderAt, now + 600) : nextWanderAt,
-    x: movement.x,
-    y: movement.y,
+    nextWanderAt: movement.blocked || constrainedBySpawnArea ? Math.min(nextWanderAt, now + 600) : nextWanderAt,
+    x: nextPosition.x,
+    y: nextPosition.y,
+  };
+}
+
+function getEnemyHomePoint(enemy) {
+  if (isFinitePoint(enemy?.home)) {
+    return {
+      x: safeNumber(enemy.home.x),
+      y: safeNumber(enemy.home.y),
+    };
+  }
+
+  const patrolHome = Array.isArray(enemy?.patrolPoints)
+    ? enemy.patrolPoints.find((point) => isFinitePoint(point))
+    : null;
+  if (patrolHome) {
+    return {
+      x: safeNumber(patrolHome.x),
+      y: safeNumber(patrolHome.y),
+    };
+  }
+
+  if (enemy?.spawnBounds) {
+    const radius = enemy.radius ?? ENEMY.radius;
+    return clampPointToBounds({
+      x: safeNumber(enemy.spawnBounds.x) + safeNumber(enemy.spawnBounds.width, radius * 2) / 2,
+      y: safeNumber(enemy.spawnBounds.y) + safeNumber(enemy.spawnBounds.height, radius * 2) / 2,
+    }, enemy.spawnBounds, radius);
+  }
+
+  return {
+    x: safeNumber(enemy?.x),
+    y: safeNumber(enemy?.y),
+  };
+}
+
+function clearEnemyCombatEffects(enemy) {
+  const nextEnemy = { ...enemy };
+  [
+    'poisonDebuff',
+    'burnDebuff',
+    'bleedDebuff',
+    'coldUntil',
+    'coldMultiplier',
+    'slowUntil',
+    'slowMultiplier',
+    'frozenUntil',
+    'stunnedUntil',
+    'damageTakenMultiplier',
+    'damageTakenUntil',
+  ].forEach((key) => {
+    delete nextEnemy[key];
+  });
+  return nextEnemy;
+}
+
+function resetEnemyAggro(enemy, now = 0) {
+  const home = getEnemyHomePoint(enemy);
+  const maxHp = Math.max(1, safeNumber(enemy?.maxHp, enemy?.hp ?? 1));
+  return {
+    ...clearEnemyCombatEffects(enemy),
+    state: 'idle',
+    targetPlayerId: null,
+    firstHitPlayerId: null,
+    leashStartedAt: null,
+    aggroStartedAt: null,
+    aggroDisabledUntil: now + 2500,
+    attackStartedAt: 0,
+    attackType: null,
+    attackLaunchAt: 0,
+    attackImpactAt: 0,
+    attackUntil: 0,
+    attackResolved: true,
+    nextMechanicAt: null,
+    nextSecondaryMechanicAt: null,
+    mechanicType: null,
+    mechanicStartedAt: 0,
+    mechanicLaunchAt: 0,
+    mechanicImpactAt: 0,
+    mechanicUntil: 0,
+    mechanicRadius: 0,
+    mechanicProjectiles: [],
+    mechanicHitPlayerIds: [],
+    mechanicResolved: true,
+    hp: maxHp,
+    x: home.x,
+    y: home.y,
+    home,
+    targetX: home.x,
+    targetY: home.y,
+    wanderTarget: home,
+    pauseUntil: now + 500,
+    nextWanderAt: now + 1400,
   };
 }
 
@@ -1406,6 +1912,7 @@ function getRaceStartPosition(tiledWorld, raceId) {
     candidate.name.toLowerCase().includes('human')
   ));
 
+  if (!start && isWorldV2Map(mapId)) return { ...WORLD_V3_HUB_ARRIVAL, mapId };
   if (!start) return { x: 420, y: 420, facing: 0, mapId };
 
   return {
@@ -1457,13 +1964,31 @@ function getGraveyardPosition(tiledWorld, character) {
   return getNearestGraveyardPosition(tiledWorld, character?.position, character);
 }
 
-function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive = getSpawnMaxAlive(spawnObject), tiledWorld = null) {
+function createEnemy(
+  id,
+  spawnObject,
+  fallbackPosition,
+  spawnSlot = 0,
+  maxAlive = getSpawnMaxAlive(spawnObject),
+  tiledWorld = null,
+  occupiedEnemies = [],
+) {
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition);
   const enemyKind = getSpawnEnemyType(spawnObject);
   const stats = getEnemyKindStats(enemyKind);
   const radius = stats.radius ?? ENEMY.radius;
   const mapId = normalizeMapId(spawnObject?.mapId ?? 'world');
-  const movement = makeEnemyMovementState(spawnObject, spawnBounds, spawnSlot, maxAlive, radius, tiledWorld);
+  const interiorId = normalizeInteriorId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId);
+  const movement = makeEnemyMovementState(
+    spawnObject,
+    spawnBounds,
+    spawnSlot,
+    maxAlive,
+    radius,
+    tiledWorld,
+    occupiedEnemies,
+    id,
+  );
   const spawnPoint = movement.home;
   const mapWidth = tiledWorld ? getTiledWorldPixelWidth(tiledWorld) : WORLD.width;
   const mapHeight = tiledWorld ? getTiledWorldPixelHeight(tiledWorld) : WORLD.height;
@@ -1472,6 +1997,7 @@ function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive 
     type: 'enemy',
     enemyKind,
     mapId,
+    interiorId,
     spriteId: ENEMY_SPRITE_CONFIG[enemyKind] ? enemyKind : null,
     name: stats.name,
     state: 'idle',
@@ -1479,13 +2005,14 @@ function createEnemy(id, spawnObject, fallbackPosition, spawnSlot = 0, maxAlive 
     spawnId: getSpawnPackId(spawnObject),
     spawnSlot,
     spawnBounds,
+    spawnArea: spawnObject,
     ...movement,
     x: clamp(spawnPoint.x, radius, mapWidth - radius),
     y: clamp(spawnPoint.y, radius, mapHeight - radius),
     hp: stats.hp,
     maxHp: stats.hp,
     radius,
-    speed: stats.speed,
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
     damage: stats.damage,
     attackCooldown: stats.attackCooldown,
@@ -1499,6 +2026,7 @@ function createBoss(id, spawnObject, fallbackPosition, tiledWorld = null) {
   const stats = getBossKindStats(bossKind);
   const radius = stats.radius ?? 36;
   const mapId = normalizeMapId(spawnObject?.mapId ?? 'world');
+  const interiorId = normalizeInteriorId(spawnObject?.props?.interiorId ?? spawnObject?.props?.caveId);
   const spawnBounds = getSpawnBounds(spawnObject, fallbackPosition, 620);
   const movement = makeEnemyMovementState(spawnObject, spawnBounds, 0, 1, radius, tiledWorld);
   const spawnPoint = movement.home;
@@ -1512,12 +2040,14 @@ function createBoss(id, spawnObject, fallbackPosition, tiledWorld = null) {
     questKind: spawnObject?.props?.enemyType ? normalizeEnemyKind(spawnObject.props.enemyType) : bossKind,
     spriteId: ENEMY_SPRITE_CONFIG[bossKind] ? bossKind : 'elder-briarheart',
     mapId,
+    interiorId,
     name: stats.name,
     state: 'idle',
     spawnName: spawnObject?.name,
     spawnId: getSpawnPackId(spawnObject),
     spawnSlot: 0,
     spawnBounds,
+    spawnArea: spawnObject,
     ...movement,
     nextWanderAt: performance.now() + 1200 + Math.random() * 2200,
     x: clamp(spawnPoint.x, radius + 6, mapWidth - radius - 6),
@@ -1525,7 +2055,7 @@ function createBoss(id, spawnObject, fallbackPosition, tiledWorld = null) {
     hp: stats.hp,
     maxHp: stats.hp,
     radius,
-    speed: stats.speed,
+    speed: getSpawnMovementSpeed(spawnObject, stats.speed),
     xp: stats.xp,
     damage: stats.damage,
     attackCooldown: stats.attackCooldown,
@@ -1533,6 +2063,8 @@ function createBoss(id, spawnObject, fallbackPosition, tiledWorld = null) {
     hitAt: 0,
   };
 }
+
+const CHARACTER_APPEARANCE_MODEL = 'adventurer-fresh-v6';
 
 function getDefaultAppearance(raceId, classId) {
   const race = RACES[raceId] ?? RACES.human;
@@ -1548,29 +2080,114 @@ function getDefaultAppearance(raceId, classId) {
     weaponVariant: 'classic',
     capeStyle: 'none',
     gender: 'male',
-    hairStyle: 'short',
+    hairStyle: 'male-cropped',
+    faceVariant: 'male-natural',
+    heritageStyle: FRESH_RACE_DEFAULT_HERITAGE[raceId] ?? 'none',
+    hatVariant: 'none',
     skin: race.skin,
+    eyes: '#3b2416',
     hair: raceId === 'human' ? classConfig.colors.hair : race.hair,
+    hat: classConfig.colors.robe,
     robe: classConfig.colors.robe,
     trim: classConfig.colors.trim,
+    staff: '#7c4a22',
+    crystal: classConfig.colors.trim,
+    weaponColor: '#94a3b8',
+    spriteModel: CHARACTER_APPEARANCE_MODEL,
+    characterSpriteModel: CHARACTER_APPEARANCE_MODEL,
+    ...(raceId === 'human' ? { humanSpriteModel: CHARACTER_APPEARANCE_MODEL } : {}),
   };
 }
 
 function getMergedDefaultAppearance(raceId, classId, current = {}) {
   const nextDefault = getDefaultAppearance(raceId, classId);
-  return {
+  const merged = {
     ...nextDefault,
     gender: current.gender ?? 'male',
-    hairStyle: current.hairStyle ?? 'short',
+    hairStyle: current.hairStyle ?? nextDefault.hairStyle,
+    faceVariant: current.faceVariant ?? nextDefault.faceVariant,
+    heritageStyle: current.heritageStyle ?? nextDefault.heritageStyle,
+    hatVariant: current.hatVariant ?? nextDefault.hatVariant,
     beard: current.beard ?? nextDefault.beard,
     outfitVariant: current.outfitVariant ?? nextDefault.outfitVariant,
     weaponVariant: current.weaponVariant ?? nextDefault.weaponVariant,
     capeStyle: current.capeStyle ?? current.cape ?? nextDefault.capeStyle,
     skin: current.skin ?? nextDefault.skin,
+    eyes: current.eyes ?? nextDefault.eyes,
     hair: current.hair ?? nextDefault.hair,
+    hat: current.hat ?? current.robe ?? nextDefault.hat,
     robe: current.robe ?? nextDefault.robe,
     trim: current.trim ?? nextDefault.trim,
+    staff: current.staff ?? nextDefault.staff,
+    crystal: current.crystal ?? current.trim ?? nextDefault.crystal,
+    weaponColor: current.weaponColor ?? nextDefault.weaponColor,
   };
+  if (RACES[raceId]) {
+    const gender = merged.gender === 'female' ? 'female' : 'male';
+    const validFaces = gender === 'female'
+      ? ['female-natural', 'female-focused', 'female-freckled', 'female-cheerful']
+      : ['male-natural', 'male-focused', 'male-scarred', 'male-cheerful'];
+    const legacyFaceMap = {
+      'male-keen': 'male-focused',
+      'male-weathered': 'male-scarred',
+      'male-calm': 'male-cheerful',
+      'female-soft': 'female-natural',
+      'female-bright': 'female-cheerful',
+      'female-serene': 'female-cheerful',
+    };
+    const validHair = gender === 'female'
+      ? ['female-long', 'female-side-bangs', 'female-bun', 'female-ponytail']
+      : ['male-cropped', 'male-windswept', 'male-tousled', 'male-tied'];
+    const legacyHairMap = gender === 'female'
+      ? {
+        short: 'female-side-bangs',
+        long: 'female-long',
+        hooded: 'female-long',
+        'female-bob': 'female-long',
+        'female-parted': 'female-side-bangs',
+        'female-wavy': 'female-bun',
+        'female-braid': 'female-ponytail',
+      }
+      : {
+        short: 'male-cropped',
+        long: 'male-tied',
+        hooded: 'male-cropped',
+        'male-parted': 'male-windswept',
+      };
+    merged.hairStyle = legacyHairMap[merged.hairStyle] ?? merged.hairStyle;
+    merged.faceVariant = legacyFaceMap[merged.faceVariant] ?? merged.faceVariant;
+    if (!validFaces.includes(merged.faceVariant)) merged.faceVariant = validFaces[0];
+    if (!validHair.includes(merged.hairStyle)) merged.hairStyle = validHair[0];
+    const validHeritage = FRESH_RACE_HERITAGE_STYLE_CHOICES[raceId]?.map((option) => option.id) ?? ['none'];
+    if (!validHeritage.includes(merged.heritageStyle)) {
+      merged.heritageStyle = FRESH_RACE_DEFAULT_HERITAGE[raceId] ?? 'none';
+    }
+    if (!['classic', 'veteran', 'runed', 'dark'].includes(merged.outfitVariant)) {
+      merged.outfitVariant = 'classic';
+    }
+    if (!['classic', 'veteran', 'runed', 'ornate', 'shadow'].includes(merged.weaponVariant)) {
+      merged.weaponVariant = 'classic';
+    }
+    if (classId === 'mage') {
+      if (!['wanderer', 'wide', 'high-crown', 'starcaller', 'none'].includes(merged.hatVariant)) {
+        merged.hatVariant = 'none';
+      }
+      merged.spriteModel = CHARACTER_APPEARANCE_MODEL;
+    } else {
+      merged.hatVariant = 'none';
+    }
+    if (gender === 'female' || !['none', 'short', 'full'].includes(merged.beard)) {
+      merged.beard = 'none';
+    }
+    if (!['none', 'short', 'long'].includes(merged.capeStyle)) {
+      merged.capeStyle = 'none';
+    }
+    merged.cape = merged.capeStyle;
+    merged.spriteModel = CHARACTER_APPEARANCE_MODEL;
+    merged.characterSpriteModel = CHARACTER_APPEARANCE_MODEL;
+    if (raceId === 'human') merged.humanSpriteModel = CHARACTER_APPEARANCE_MODEL;
+  }
+  return merged;
 }
 
 function getNpcDisplayName(npc) {
@@ -1761,12 +2378,44 @@ function getNpcInteriorId(npc) {
   return String(npc?.props?.interiorId ?? npc?.interiorId ?? '').trim();
 }
 
+function normalizeInteriorId(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized || ['none', 'null', 'overworld', 'outside'].includes(normalized.toLowerCase())) return null;
+  return normalized;
+}
+
+function getInteriorZoneId(zone) {
+  const props = zone?.props ?? {};
+  const name = String(zone?.name ?? '').trim();
+  const explicitId = normalizeInteriorId(props.interiorId ?? props.caveId ?? props.targetInteriorId ?? zone?.interiorId);
+  if (explicitId) return explicitId;
+  if (/^cave_entrance_/i.test(name)) return name.replace(/^cave_entrance_/i, 'cave_');
+  return normalizeInteriorId(name);
+}
+
+function getInteriorZoneKind(zone) {
+  const props = zone?.props ?? {};
+  return String(props.interiorKind ?? props.kind ?? props.type ?? zone?.type ?? zone?.name ?? '').trim().toLowerCase();
+}
+
+function isCaveEntranceZone(zone) {
+  const kind = getInteriorZoneKind(zone);
+  const name = String(zone?.name ?? '').toLowerCase();
+  return kind.includes('cave_entrance') || kind.includes('cave entrance') || name.startsWith('cave_entrance');
+}
+
+function isCaveInteriorZone(zone) {
+  const kind = getInteriorZoneKind(zone);
+  const name = String(zone?.name ?? '').toLowerCase();
+  return !isCaveEntranceZone(zone) && (kind.includes('cave') || name.startsWith('cave_'));
+}
+
 function isNpcVisibleForInterior(npc, activeInteriorZone) {
   const npcInteriorId = getNpcInteriorId(npc);
   if (!npcInteriorId) return true;
   if (!activeInteriorZone) return false;
+  const zoneInteriorId = getInteriorZoneId(activeInteriorZone);
   const zoneProps = activeInteriorZone.props ?? {};
-  const zoneInteriorId = String(zoneProps.interiorId ?? activeInteriorZone.name ?? '').trim();
   const zoneBuildingId = String(zoneProps.buildingId ?? '').trim();
   const npcBuildingId = String(npc?.props?.buildingId ?? npc?.buildingId ?? '').trim();
   return npcInteriorId === zoneInteriorId
@@ -1789,12 +2438,135 @@ function getNearbyServiceNpc(tiledWorld, point) {
   return null;
 }
 
-function getOpenInteriorZone(tiledWorld, point) {
+function getCaveInteriorZones(tiledWorld) {
+  return (tiledWorld?.caveZones ?? []).filter(isCaveInteriorZone);
+}
+
+function getCaveEntranceZones(tiledWorld, interiorId = null) {
+  const normalizedInteriorId = normalizeInteriorId(interiorId);
+  return (tiledWorld?.caveZones ?? [])
+    .filter(isCaveEntranceZone)
+    .filter((zone) => !normalizedInteriorId || getInteriorZoneId(zone) === normalizedInteriorId);
+}
+
+function getCaveInteriorZone(tiledWorld, interiorId) {
+  const normalizedInteriorId = normalizeInteriorId(interiorId);
+  if (!normalizedInteriorId) return null;
+  return getCaveInteriorZones(tiledWorld)
+    .find((zone) => getInteriorZoneId(zone) === normalizedInteriorId) ?? null;
+}
+
+function getCaveEntranceZone(tiledWorld, point) {
+  if (!point) return null;
+  return getCaveEntranceZones(tiledWorld)
+    .filter((zone) => pointInObject(point, zone, PLAYER.radius))
+    .sort((a, b) => {
+      const areaA = getObjectArea(a);
+      const areaB = getObjectArea(b);
+      return areaA - areaB;
+    })[0] ?? null;
+}
+
+function normalizeTileLayerName(layer) {
+  return String(layer?.name ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function getTileLayerProperty(layer, propertyName) {
+  return (layer?.properties ?? []).find((property) => property.name === propertyName)?.value;
+}
+
+function getTileLayerInteriorId(layer) {
+  return normalizeInteriorId(
+    getTileLayerProperty(layer, 'interiorId')
+      ?? getTileLayerProperty(layer, 'caveId'),
+  );
+}
+
+function isCaveInteriorTileLayer(layer, interiorId) {
+  if (layer?.type !== 'tilelayer' || layer.visible === false || !hasTileData(layer)) return false;
+  const name = normalizeTileLayerName(layer);
+  if (!['caveinteriors', 'cave_interiors'].includes(name)) return false;
+  const layerInteriorId = getTileLayerInteriorId(layer);
+  return !interiorId || !layerInteriorId || layerInteriorId === interiorId;
+}
+
+function pointHitsTileLayer(map, layer, point) {
+  const tileWidth = safeNumber(map?.tilewidth, WORLD.tile);
+  const tileHeight = safeNumber(map?.tileheight, WORLD.tile);
+  const col = Math.floor(safeNumber(point?.x, 0) / tileWidth);
+  const row = Math.floor(safeNumber(point?.y, 0) / tileHeight);
+  const width = Number(layer?.width ?? map?.width ?? 0);
+  const height = Number(layer?.height ?? map?.height ?? 0);
+  if (col < 0 || row < 0 || col >= width || row >= height) return false;
+  return Boolean(layer.data[row * width + col]);
+}
+
+function pointHitsCaveInteriorTile(map, point, interiorId) {
+  return (map?.layers ?? [])
+    .filter((layer) => isCaveInteriorTileLayer(layer, interiorId))
+    .some((layer) => pointHitsTileLayer(map, layer, point));
+}
+
+function getLocalMapPoint(tiledWorld, point) {
+  const map = tiledWorld?.map;
+  if (!map || !point) return point;
+  if (!isWorldV2Map(tiledWorld.mapId)) return point;
+  const offset = getWorldV2RegionOffset(tiledWorld.mapId);
+  const mapWidth = Number(map.width ?? 0) * safeNumber(map.tilewidth, WORLD.tile);
+  const mapHeight = Number(map.height ?? 0) * safeNumber(map.tileheight, WORLD.tile);
+  const x = safeNumber(point.x, 0);
+  const y = safeNumber(point.y, 0);
+  if (
+    x >= offset.x
+    && y >= offset.y
+    && x < offset.x + mapWidth
+    && y < offset.y + mapHeight
+  ) {
+    return { ...point, x: x - offset.x, y: y - offset.y };
+  }
+  return point;
+}
+
+function isPointOnCaveInteriorTile(tiledWorld, point, interiorId) {
+  if (!tiledWorld?.map || !point) return false;
+  if (tiledWorld.isRegionWorld && Array.isArray(tiledWorld.loadedRegions)) {
+    return tiledWorld.loadedRegions.some((region) => {
+      const map = region?.map;
+      if (!map) return false;
+      const localPoint = {
+        ...point,
+        x: safeNumber(point.x, 0) - safeNumber(region.offsetX, 0),
+        y: safeNumber(point.y, 0) - safeNumber(region.offsetY, 0),
+      };
+      return pointHitsCaveInteriorTile(map, localPoint, interiorId);
+    });
+  }
+  return pointHitsCaveInteriorTile(tiledWorld.map, getLocalMapPoint(tiledWorld, point), interiorId);
+}
+
+function isPointInCaveInteriorSpace(tiledWorld, point, interiorId) {
+  const normalizedInteriorId = normalizeInteriorId(interiorId);
+  if (!point || !normalizedInteriorId) return false;
+  const caveZone = getCaveInteriorZone(tiledWorld, normalizedInteriorId);
+  const entranceZones = getCaveEntranceZones(tiledWorld, normalizedInteriorId);
+  return isPointOnCaveInteriorTile(tiledWorld, point, normalizedInteriorId)
+    || entranceZones.some((zone) => (
+      pointInObject(point, zone, PLAYER.radius)
+      || isPointInCaveConnector(point, caveZone, zone)
+    ));
+}
+
+function getOpenInteriorZone(tiledWorld, point, activeInteriorId = null) {
+  const activeCaveId = normalizeInteriorId(activeInteriorId);
+  if (activeCaveId && isPointInCaveInteriorSpace(tiledWorld, point, activeCaveId)) {
+    return getCaveInteriorZone(tiledWorld, activeCaveId);
+  }
+
   return (tiledWorld?.interiorZones ?? [])
     .filter((zone) => zone?.props?.roofHide !== false && pointInObject(point, zone, PLAYER.radius))
     .sort((a, b) => {
-      const areaA = safeNumber(a.width, 0) * safeNumber(a.height, 0);
-      const areaB = safeNumber(b.width, 0) * safeNumber(b.height, 0);
+      const areaA = getObjectArea(a);
+      const areaB = getObjectArea(b);
       return areaA - areaB;
     })[0] ?? null;
 }
@@ -1811,9 +2583,41 @@ function getObjectPosition(object) {
   return object.point ? { x: Number(object.x ?? 0), y: Number(object.y ?? 0) } : getObjectCenter(object);
 }
 
+function getObjectBounds(object) {
+  const objectX = Number(object?.x ?? 0);
+  const objectY = Number(object?.y ?? 0);
+  if (Array.isArray(object?.polygon) && object.polygon.length >= 3) {
+    const polygon = getObjectPolygonPoints(object);
+    const minX = Math.min(...polygon.map((point) => point.x));
+    const maxX = Math.max(...polygon.map((point) => point.x));
+    const minY = Math.min(...polygon.map((point) => point.y));
+    const maxY = Math.max(...polygon.map((point) => point.y));
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+  return {
+    x: objectX,
+    y: objectY,
+    width: Math.max(0, Number(object?.width ?? 0)),
+    height: Math.max(0, Number(object?.height ?? 0)),
+  };
+}
+
+function getObjectVisualCenter(object) {
+  const bounds = getObjectBounds(object);
+  return {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  };
+}
+
 function pointInObject(point, object, padding = 0) {
   if (!object || !point) return false;
   if (object.point) return distance(point, object) < 42 + padding;
+  if (Array.isArray(object.polygon) && object.polygon.length >= 3) {
+    const polygon = getObjectPolygonPoints(object);
+    if (pointInPolygon(point, polygon)) return true;
+    return padding > 0 && distanceToPolygon(point, polygon) <= padding;
+  }
   const objectX = Number(object.x ?? 0);
   const objectY = Number(object.y ?? 0);
   const objectWidth = Number(object.width ?? 0);
@@ -1833,6 +2637,100 @@ function pointInObject(point, object, padding = 0) {
     && point.y >= objectY - padding
     && point.y <= objectY + objectHeight + padding
   );
+}
+
+function getObjectPolygonPoints(object) {
+  const objectX = Number(object?.x ?? 0);
+  const objectY = Number(object?.y ?? 0);
+  return (object?.polygon ?? []).map((point) => ({
+    x: objectX + Number(point.x ?? 0),
+    y: objectY + Number(point.y ?? 0),
+  }));
+}
+
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  const x = Number(point?.x ?? 0);
+  const y = Number(point?.y ?? 0);
+  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
+    const current = polygon[index];
+    const previous = polygon[previousIndex];
+    const denominator = previous.y - current.y;
+    const safeDenominator = Math.abs(denominator) < 0.0001
+      ? (denominator < 0 ? -0.0001 : 0.0001)
+      : denominator;
+    const intersects = ((current.y > y) !== (previous.y > y))
+      && x < ((previous.x - current.x) * (y - current.y)) / safeDenominator + current.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceToPolygon(point, polygon) {
+  if (!polygon.length) return Number.POSITIVE_INFINITY;
+  let closest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    closest = Math.min(closest, distanceToSegment(point, start, end));
+  }
+  return closest;
+}
+
+function closestPointOnSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 0.0001) return { ...start };
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+  return {
+    x: start.x + dx * t,
+    y: start.y + dy * t,
+  };
+}
+
+function closestPointOnPolygon(point, polygon) {
+  if (!polygon.length) return null;
+  let closest = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    const candidate = closestPointOnSegment(point, start, end);
+    const candidateDistance = distance(point, candidate);
+    if (candidateDistance < closestDistance) {
+      closest = candidate;
+      closestDistance = candidateDistance;
+    }
+  }
+  return closest;
+}
+
+function isPointInCaveConnector(point, caveZone, entranceZone) {
+  if (!point || !caveZone || !entranceZone) return false;
+  const entranceCenter = getObjectVisualCenter(entranceZone);
+  const cavePolygon = getObjectPolygonPoints(caveZone);
+  const caveEntryPoint = closestPointOnPolygon(entranceCenter, cavePolygon) ?? getObjectVisualCenter(caveZone);
+  const connectorWidth = clamp(
+    safeNumber(entranceZone?.props?.connectorWidth ?? caveZone?.props?.connectorWidth, 240),
+    80,
+    900,
+  ) / 2 + PLAYER.radius + 24;
+  return distanceToSegment(point, entranceCenter, caveEntryPoint) <= connectorWidth;
+}
+
+function getObjectArea(object) {
+  if (Array.isArray(object?.polygon) && object.polygon.length >= 3) {
+    const polygon = getObjectPolygonPoints(object);
+    let area = 0;
+    for (let index = 0; index < polygon.length; index += 1) {
+      const current = polygon[index];
+      const next = polygon[(index + 1) % polygon.length];
+      area += current.x * next.y - next.x * current.y;
+    }
+    return Math.abs(area) / 2;
+  }
+  return safeNumber(object?.width, 0) * safeNumber(object?.height, 0);
 }
 
 function getTransition(tiledWorld, name) {
@@ -1867,16 +2765,16 @@ function normalizeTransitionTargetKey(value) {
 function getMapIdFromTransitionTarget(value) {
   const rawTarget = String(value ?? '').trim();
   if (!rawTarget) return null;
-  if (MAP_FILES[rawTarget]) return rawTarget;
+  if (MAP_FILES[rawTarget]) return normalizeMapId(rawTarget);
 
   const normalizedTarget = normalizeTransitionTargetKey(rawTarget);
-  if (['world_map', 'old_world', 'old_world_map', 'main_world'].includes(normalizedTarget)) return 'world';
+  if (isActiveWorldTransitionKey(normalizedTarget)) return WORLD_V3_HUB_MAP_ID;
 
   const matchingEntry = Object.entries(MAP_FILES).find(([mapId, fileName]) => (
     normalizeTransitionTargetKey(mapId) === normalizedTarget
     || normalizeTransitionTargetKey(fileName) === normalizedTarget
   ));
-  return matchingEntry?.[0] ?? null;
+  return matchingEntry ? normalizeMapId(matchingEntry[0]) : null;
 }
 
 function getTransitionTargetMapId(transition) {
@@ -1891,8 +2789,7 @@ function isStartingZoneWorldExit(currentMapId, transition, targetMapId) {
   if (!isStartingMapId(currentMapId)) return false;
 
   const targetKey = normalizeTransitionTargetKey(getTransitionRawTarget(transition));
-  return normalizeMapId(targetMapId) === 'world'
-    || ['world_map', 'old_world', 'old_world_map', 'main_world'].includes(targetKey);
+  return isWorldV2Map(targetMapId) || isActiveWorldTransitionKey(targetKey);
 }
 
 function getTransitionTargetSpawnName(transition, character, targetMapId) {
@@ -1901,7 +2798,7 @@ function getTransitionTargetSpawnName(transition, character, targetMapId) {
   const explicitName = explicit ? String(explicit) : '';
   const raceId = getCharacterRaceId(character);
 
-  if (targetMapId === 'world' && (!explicitName || explicitName.endsWith('_road_exit'))) {
+  if (isWorldV2Map(targetMapId) && (!explicitName || explicitName.endsWith('_road_exit'))) {
     return `${raceId}_road_arrival`;
   }
 
@@ -1967,10 +2864,9 @@ function getDungeonEntryError(character) {
 function getStartingZoneExitError(character) {
   const hasTravelQuest = Object.values(character?.quests?.active ?? {}).some((activeQuest) => {
     const quest = getQuestSnapshot(activeQuest);
-    const turnInMapId = normalizeMapId(quest?.turnInMapId);
     return quest?.type === 'travel'
-      && normalizeMapId(quest.mapId) !== 'world'
-      && (turnInMapId === 'world' || isWorldV2Map(turnInMapId));
+      && !isWorldV2Map(quest?.mapId)
+      && isWorldV2Map(quest?.turnInMapId);
   });
 
   if (hasTravelQuest || hasCompletedStartingTravelQuest(character)) return null;
@@ -2066,8 +2962,10 @@ export {
   clampPointToBounds,
   buildPatrolPoints,
   makeEnemyMovementState,
+  getEnemySeparationVector,
   getReadyRespawnSlots,
   updateIdleEnemyMovement,
+  resetEnemyAggro,
   createWorldSpawnPacks,
   scheduleWorldSpawnRespawn,
   getRaceStartPosition,
@@ -2092,6 +2990,14 @@ export {
   getNpcInteriorId,
   isNpcVisibleForInterior,
   getNearbyServiceNpc,
+  normalizeInteriorId,
+  getInteriorZoneId,
+  isCaveEntranceZone,
+  isCaveInteriorZone,
+  getCaveInteriorZone,
+  getCaveEntranceZones,
+  getCaveEntranceZone,
+  isPointInCaveInteriorSpace,
   getOpenInteriorZone,
   getObjectCenter,
   getObjectPosition,

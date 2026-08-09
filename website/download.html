@@ -6,7 +6,13 @@
     <meta name="description" content="Download the current Windows build of Wayworn by Bridgeward Studio." />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>Download Wayworn | Bridgeward Studio</title>
-    <link rel="stylesheet" href="./styles.css?v=20260621-6" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=Inter:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=20260709-1" />
   </head>
   <body class="download-page">
     <header class="site-header">
@@ -17,11 +23,13 @@
           <small>Creators of Wayworn</small>
         </span>
       </a>
-      <nav aria-label="Main navigation">
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
         <a href="./">Home</a>
-        <a class="nav-cta nav-active" href="./download" aria-current="page">Download</a>
+        <a href="./#classes">Classes</a>
+        <a href="./#devlog">Dev Log</a>
         <a href="./account">Account</a>
-        <a href="https://www.instagram.com/bridgewardstudio/" rel="noreferrer">Instagram</a>
+        <a class="nav-cta nav-active" href="./download" aria-current="page">Download</a>
       </nav>
     </header>
 
@@ -31,21 +39,20 @@
           <p class="eyebrow">Playtest build</p>
           <img class="game-logo page-logo" src="./assets/wayworn-logo.png" width="720" height="405" alt="Wayworn" />
           <p class="hero-copy">
-            Download the current Windows build. Wayworn is still early in
-            development, so this version is meant for testing, feedback, and
-            following the road while it is still being built.
+            Grab the current Windows build. Wayworn is still early in
+            development — this version is for testing, feedback, and walking
+            the road while it is still being paved.
           </p>
           <div class="hero-actions">
-            <a
-              class="button primary big-download"
-              href="https://www.mediafire.com/file/fim46sxz5exteya/Top-Down_MMO_Prototype_Setup.exe/file"
-              rel="noreferrer"
-            >
+            <a class="button primary big-download" data-download-link href="https://www.mediafire.com/file/fim46sxz5exteya/Top-Down_MMO_Prototype_Setup.exe/file" rel="noreferrer">
               Download for Windows
             </a>
             <a class="button secondary" href="./account">Open Account</a>
           </div>
-          <p class="download-note">Windows installer - hosted externally via MediaFire.</p>
+          <p class="download-note">
+            Windows installer, hosted externally on MediaFire. The client
+            auto-updates after the first install, so you only do this once.
+          </p>
         </div>
         <aside class="download-card">
           <p class="eyebrow">Current build</p>
@@ -56,37 +63,116 @@
               <dd>Wayworn</dd>
             </div>
             <div>
-              <dt>Platform</dt>
-              <dd>Windows</dd>
+              <dt>Version</dt>
+              <dd data-version>0.3.76</dd>
             </div>
             <div>
-              <dt>Version</dt>
-              <dd>0.2.40</dd>
+              <dt>Platform</dt>
+              <dd>Windows 10 / 11 (64-bit)</dd>
             </div>
             <div>
               <dt>File</dt>
               <dd>Top-Down MMO Prototype Setup.exe</dd>
             </div>
+            <div>
+              <dt>Account</dt>
+              <dd>Free Wayworn account required</dd>
+            </div>
+            <div>
+              <dt>Price</dt>
+              <dd>Free during the playtest</dd>
+            </div>
           </dl>
         </aside>
       </section>
 
-      <section class="section compact-section">
-        <div>
-          <p class="eyebrow">Install</p>
-          <h2>Before you launch</h2>
+      <section class="section" aria-labelledby="install-title">
+        <div class="section-head">
+          <p class="eyebrow">Getting started</p>
+          <h2 id="install-title">Four steps to the road.</h2>
         </div>
-        <p>
-          Download the installer from MediaFire, run the setup file, then sign in
-          with your Wayworn account. Windows may warn you because this early indie
-          build is not code-signed yet.
-        </p>
+        <div class="steps-grid">
+          <article class="step-card reveal">
+            <span class="step-num">I</span>
+            <h3>Download the installer</h3>
+            <p>Get the setup file from MediaFire using the button above. It is a standard Windows installer.</p>
+          </article>
+          <article class="step-card reveal">
+            <span class="step-num">II</span>
+            <h3>Run the setup</h3>
+            <p>Pick an install folder and let it finish. Windows SmartScreen may warn you — see the FAQ below.</p>
+          </article>
+          <article class="step-card reveal">
+            <span class="step-num">III</span>
+            <h3>Sign in or register</h3>
+            <p>Launch Wayworn and log in with your account, or create one in the game or on the <a href="./account" style="color: var(--gold-bright);">account page</a>.</p>
+          </article>
+          <article class="step-card reveal">
+            <span class="step-num">IV</span>
+            <h3>Make a hero</h3>
+            <p>Choose a race and class, step into your starting zone, and follow the road. Characters save to the cloud.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section tinted" aria-labelledby="faq-title">
+        <div class="section-head">
+          <p class="eyebrow">Good to know</p>
+          <h2 id="faq-title">Frequently asked questions.</h2>
+        </div>
+        <div class="faq-list">
+          <details class="reveal">
+            <summary>Windows says the publisher is unknown. Is that normal?</summary>
+            <p>
+              Yes. Wayworn is an early indie build and the installer is not
+              code-signed yet, so SmartScreen shows a warning. Click
+              &ldquo;More info&rdquo; and then &ldquo;Run anyway&rdquo; if you
+              downloaded the file from this page.
+            </p>
+          </details>
+          <details class="reveal">
+            <summary>Do I need to re-download every new version?</summary>
+            <p>
+              No. The client checks for updates when it starts and downloads
+              new builds automatically. You only need the installer once.
+            </p>
+          </details>
+          <details class="reveal">
+            <summary>Is my progress tied to my PC?</summary>
+            <p>
+              No — characters are saved to your Wayworn account in the cloud.
+              Reinstalling Windows or switching machines will not lose your
+              heroes, as long as you sign in with the same account.
+            </p>
+          </details>
+          <details class="reveal">
+            <summary>What should I expect from a playtest build?</summary>
+            <p>
+              Rough edges: placeholder art in spots, balance swings, and the
+              occasional bug. The world grows with nearly every build — that is
+              the fun of testing early. Feedback is very welcome on Instagram.
+            </p>
+          </details>
+          <details class="reveal">
+            <summary>Will there be a Mac or Linux version?</summary>
+            <p>
+              Windows is the focus right now. The client groundwork for other
+              platforms exists, but there is no promised date for them yet.
+            </p>
+          </details>
+        </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <span>Bridgeward Studio</span>
-      <span>Wayworn is in development.</span>
+      <span>&copy; 2026 Bridgeward Studio &middot; Wayworn is in development.</span>
+      <nav aria-label="Footer">
+        <a href="./">Home</a>
+        <a href="./account">Account</a>
+        <a href="https://www.instagram.com/bridgewardstudio/" rel="noreferrer">Instagram</a>
+      </nav>
     </footer>
+
+    <script src="./site.js?v=20260709-1" defer></script>
   </body>
 </html>

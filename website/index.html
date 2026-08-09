@@ -5,11 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Bridgeward Studio is a small indie studio from Hungary building Wayworn, a classic fantasy MMO."
+      content="Wayworn is a classic fantasy MMO by Bridgeward Studio: five races, six classes, dungeons, professions, and a growing open world."
     />
     <meta http-equiv="Cache-Control" content="no-store" />
-    <title>Bridgeward Studio | Wayworn</title>
-    <link rel="stylesheet" href="./styles.css?v=20260621-6" />
+    <meta property="og:title" content="Wayworn | Bridgeward Studio" />
+    <meta property="og:description" content="A classic fantasy MMO about old roads, lost crowns, and the heroes who still choose the long way forward." />
+    <meta property="og:image" content="./assets/wayworn-logo.png" />
+    <title>Wayworn | Bridgeward Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=Inter:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=20260709-1" />
   </head>
   <body class="home-page">
     <header class="site-header">
@@ -20,131 +29,440 @@
           <small>Creators of Wayworn</small>
         </span>
       </a>
-      <nav aria-label="Main navigation">
-        <a href="./#wayworn">Wayworn</a>
-        <a class="nav-cta" href="./download">Download</a>
-        <a href="./account">Account</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="./#classes">Classes</a>
+        <a href="./#races">Races</a>
+        <a href="./#world">World</a>
+        <a href="./#devlog">Dev Log</a>
         <a href="./#studio">Studio</a>
+        <a href="./account">Account</a>
+        <a class="nav-cta" href="./download">Download</a>
       </nav>
     </header>
 
     <main id="top">
+      <!-- ============================== HERO ============================== -->
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-bg" aria-hidden="true"></div>
         <div class="hero-content">
-          <p class="eyebrow">Small indie studio from Hungary</p>
+          <p class="eyebrow">A classic fantasy MMO in development</p>
           <img class="game-logo" src="./assets/wayworn-logo.png" width="720" height="405" alt="Wayworn" />
           <h1 id="hero-title" class="visually-hidden">Wayworn</h1>
           <p class="hero-copy">
-            A classic fantasy MMO about old roads, lost crowns, dangerous wilds,
-            and the heroes who still choose the long way forward.
+            Old roads, lost crowns, dangerous wilds — and the heroes who still
+            choose the long way forward. Pick a race, learn a class, and walk a
+            world that is being built one zone at a time.
           </p>
-          <div class="hero-actions" id="follow">
-            <a class="button primary" href="./download">Download Wayworn</a>
-            <a class="button secondary" href="https://www.instagram.com/bridgewardstudio/" rel="noreferrer">
-              Follow development
-            </a>
+          <div class="hero-actions">
+            <a class="button primary" href="./download">Download for Windows</a>
+            <a class="button secondary" href="./account">Create an Account</a>
+          </div>
+          <div class="hero-badges">
+            <span class="pill gold">Build <span data-version>0.3.76</span></span>
+            <span class="pill">Free playtest</span>
+            <span class="pill">5 races &middot; 6 classes</span>
           </div>
         </div>
-        <aside class="hero-panel" aria-label="Wayworn quick links">
+
+        <aside class="hero-panel" aria-label="Wayworn quick facts">
           <div class="panel-row">
-            <span>Build</span>
-            <strong>0.2.40</strong>
+            <span>Current build</span>
+            <strong data-version>0.3.76</strong>
           </div>
           <div class="panel-row">
             <span>Platform</span>
-            <strong>Windows</strong>
+            <strong>Windows &middot; auto-updating</strong>
           </div>
           <div class="panel-row">
-            <span>Account</span>
-            <strong>Cloud characters</strong>
+            <span>Characters</span>
+            <strong>Saved in the cloud</strong>
           </div>
           <div class="hero-roster" aria-label="Playable class preview">
-            <span class="sprite-frame">
-              <img src="./assets/paladin.png" width="48" height="48" alt="Paladin class sprite" />
-            </span>
-            <span class="sprite-frame">
-              <img src="./assets/hunter.png" width="48" height="48" alt="Hunter class sprite" />
-            </span>
-            <span class="sprite-frame">
-              <img src="./assets/mage.png" width="48" height="48" alt="Mage class sprite" />
-            </span>
+            <figure>
+              <span class="sprite-frame">
+                <span class="walker pixel" style="background-image: url('./assets/paladin.png')" role="img" aria-label="Paladin sprite"></span>
+              </span>
+              <figcaption>Paladin</figcaption>
+            </figure>
+            <figure>
+              <span class="sprite-frame">
+                <span class="walker pixel" style="background-image: url('./assets/hunter.png')" role="img" aria-label="Hunter sprite"></span>
+              </span>
+              <figcaption>Hunter</figcaption>
+            </figure>
+            <figure>
+              <span class="sprite-frame">
+                <span class="walker pixel" style="background-image: url('./assets/mage.png')" role="img" aria-label="Mage sprite"></span>
+              </span>
+              <figcaption>Mage</figcaption>
+            </figure>
           </div>
         </aside>
+
         <div class="hero-status" aria-label="Development status">
-          <span>Windows playtest</span>
-          <span>Classic fantasy MMO</span>
-          <span>Built by Bridgeward Studio</span>
+          <span>Windows playtest is live</span>
+          <span>Built by a small studio in Hungary</span>
+          <span>New zones under construction</span>
         </div>
       </section>
 
-      <section class="section intro" id="wayworn" aria-labelledby="wayworn-title">
-        <div>
-          <p class="eyebrow">The game</p>
-          <h2 id="wayworn-title">A world shaped by roads, ruins, and restless magic.</h2>
+      <!-- ============================== INTRO ============================== -->
+      <section class="section" id="wayworn" aria-labelledby="wayworn-title">
+        <div class="intro-grid">
+          <div>
+            <p class="eyebrow">The game</p>
+            <h2 id="wayworn-title">A world shaped by roads, ruins, and restless magic.</h2>
+            <div class="ornament" aria-hidden="true"><span></span></div>
+            <p style="margin-top: 22px; color: var(--muted); font-size: 1.1rem;">
+              Wayworn is an old-school fantasy MMO built around crossroads,
+              frontier towns, and the threats waking beneath them. Quest through
+              race starting zones, level to the cap, pick a talent
+              specialization, learn professions, and descend into the first
+              dungeon with other players.
+            </p>
+          </div>
+          <div class="stat-band reveal" aria-label="Wayworn by the numbers">
+            <div><strong>5</strong><span>Playable races</span></div>
+            <div><strong>6</strong><span>Character classes</span></div>
+            <div><strong>30</strong><span>Level cap</span></div>
+            <div><strong>5</strong><span>Professions</span></div>
+          </div>
         </div>
+      </section>
+
+      <!-- ============================== CLASSES ============================== -->
+      <section class="section tinted" id="classes" aria-labelledby="classes-title">
+        <div class="section-head">
+          <p class="eyebrow">Choose your path</p>
+          <h2 id="classes-title">Six classes, each with its own way to fight.</h2>
+          <p class="lede">
+            Every class levels through six signature abilities, then unlocks a
+            talent specialization at level 10 that changes how it plays. These
+            are the real abilities from the current build.
+          </p>
+        </div>
+        <div class="class-explorer reveal">
+          <div class="class-tabs" id="class-tabs" role="tablist" aria-label="Class selector"></div>
+          <div class="class-detail" id="class-detail" aria-live="polite"></div>
+        </div>
+        <noscript>
+          <p style="color: var(--muted); margin-top: 18px;">
+            Enable JavaScript to browse the class explorer. Classes: Mage,
+            Hunter, Paladin, Warrior, Priest, and Rogue.
+          </p>
+        </noscript>
+      </section>
+
+      <!-- ============================== RACES ============================== -->
+      <section class="section" id="races" aria-labelledby="races-title">
+        <div class="section-head">
+          <p class="eyebrow">Peoples of the road</p>
+          <h2 id="races-title">Five races, five starting zones.</h2>
+          <p class="lede">
+            Each race begins in its own corner of the world, with its own
+            towns, quests, and troubles — and its own mix of available classes.
+          </p>
+        </div>
+        <div class="race-grid">
+          <article class="race-card reveal">
+            <span class="walker pixel" style="background-image: url('./assets/human-male.png')" role="img" aria-label="Human sprite"></span>
+            <h3>Human</h3>
+            <span class="race-zone">Asterfall Reaches</span>
+            <p>Crossroads folk of the central kingdoms. Adaptable enough to walk any path.</p>
+            <div class="race-classes">
+              <span>Mage</span><span>Hunter</span><span>Paladin</span><span>Warrior</span><span>Priest</span><span>Rogue</span>
+            </div>
+          </article>
+          <article class="race-card reveal">
+            <span class="walker pixel" style="background-image: url('./assets/elf-female.png')" role="img" aria-label="Elf sprite"></span>
+            <h3>Elf</h3>
+            <span class="race-zone">Moonlit Forests</span>
+            <p>Keepers of the old groves, quick of hand and long of memory.</p>
+            <div class="race-classes">
+              <span>Mage</span><span>Hunter</span><span>Priest</span><span>Rogue</span>
+            </div>
+          </article>
+          <article class="race-card reveal">
+            <span class="walker pixel" style="background-image: url('./assets/dwarf-male.png')" role="img" aria-label="Dwarf sprite"></span>
+            <h3>Dwarf</h3>
+            <span class="race-zone">Highland Holds</span>
+            <p>Miners and smiths of the rocky highlands, stubborn as the stone they cut.</p>
+            <div class="race-classes">
+              <span>Paladin</span><span>Warrior</span><span>Hunter</span><span>Priest</span><span>Rogue</span>
+            </div>
+          </article>
+          <article class="race-card reveal">
+            <span class="walker pixel" style="background-image: url('./assets/orc-male.png')" role="img" aria-label="Orc sprite"></span>
+            <h3>Orc</h3>
+            <span class="race-zone">Redscar Plains</span>
+            <p>Raiders turned settlers, at home wherever the fighting is honest.</p>
+            <div class="race-classes">
+              <span>Warrior</span><span>Hunter</span><span>Rogue</span>
+            </div>
+          </article>
+          <article class="race-card reveal">
+            <span class="walker pixel" style="background-image: url('./assets/undead-male.png')" role="img" aria-label="Undead sprite"></span>
+            <h3>Undead</h3>
+            <span class="race-zone">Gravemist Marches</span>
+            <p>The restless dead who kept walking. Death was a setback, not an ending.</p>
+            <div class="race-classes">
+              <span>Mage</span><span>Warrior</span><span>Priest</span><span>Rogue</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================== WORLD + DUNGEON ============================== -->
+      <section class="section tinted" id="world" aria-labelledby="world-title">
+        <div class="world-grid">
+          <div class="world-copy">
+            <p class="eyebrow">The world</p>
+            <h2 id="world-title">From frontier towns to what waits below.</h2>
+            <div class="ornament" aria-hidden="true"><span></span></div>
+            <p style="margin-top: 22px;">
+              The overworld is a growing continent of connected regions: quest
+              hubs, wilderness, world bosses, and roads that actually lead
+              somewhere. Along the way you will find vendors, banks, an auction
+              house, and respawn shrines for when the road wins.
+            </p>
+            <ul class="world-list">
+              <li><strong>Starting zones</strong><span>A hand-built home region for every race, with quests and towns.</span></li>
+              <li><strong>Open world</strong><span>Seamless regions with roaming enemies and world bosses.</span></li>
+              <li><strong>Day &amp; night</strong><span>A living cycle with weather fronts that roll across the map.</span></li>
+              <li><strong>Economy</strong><span>Vendors, personal bank storage, and a player auction house.</span></li>
+            </ul>
+          </div>
+          <aside class="dungeon-card reveal" aria-labelledby="dungeon-title">
+            <p class="eyebrow">Dungeon spotlight</p>
+            <h3 id="dungeon-title" style="font-size: 1.6rem; margin: 0;">The First Depths</h3>
+            <p>
+              Wayworn&rsquo;s first dungeon burrows beneath the overworld: webbed
+              tunnels, magma channels, and things that have never seen the sun.
+              Bring friends — or a very good escape plan.
+            </p>
+            <div class="dungeon-boss">
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/gloomfang-matriarch.png')" role="img" aria-label="Gloomfang Matriarch sprite"></span>
+              <span>
+                <strong>Gloomfang Matriarch</strong>
+                <small>Dungeon boss &middot; mother of everything skittering below</small>
+              </span>
+            </div>
+          </aside>
+        </div>
+
+        <div class="bestiary reveal" aria-labelledby="bestiary-title">
+          <p class="eyebrow">Bestiary</p>
+          <h3 id="bestiary-title" style="font-size: 1.5rem;">A few of the things that want you dead.</h3>
+          <div class="bestiary-strip">
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/dire-wolf.png')" role="img" aria-label="Dire Wolf sprite"></span>
+              <figcaption>Dire Wolf</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/cave-spider.png')" role="img" aria-label="Cave Spider sprite"></span>
+              <figcaption>Cave Spider</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/ash-witch.png')" role="img" aria-label="Ash Witch sprite"></span>
+              <figcaption>Ash Witch</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/crypt-warden.png')" role="img" aria-label="Crypt Warden sprite"></span>
+              <figcaption>Crypt Warden</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/magma-crawler.png')" role="img" aria-label="Magma Crawler sprite"></span>
+              <figcaption>Magma Crawler</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/obsidian-sentinel.png')" role="img" aria-label="Obsidian Sentinel sprite"></span>
+              <figcaption>Obsidian Sentinel</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/deep-burrower.png')" role="img" aria-label="Deep Burrower sprite"></span>
+              <figcaption>Deep Burrower</figcaption>
+            </figure>
+            <figure>
+              <span class="enemy-sprite pixel" style="background-image: url('./assets/bloodtusk-chief.png')" role="img" aria-label="Bloodtusk Chief sprite"></span>
+              <figcaption>Bloodtusk Chief</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== FEATURES ============================== -->
+      <section class="section" id="features" aria-labelledby="features-title">
+        <div class="section-head">
+          <p class="eyebrow">Systems in the current build</p>
+          <h2 id="features-title">Already in the game — not on a wishlist.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 4 5v16l5-2 6 2 5-2V3l-5 2-6-2Z"/><path d="M9 3v16M15 5v16"/></svg>
+            </span>
+            <h3>Open World &amp; Zones</h3>
+            <p>Five race starting zones and a connected overworld of regions, roads, towns, and world bosses.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-4 0-7 3-7 7 0 2.5 1 4 2 5v3h10v-3c1-1 2-2.5 2-5 0-4-3-7-7-7Z"/><circle cx="9.5" cy="10" r="1"/><circle cx="14.5" cy="10" r="1"/><path d="M10 17v3M14 17v3"/></svg>
+            </span>
+            <h3>Dungeons &amp; Bosses</h3>
+            <p>The First Depths dungeon plus roaming world bosses with real respawn timers and better loot.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9M12 9 6 3M12 9l6-6"/><circle cx="6" cy="3" r="1.4"/><circle cx="18" cy="3" r="1.4"/><circle cx="12" cy="21" r="1.4"/></svg>
+            </span>
+            <h3>Talent Specializations</h3>
+            <p>At level 10 every class chooses an oath — from Aegis of Dawn tanking to Enter the Void damage.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m14 6 4 4-9 9H5v-4l9-9Z"/><path d="m13 7 4 4M15 4l2-2 5 5-2 2"/></svg>
+            </span>
+            <h3>Professions &amp; Crafting</h3>
+            <p>Fishing, mining, leatherworking, tailoring, and blacksmithing — gather on the road, craft in town.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="4"/><circle cx="5.5" cy="9" r="1.6"/><circle cx="9" cy="5.5" r="1.6"/><circle cx="15" cy="5.5" r="1.6"/><circle cx="18.5" cy="9" r="1.6"/></svg>
+            </span>
+            <h3>Hunter Pets</h3>
+            <p>Hunters fight alongside a loyal companion that follows, guards, and tears into whatever you mark.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 3 8 7h8l-4-4ZM4 21h16M6 21V11m12 10V11M10 21v-6h4v6"/></svg>
+            </span>
+            <h3>Auction House &amp; Bank</h3>
+            <p>Trade gear with other players on the auction house and stash your treasures in personal bank storage.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4"/><path d="M15.5 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"/></svg>
+            </span>
+            <h3>Day, Night &amp; Weather</h3>
+            <p>A full day cycle and drifting weather change how the world looks and feels as you travel it.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 1 1 .9-8.9 6 6 0 0 1 11.6 1.6A3.7 3.7 0 0 1 18.5 18H7Z"/><path d="M12 13v5m0-5-2 2m2-2 2 2"/></svg>
+            </span>
+            <h3>Cloud Characters</h3>
+            <p>Your heroes are saved to your account, not your machine. Log in anywhere and keep walking.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
+            </span>
+            <h3>Auto-Updating Client</h3>
+            <p>The Windows client checks for new builds on launch, so you are always playing the newest road.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================== DEV LOG ============================== -->
+      <section class="section tinted" id="devlog" aria-labelledby="devlog-title">
+        <div class="section-head">
+          <p class="eyebrow">Dev log</p>
+          <h2 id="devlog-title">The road so far.</h2>
+          <p class="lede">Highlights from recent builds. Follow development on Instagram for work-in-progress screenshots.</p>
+        </div>
+        <div class="devlog-list">
+          <article class="devlog-entry reveal">
+            <div class="devlog-meta">
+              <h3>Expanded world content &amp; spawn fixes</h3>
+              <time datetime="2026-06-25">June 2026</time>
+              <span class="pill gold">0.3.x</span>
+            </div>
+            <p>
+              New overworld content, more enemy camps across the regions, and a
+              round of spawn fixes so the wilds fill in the way they should.
+            </p>
+          </article>
+          <article class="devlog-entry reveal">
+            <div class="devlog-meta">
+              <h3>Cross-platform client groundwork</h3>
+              <time datetime="2026-06-02">June 2026</time>
+            </div>
+            <p>
+              Refreshed prototype assets and restructured the desktop client
+              setup to make future platform builds easier.
+            </p>
+          </article>
+          <article class="devlog-entry reveal">
+            <div class="devlog-meta">
+              <h3>Character menu &amp; creation revamp</h3>
+              <time datetime="2026-05-28">May 2026</time>
+            </div>
+            <p>
+              A rebuilt character creation flow, plus party leadership controls
+              and repositioned target and invite panels in the HUD.
+            </p>
+          </article>
+          <article class="devlog-entry reveal">
+            <div class="devlog-meta">
+              <h3>The First Depths opens</h3>
+              <time datetime="2026-05">May 2026</time>
+            </div>
+            <p>
+              Wayworn&rsquo;s first dungeon went in — tunnels, magma, cave
+              stalkers, and the Gloomfang Matriarch waiting at the bottom.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============================== STUDIO ============================== -->
+      <section class="section" id="studio" aria-labelledby="studio-title">
+        <div class="story-grid">
+          <div class="story-copy">
+            <p class="eyebrow">The studio</p>
+            <h2 id="studio-title">Bridgeward Studio started where many good quests start: at a local pub.</h2>
+            <div class="ornament" aria-hidden="true"><span></span></div>
+            <p style="margin-top: 22px;">
+              The name comes from a place close to home in Hungary — a pub
+              called Hídfő, where many of the ideas behind the project took
+              shape with a friend. Bridgeward keeps that feeling: crossing into
+              something new, building from small beginnings, and following the
+              road because the next zone might be worth it.
+            </p>
+            <div class="hero-actions">
+              <a class="button secondary" href="https://www.instagram.com/bridgewardstudio/" rel="noreferrer">Follow development on Instagram</a>
+            </div>
+          </div>
+          <div class="studio-card reveal" aria-label="Bridgeward Studio identity">
+            <img src="./assets/bridgeward-logo.png" alt="Bridgeward Studio logo art" />
+            <p>Ideas born at a table, then carried into a world of roads, ruins, and long evenings of building.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== CTA ============================== -->
+      <section class="cta-band" aria-labelledby="cta-title">
+        <p class="eyebrow">Playtest build <span data-version>0.3.76</span></p>
+        <h2 id="cta-title">The road is open.</h2>
         <p>
-          Wayworn is being built as an old-school fantasy MMO with playable races,
-          character classes, questing, dungeons, and a growing open world centered
-          around crossroads, frontier towns, ancient places, and the threats waking
-          beneath them.
+          Wayworn is early and rough in places — that is the point of a
+          playtest. Make an account, pick a class, and tell us what broke.
         </p>
-      </section>
-
-      <section class="feature-band" aria-label="Wayworn features">
-        <article>
-          <span>01</span>
-          <h3>Classic Fantasy</h3>
-          <p>Heroes, classes, dangerous roads, haunted ruins, and a world that feels built to explore.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <h3>Online World</h3>
-          <p>Designed around shared spaces, player progression, quests, enemies, and future group content.</p>
-        </article>
-        <article>
-          <span>03</span>
-          <h3>Indie Heart</h3>
-          <p>A personal project growing from late-night ideas, experiments, and a love for MMO worlds.</p>
-        </article>
-      </section>
-
-      <section class="download-band" aria-labelledby="download-title">
-        <div>
-          <p class="eyebrow">Playtest build</p>
-          <h2 id="download-title">Step onto the road.</h2>
-        </div>
-        <div class="download-panel">
-          <p>
-            Download the current Windows setup for Wayworn. This is an early
-            development build, so expect rough edges while the world grows.
-          </p>
-          <a class="button primary" href="./download">Open Download Page</a>
-        </div>
-      </section>
-
-      <section class="section story" id="studio" aria-labelledby="studio-title">
-        <div class="story-copy">
-          <p class="eyebrow">The studio</p>
-          <h2 id="studio-title">Bridgeward Studio started where many good quests start: at a local pub.</h2>
-          <p>
-            The name comes from a place close to home in Hungary, a pub called
-            Hidfo, where many of the ideas behind the project took shape with a
-            friend. Bridgeward keeps that feeling: crossing into something new,
-            building from small beginnings, and following the road because the
-            next zone might be worth it.
-          </p>
-        </div>
-        <div class="studio-card" aria-label="Bridgeward Studio identity">
-          <img src="./assets/bridgeward-logo.png" alt="Bridgeward Studio logo art" />
-          <p>Ideas born at a table, then carried into a world of roads, ruins, and long evenings of building.</p>
-        </div>
+        <a class="button primary big-download" href="./download">Download Wayworn</a>
       </section>
     </main>
 
     <footer class="site-footer">
-      <span>Bridgeward Studio</span>
-      <span>Wayworn is in development.</span>
+      <span>&copy; 2026 Bridgeward Studio &middot; Wayworn is in development.</span>
+      <nav aria-label="Footer">
+        <a href="./download">Download</a>
+        <a href="./account">Account</a>
+        <a href="./#devlog">Dev Log</a>
+        <a href="https://www.instagram.com/bridgewardstudio/" rel="noreferrer">Instagram</a>
+      </nav>
     </footer>
+
+    <script src="./site.js?v=20260709-1" defer></script>
   </body>
 </html>

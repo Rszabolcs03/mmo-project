@@ -1,0 +1,425 @@
+{
+  "continentId": "continent_01",
+  "displayName": "Continent 01",
+  "structureVersion": "v4",
+  "tileSize": 32,
+  "regionSizeTiles": 800,
+  "gridSize": {
+    "cols": 5,
+    "rows": 5
+  },
+  "totalSizeTiles": {
+    "width": 4000,
+    "height": 4000
+  },
+  "runtime": {
+    "chunkIndexFile": "regions/chunks/continent_01_chunks.json",
+    "chunkAssetVersion": "v4-continent-01-runtime-chunks-9",
+    "chunkTiles": 128,
+    "chunkGrid": {
+      "cols": 32,
+      "rows": 32
+    },
+    "chunkCount": 1024
+  },
+  "overviewImage": "continent_01_overview.png",
+  "defaultSpawnPoints": [
+    {
+      "id": "after_starting_zone_spawn",
+      "mapId": "continent_01_region_0_0",
+      "x": 15652,
+      "y": 12910,
+      "facing": -1.5707963267948966,
+      "description": "Preserved Tamzia arrival spawn."
+    },
+    {
+      "id": "dungeon_01_entrance",
+      "mapId": "continent_01_region_1_0",
+      "x": 48800,
+      "y": 15906,
+      "targetMapId": "dungeon_01",
+      "targetSpawn": "dungeon_01_start",
+      "interiorId": "cave_01",
+      "caveId": "cave_01"
+    }
+  ],
+  "majorZones": [],
+  "poiSummary": [],
+  "regions": [
+    {
+      "id": "continent_01_region_0_0",
+      "file": "regions/continent_01_region_0_0.tmj",
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Tamzia Green",
+      "biomeId": "emerald_vale",
+      "recommendedLevel": 1,
+      "aliases": [
+        "world_region_0_0_v3",
+        "world_region_0_0"
+      ]
+    },
+    {
+      "id": "continent_01_region_1_0",
+      "file": "regions/continent_01_region_1_0.tmj",
+      "x": 800,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Brightwater Ford",
+      "biomeId": "silver_river",
+      "recommendedLevel": 1,
+      "aliases": [
+        "world_region_1_0_v3",
+        "world_region_1_0"
+      ]
+    },
+    {
+      "id": "continent_01_region_2_0",
+      "file": "regions/continent_01_region_2_0.tmj",
+      "x": 1600,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Sunhill Marches",
+      "biomeId": "sunhill",
+      "recommendedLevel": 2,
+      "aliases": [
+        "world_region_2_0_v3",
+        "world_region_2_0"
+      ]
+    },
+    {
+      "id": "continent_01_region_3_0",
+      "file": "regions/continent_01_region_3_0.tmj",
+      "x": 2400,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Crownroad Fields",
+      "biomeId": "golden_fields",
+      "recommendedLevel": 2,
+      "aliases": [
+        "world_region_3_0_v3",
+        "world_region_3_0"
+      ]
+    },
+    {
+      "id": "continent_01_region_4_0",
+      "file": "regions/continent_01_region_4_0.tmj",
+      "x": 3200,
+      "y": 0,
+      "width": 800,
+      "height": 800,
+      "displayName": "Saltwind Quay",
+      "biomeId": "saltwind",
+      "recommendedLevel": 3,
+      "aliases": [
+        "world_region_4_0_v3",
+        "world_region_4_0"
+      ]
+    },
+    {
+      "id": "continent_01_region_0_1",
+      "file": "regions/continent_01_region_0_1.tmj",
+      "x": 0,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Elderbough Wilds",
+      "biomeId": "elderwood",
+      "recommendedLevel": 4,
+      "aliases": [
+        "world_region_0_1_v3",
+        "world_region_0_1"
+      ]
+    },
+    {
+      "id": "continent_01_region_1_1",
+      "file": "regions/continent_01_region_1_1.tmj",
+      "x": 800,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Hearthmere Farms",
+      "biomeId": "golden_fields",
+      "recommendedLevel": 4,
+      "aliases": [
+        "world_region_1_1_v3",
+        "world_region_1_1"
+      ]
+    },
+    {
+      "id": "continent_01_region_2_1",
+      "file": "regions/continent_01_region_2_1.tmj",
+      "x": 1600,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Lionsgate Approach",
+      "biomeId": "golden_fields",
+      "recommendedLevel": 5,
+      "aliases": [
+        "world_region_2_1_v3",
+        "world_region_2_1"
+      ]
+    },
+    {
+      "id": "continent_01_region_3_1",
+      "file": "regions/continent_01_region_3_1.tmj",
+      "x": 2400,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Velorian Ruins",
+      "biomeId": "old_empire",
+      "recommendedLevel": 5,
+      "aliases": [
+        "world_region_3_1_v3",
+        "world_region_3_1"
+      ]
+    },
+    {
+      "id": "continent_01_region_4_1",
+      "file": "regions/continent_01_region_4_1.tmj",
+      "x": 3200,
+      "y": 800,
+      "width": 800,
+      "height": 800,
+      "displayName": "Pinewatch Weald",
+      "biomeId": "elderwood",
+      "recommendedLevel": 6,
+      "aliases": [
+        "world_region_4_1_v3",
+        "world_region_4_1"
+      ]
+    },
+    {
+      "id": "continent_01_region_0_2",
+      "file": "regions/continent_01_region_0_2.tmj",
+      "x": 0,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Glassmere Lakes",
+      "biomeId": "silver_river",
+      "recommendedLevel": 7,
+      "aliases": [
+        "world_region_0_2_v3",
+        "world_region_0_2"
+      ]
+    },
+    {
+      "id": "continent_01_region_1_2",
+      "file": "regions/continent_01_region_1_2.tmj",
+      "x": 800,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Bannerfall Downs",
+      "biomeId": "sunhill",
+      "recommendedLevel": 7,
+      "aliases": [
+        "world_region_1_2_v3",
+        "world_region_1_2"
+      ]
+    },
+    {
+      "id": "continent_01_region_2_2",
+      "file": "regions/continent_01_region_2_2.tmj",
+      "x": 1600,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Lionsgate City",
+      "biomeId": "golden_fields",
+      "recommendedLevel": 8,
+      "aliases": [
+        "world_region_2_2_v3",
+        "world_region_2_2"
+      ]
+    },
+    {
+      "id": "continent_01_region_3_2",
+      "file": "regions/continent_01_region_3_2.tmj",
+      "x": 2400,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Murkfen Verge",
+      "biomeId": "murkfen",
+      "recommendedLevel": 8,
+      "aliases": [
+        "world_region_3_2_v3",
+        "world_region_3_2"
+      ]
+    },
+    {
+      "id": "continent_01_region_4_2",
+      "file": "regions/continent_01_region_4_2.tmj",
+      "x": 3200,
+      "y": 1600,
+      "width": 800,
+      "height": 800,
+      "displayName": "Seabriar Coast",
+      "biomeId": "saltwind",
+      "recommendedLevel": 9,
+      "aliases": [
+        "world_region_4_2_v3",
+        "world_region_4_2"
+      ]
+    },
+    {
+      "id": "continent_01_region_0_3",
+      "file": "regions/continent_01_region_0_3.tmj",
+      "x": 0,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Cloudspine Foothold",
+      "biomeId": "cloudspine",
+      "recommendedLevel": 10,
+      "aliases": [
+        "world_region_0_3_v3",
+        "world_region_0_3"
+      ]
+    },
+    {
+      "id": "continent_01_region_1_3",
+      "file": "regions/continent_01_region_1_3.tmj",
+      "x": 800,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Ironcrag Hold",
+      "biomeId": "ironcrag",
+      "recommendedLevel": 10,
+      "aliases": [
+        "world_region_1_3_v3",
+        "world_region_1_3"
+      ]
+    },
+    {
+      "id": "continent_01_region_2_3",
+      "file": "regions/continent_01_region_2_3.tmj",
+      "x": 1600,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Frostgate Pass",
+      "biomeId": "cloudspine",
+      "recommendedLevel": 11,
+      "aliases": [
+        "world_region_2_3_v3",
+        "world_region_2_3"
+      ]
+    },
+    {
+      "id": "continent_01_region_3_3",
+      "file": "regions/continent_01_region_3_3.tmj",
+      "x": 2400,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Blackreed Marsh",
+      "biomeId": "murkfen",
+      "recommendedLevel": 11,
+      "aliases": [
+        "world_region_3_3_v3",
+        "world_region_3_3"
+      ]
+    },
+    {
+      "id": "continent_01_region_4_3",
+      "file": "regions/continent_01_region_4_3.tmj",
+      "x": 3200,
+      "y": 2400,
+      "width": 800,
+      "height": 800,
+      "displayName": "Tidefallen Shore",
+      "biomeId": "old_empire",
+      "recommendedLevel": 12,
+      "aliases": [
+        "world_region_4_3_v3",
+        "world_region_4_3"
+      ]
+    },
+    {
+      "id": "continent_01_region_0_4",
+      "file": "regions/continent_01_region_0_4.tmj",
+      "x": 0,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Windbreak Isles",
+      "biomeId": "saltwind",
+      "recommendedLevel": 13,
+      "aliases": [
+        "world_region_0_4_v3",
+        "world_region_0_4"
+      ]
+    },
+    {
+      "id": "continent_01_region_1_4",
+      "file": "regions/continent_01_region_1_4.tmj",
+      "x": 800,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Ambergrain Reach",
+      "biomeId": "amber_steppe",
+      "recommendedLevel": 13,
+      "aliases": [
+        "world_region_1_4_v3",
+        "world_region_1_4"
+      ]
+    },
+    {
+      "id": "continent_01_region_2_4",
+      "file": "regions/continent_01_region_2_4.tmj",
+      "x": 1600,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Dawnwatch Bastion",
+      "biomeId": "amber_steppe",
+      "recommendedLevel": 14,
+      "aliases": [
+        "world_region_2_4_v3",
+        "world_region_2_4"
+      ]
+    },
+    {
+      "id": "continent_01_region_3_4",
+      "file": "regions/continent_01_region_3_4.tmj",
+      "x": 2400,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Old Crown Expanse",
+      "biomeId": "old_empire",
+      "recommendedLevel": 14,
+      "aliases": [
+        "world_region_3_4_v3",
+        "world_region_3_4"
+      ]
+    },
+    {
+      "id": "continent_01_region_4_4",
+      "file": "regions/continent_01_region_4_4.tmj",
+      "x": 3200,
+      "y": 3200,
+      "width": 800,
+      "height": 800,
+      "displayName": "Shadowfen Frontier",
+      "biomeId": "shadowfen",
+      "recommendedLevel": 15,
+      "aliases": [
+        "world_region_4_4_v3",
+        "world_region_4_4"
+      ]
+    }
+  ]
+}

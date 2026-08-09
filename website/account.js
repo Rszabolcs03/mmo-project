@@ -62,9 +62,23 @@ function showLogin(message = "Login with your Wayworn account.") {
   setStatus(message);
 }
 
+const CLASS_ACCENTS = {
+  mage: "var(--class-mage)",
+  hunter: "var(--class-hunter)",
+  paladin: "var(--class-paladin)",
+  warrior: "var(--class-warrior)",
+  priest: "var(--class-priest)",
+  rogue: "var(--class-rogue)",
+};
+
+function characterClassId(character) {
+  const raw = character.classId || character.className || character.class || "";
+  return String(raw).toLowerCase().trim();
+}
+
 function characterSubtitle(character) {
   const race = character.raceId || character.race || "unknown race";
-  const characterClass = character.classId || character.className || character.class || "unknown class";
+  const characterClass = characterClassId(character) || "unknown class";
   return `${race} ${characterClass}`;
 }
 
@@ -90,6 +104,11 @@ function renderCharacters(characters) {
   characterList.innerHTML = characters.map((character) => {
     const name = character.name || "Unnamed Hero";
     const level = characterLevel(character);
+    const classId = characterClassId(character);
+    const accent = CLASS_ACCENTS[classId] || "var(--gold)";
+    const avatar = CLASS_ACCENTS[classId]
+      ? `<span class="character-avatar" style="background-image: url('./assets/${classId}.png')" role="img" aria-label="${escapeHtml(classId)} sprite"></span>`
+      : `<span class="character-avatar" aria-hidden="true"></span>`;
     const updated = character.cloudUpdatedAt?.toDate
       ? character.cloudUpdatedAt.toDate().toLocaleString("en-GB", {
           dateStyle: "medium",
@@ -97,7 +116,8 @@ function renderCharacters(characters) {
         })
       : "Unknown";
     return `
-      <article class="character-card">
+      <article class="character-card" style="--accent: ${accent}">
+        ${avatar}
         <div class="character-main">
           <strong>${escapeHtml(name)}</strong>
           <span>${escapeHtml(characterSubtitle(character))}</span>

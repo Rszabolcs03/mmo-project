@@ -8,12 +8,24 @@ import { PNG } from 'pngjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const mapsDir = path.join(rootDir, 'public', 'maps');
-const registryPath = path.join(mapsDir, 'world_regions_v3.json');
-const outputPath = path.join(mapsDir, 'world_v3_overview.png');
+const continentRoot = path.join(mapsDir, 'world_map', 'continents', 'continent_01');
+const registryPath = path.join(continentRoot, 'continent_01_regions.json');
+const outputPath = path.join(continentRoot, 'continent_01_overview.png');
 
 const COLLISION_LAYER_NAME = 'Collision';
+const OVERVIEW_HIDDEN_LAYER_NAMES = new Set([
+  'CaveInteriors',
+  'CaveDetails',
+  'CaveRoofs',
+  'CaveCollision',
+]);
+const OVERVIEW_OBJECT_LAYER_NAMES = new Set([
+  'tamzia_forest',
+  'tamzia_bandit_forest',
+  'tamzia_dense_forest',
+]);
 const WORLD_BACKGROUND = [47, 111, 126, 255];
-const TILED_GID_MASK = 0x0fffffff;
+const TILED_GID_MASK = 0x1fffffff;
 
 function parseXmlAttributes(tag) {
   const attributes = {};
@@ -130,12 +142,12 @@ function fillPng(png, color) {
   }
 }
 
-function buildTilesetColorLookup(map, tilesetCache, gidColors) {
+function buildTilesetColorLookup(map, mapPath, tilesetCache, gidColors) {
   const tilesets = [...(map.tilesets ?? [])].sort((a, b) => a.firstgid - b.firstgid);
   for (const entry of tilesets) {
     if (gidColors[entry.firstgid]) continue;
 
-    const tsxPath = path.resolve(mapsDir, entry.source.replaceAll('/', path.sep));
+    const tsxPath = path.resolve(path.dirname(mapPath), entry.source.replaceAll('/', path.sep));
     let tileset = tilesetCache.get(tsxPath);
     if (!tileset) {
       tileset = readTileset(tsxPath);
@@ -151,6 +163,8 @@ function buildTilesetColorLookup(map, tilesetCache, gidColors) {
 
 function drawRegionLayer(output, region, layer, gidColors) {
   const data = decodeLayerData(layer);
+  const layerOpacity = Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
+  if (layerOpacity <= 0) return;
   for (let row = 0; row < layer.height; row += 1) {
     const worldY = region.y + row;
     if (worldY < 0 || worldY >= output.height) continue;
@@ -163,9 +177,69 @@ function drawRegionLayer(output, region, layer, gidColors) {
 
       const color = gidColors[gid];
       if (!color) continue;
-      blendPixel(output.data, targetIndex, color);
+      blendPixel(output.data, targetIndex, [
+        color[0],
+        color[1],
+        color[2],
+        Math.round(color[3] * layerOpacity),
+      ]);
     }
   }
+}
+
+function getObjectProperty(object, propertyName) {
+  return (object?.properties ?? []).find((property) => property.name === propertyName)?.value;
+}
+
+function getObjectOverviewAlpha(object, color) {
+  const type = String(object?.type || getObjectProperty(object, 'type') || '').toLowerCase();
+  if (type.includes('tree')) return Math.max(color[3], 156);
+  if (type.includes('bush')) return Math.max(color[3], 128);
+  if (type.includes('detail')) return Math.max(color[3], 72);
+  return Math.max(color[3], 96);
+}
+
+function drawRegionObjectLayer(output, region, map, layer, gidColors) {
+  const layerOpacity = Math.max(0, Math.min(1, Number(layer.opacity ?? 1)));
+  if (layerOpacity <= 0) return 0;
+
+  const tileWidth = Number(map.tilewidth ?? 32) || 32;
+  const tileHeight = Number(map.tileheight ?? 32) || 32;
+  let objectCount = 0;
+
+  for (const object of layer.objects ?? []) {
+    if (object.visible === false) continue;
+    const gid = (Number(object.gid ?? 0) || 0) & TILED_GID_MASK;
+    if (!gid) continue;
+
+    const color = gidColors[gid];
+    if (!color) continue;
+
+    const objectWidth = Math.max(1, Number(object.width ?? tileWidth));
+    const objectHeight = Math.max(1, Number(object.height ?? tileHeight));
+    const objectOpacity = Math.max(0, Math.min(1, Number(object.opacity ?? 1)));
+    const drawColor = [
+      color[0],
+      color[1],
+      color[2],
+      Math.round(getObjectOverviewAlpha(object, color) * layerOpacity * objectOpacity),
+    ];
+    if (drawColor[3] <= 0) continue;
+
+    const startX = Math.max(0, Math.floor(region.x + Number(object.x ?? 0) / tileWidth));
+    const endX = Math.min(output.width, Math.ceil(region.x + (Number(object.x ?? 0) + objectWidth) / tileWidth));
+    const startY = Math.max(0, Math.floor(region.y + (Number(object.y ?? 0) - objectHeight) / tileHeight));
+    const endY = Math.min(output.height, Math.ceil(region.y + Number(object.y ?? 0) / tileHeight));
+
+    for (let y = startY; y < endY; y += 1) {
+      for (let x = startX; x < endX; x += 1) {
+        blendPixel(output.data, ((y * output.width) + x) * 4, drawColor);
+      }
+    }
+    objectCount += 1;
+  }
+
+  return objectCount;
 }
 
 async function main() {
@@ -177,32 +251,46 @@ async function main() {
   const tilesetCache = new Map();
   const gidColors = [];
   let layerCount = 0;
+  let objectCount = 0;
 
   fillPng(output, WORLD_BACKGROUND);
 
   for (const region of registry.regions) {
-    const mapPath = path.join(mapsDir, region.file);
+    const mapPath = path.join(continentRoot, region.file);
     const map = JSON.parse(await fs.readFile(mapPath, 'utf8'));
-    buildTilesetColorLookup(map, tilesetCache, gidColors);
+    buildTilesetColorLookup(map, mapPath, tilesetCache, gidColors);
 
-    const tileLayers = map.layers.filter((layer) => (
-      layer.type === 'tilelayer'
-      && layer.visible !== false
-      && layer.name !== COLLISION_LAYER_NAME
+    const overviewLayers = map.layers.filter((layer) => (
+      layer.visible !== false
+      && (
+        (
+          layer.type === 'tilelayer'
+          && layer.name !== COLLISION_LAYER_NAME
+          && !OVERVIEW_HIDDEN_LAYER_NAMES.has(layer.name)
+        )
+        || (
+          layer.type === 'objectgroup'
+          && OVERVIEW_OBJECT_LAYER_NAMES.has(layer.name)
+        )
+      )
     ));
 
-    for (const layer of tileLayers) {
-      drawRegionLayer(output, region, layer, gidColors);
-      layerCount += 1;
+    for (const layer of overviewLayers) {
+      if (layer.type === 'tilelayer') {
+        drawRegionLayer(output, region, layer, gidColors);
+        layerCount += 1;
+      } else if (layer.type === 'objectgroup') {
+        objectCount += drawRegionObjectLayer(output, region, map, layer, gidColors);
+      }
     }
 
-    console.log(`Rendered ${region.file}: ${tileLayers.length} layers`);
+    console.log(`Rendered ${region.file}: ${overviewLayers.length} layers`);
   }
 
   const pngBuffer = PNG.sync.write(output, { colorType: 6, inputColorType: 6, deflateLevel: 9 });
   await fs.writeFile(outputPath, pngBuffer);
 
-  console.log(`Wrote ${path.relative(rootDir, outputPath)} (${output.width}x${output.height}, ${pngBuffer.length} bytes, ${tilesetCache.size} tilesets, ${layerCount} layers)`);
+  console.log(`Wrote ${path.relative(rootDir, outputPath)} (${output.width}x${output.height}, ${pngBuffer.length} bytes, ${tilesetCache.size} tilesets, ${layerCount} tile layers, ${objectCount} overview objects)`);
 }
 
 main().catch((error) => {

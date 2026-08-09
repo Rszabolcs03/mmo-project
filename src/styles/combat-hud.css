@@ -205,8 +205,10 @@ kbd {
   z-index: 7;
   display: grid;
   gap: 8px;
-  width: 190px;
+  width: min(250px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   padding: 10px;
+  overflow: auto;
   border: 1px solid rgba(250, 204, 21, 0.36);
   border-radius: 8px;
   background: rgba(16, 24, 30, 0.78);
@@ -245,6 +247,82 @@ kbd {
 .admin-panel button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.admin-panel-actions,
+.admin-time-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.admin-time-section {
+  display: grid;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(250, 204, 21, 0.18);
+}
+
+.admin-time-title {
+  color: rgba(246, 241, 223, 0.72);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-time-readout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.admin-time-readout span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid rgba(246, 241, 223, 0.11);
+  border-radius: 7px;
+  background: rgba(246, 241, 223, 0.06);
+  color: rgba(246, 241, 223, 0.62);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.admin-time-readout strong {
+  overflow: hidden;
+  color: #f6f1df;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.admin-time-buttons {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-time-buttons.speed {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-time-buttons button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 4px;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.admin-time-buttons.speed button {
+  text-transform: none;
+}
+
+.admin-time-buttons button.selected {
+  border-color: rgba(139, 233, 253, 0.7);
+  background: rgba(139, 233, 253, 0.18);
+  color: #8be9fd;
 }
 
 .admin-players-panel {

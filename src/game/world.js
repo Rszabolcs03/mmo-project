@@ -22,13 +22,18 @@ const RESOLUTION_OPTIONS = [
 ];
 
 const MAP_FILES = {
-  world: 'world_map.tmj',
-  human_starting: 'human_starting_zone_v4.tmj',
-  dwarf_starting: 'dwarf_starting_zone.tmj',
-  undead_starting: 'undead_starting_zone.tmj',
-  elf_starting: 'elf_starting_zone.tmj',
-  orc_starting: 'orc_starting_zone.tmj',
-  dungeon_01: 'dungeon_01.tmj',
+  world: 'world_map/continents/continent_01/regions/continent_01_region_0_0.tmj',
+  starting_human: 'starting_zones/human/starting_human.tmj',
+  starting_dwarf: 'starting_zones/dwarf/starting_dwarf.tmj',
+  starting_elf: 'starting_zones/elf/starting_elf.tmj',
+  starting_orc: 'starting_zones/orc/starting_orc.tmj',
+  starting_neutral: 'starting_zones/neutral/starting_neutral.tmj',
+  human_starting: 'starting_zones/human/starting_human.tmj',
+  dwarf_starting: 'starting_zones/dwarf/starting_dwarf.tmj',
+  undead_starting: 'starting_zones/neutral/starting_neutral.tmj',
+  elf_starting: 'starting_zones/elf/starting_elf.tmj',
+  orc_starting: 'starting_zones/orc/starting_orc.tmj',
+  dungeon_01: 'dungeons/dungeon_01/dungeon_01.tmj',
 };
 
 const WORLD_V2_REGION_GRID = 5;
@@ -41,10 +46,16 @@ const WORLD_V2_CHUNK_PIXEL_SIZE = WORLD_V2_CHUNK_TILES * WORLD.tile;
 const WORLD_V2_CHUNK_GRID = Math.ceil(WORLD_V2_WORLD_TILES / WORLD_V2_CHUNK_TILES);
 const WORLD_V2_ACTIVE_CHUNK_RADIUS = 2;
 const WORLD_V2_PRELOAD_CHUNK_RADIUS = 3;
-const WORLD_V2_CHUNK_INDEX_FILE = 'world_v2_chunks/world_v2_chunks.json';
-const WORLD_V2_CHUNK_ASSET_VERSION = 'v2-runtime-chunks-1';
-const WORLD_V2_REGISTRY_FILE = 'world_regions_v2.json';
-const WORLD_V3_HUB_MAP_ID = 'world_region_0_0_v3';
+const CONTINENT_01_ID = 'continent_01';
+const CONTINENT_01_REGION_PREFIX = 'continent_01_region';
+const CONTINENT_01_REGION_PATH = 'world_map/continents/continent_01/regions';
+const CONTINENT_01_CHUNK_INDEX_FILE = `${CONTINENT_01_REGION_PATH}/chunks/continent_01_chunks.json`;
+const CONTINENT_01_CHUNK_ASSET_VERSION = 'v4-continent-01-runtime-chunks-9';
+const CONTINENT_01_REGISTRY_FILE = 'world_map/continents/continent_01/continent_01_regions.json';
+const WORLD_V2_CHUNK_INDEX_FILE = CONTINENT_01_CHUNK_INDEX_FILE;
+const WORLD_V2_CHUNK_ASSET_VERSION = CONTINENT_01_CHUNK_ASSET_VERSION;
+const WORLD_V2_REGISTRY_FILE = CONTINENT_01_REGISTRY_FILE;
+const WORLD_V3_HUB_MAP_ID = 'continent_01_region_0_0';
 const WORLD_V3_QUEST_GIVER_ID = 'tamzia_town_hall_mayor';
 const WORLD_V3_AFTER_STARTING_SPAWN_NAME = 'after_starting_zone_spawn';
 const WORLD_V3_HUB_ARRIVAL = {
@@ -62,17 +73,18 @@ const WORLD_V3_HUB_TURN_IN_MARKER = {
 const WORLD_STREAM_GENERATIONS = {
   v2: {
     id: 'v2',
-    mapSpaceId: 'world_v2',
+    mapSpaceId: CONTINENT_01_ID,
     chunkIndexFile: WORLD_V2_CHUNK_INDEX_FILE,
     chunkAssetVersion: WORLD_V2_CHUNK_ASSET_VERSION,
     registryFile: WORLD_V2_REGISTRY_FILE,
+    aliasOf: 'v3',
   },
   v3: {
     id: 'v3',
-    mapSpaceId: 'world_v3',
-    chunkIndexFile: 'world_v3_chunks/world_v3_chunks.json',
-    chunkAssetVersion: 'v3-runtime-chunks-12',
-    registryFile: 'world_regions_v3.json',
+    mapSpaceId: CONTINENT_01_ID,
+    chunkIndexFile: CONTINENT_01_CHUNK_INDEX_FILE,
+    chunkAssetVersion: CONTINENT_01_CHUNK_ASSET_VERSION,
+    registryFile: CONTINENT_01_REGISTRY_FILE,
   },
 };
 const WORLD_STREAM_GENERATION_IDS = Object.keys(WORLD_STREAM_GENERATIONS);
@@ -80,13 +92,50 @@ const WORLD_V2_MAP_IDS = WORLD_STREAM_GENERATION_IDS.flatMap((generationId) => (
   Array.from({ length: WORLD_V2_REGION_GRID * WORLD_V2_REGION_GRID }, (_, index) => {
     const x = index % WORLD_V2_REGION_GRID;
     const y = Math.floor(index / WORLD_V2_REGION_GRID);
-    return `world_region_${x}_${y}_${generationId}`;
+    return generationId === 'v3' ? `${CONTINENT_01_REGION_PREFIX}_${x}_${y}` : `world_region_${x}_${y}_${generationId}`;
   })
 ));
 const WORLD_V2_MAP_ID_SET = new Set(WORLD_V2_MAP_IDS);
 WORLD_V2_MAP_IDS.forEach((mapId) => {
-  MAP_FILES[mapId] = `${mapId}.tmj`;
+  MAP_FILES[mapId] = mapId.startsWith(CONTINENT_01_REGION_PREFIX)
+    ? `${CONTINENT_01_REGION_PATH}/${mapId}.tmj`
+    : `${CONTINENT_01_REGION_PATH}/${mapId.replace(/^world_region_(\d+)_(\d+)_v2$/, `${CONTINENT_01_REGION_PREFIX}_$1_$2`)}.tmj`;
 });
+const MAP_ALIASES = {
+  world: WORLD_V3_HUB_MAP_ID,
+  old_world: WORLD_V3_HUB_MAP_ID,
+  old_world_map: WORLD_V3_HUB_MAP_ID,
+  main_world: WORLD_V3_HUB_MAP_ID,
+  world_map: WORLD_V3_HUB_MAP_ID,
+  world_map_tmj: WORLD_V3_HUB_MAP_ID,
+  new_world: WORLD_V3_HUB_MAP_ID,
+  new_world_v3: WORLD_V3_HUB_MAP_ID,
+  world_v3: WORLD_V3_HUB_MAP_ID,
+  world_continent_v3: WORLD_V3_HUB_MAP_ID,
+  world_continent_v4: WORLD_V3_HUB_MAP_ID,
+  continent_01: WORLD_V3_HUB_MAP_ID,
+  human_starting: 'starting_human',
+  dwarf_starting: 'starting_dwarf',
+  elf_starting: 'starting_elf',
+  orc_starting: 'starting_orc',
+  undead_starting: 'starting_neutral',
+  starting_undead: 'starting_neutral',
+  human_starting_zone_v4: 'starting_human',
+  dwarf_starting_zone: 'starting_dwarf',
+  elf_starting_zone: 'starting_elf',
+  orc_starting_zone: 'starting_orc',
+  undead_starting_zone: 'starting_neutral',
+};
+for (let regionY = 0; regionY < WORLD_V2_REGION_GRID; regionY += 1) {
+  for (let regionX = 0; regionX < WORLD_V2_REGION_GRID; regionX += 1) {
+    const canonicalMapId = `${CONTINENT_01_REGION_PREFIX}_${regionX}_${regionY}`;
+    const canonicalPath = `${CONTINENT_01_REGION_PATH}/${canonicalMapId}.tmj`;
+    [`world_region_${regionX}_${regionY}`, `world_region_${regionX}_${regionY}_v2`, `world_region_${regionX}_${regionY}_v3`].forEach((legacyMapId) => {
+      MAP_ALIASES[legacyMapId] = canonicalMapId;
+      MAP_FILES[legacyMapId] = canonicalPath;
+    });
+  }
+}
 
 const WORLD_MAP_VERSION = 2;
 const WORLD_QUEST_GIVER_ID = 'world-arrivals-quartermaster';
@@ -99,9 +148,9 @@ const WORLD_QUEST_TURN_IN_MARKER = {
 };
 const DUNGEON_ENTRANCE_MARKER = {
   type: 'point',
-  mapId: 'world',
-  x: 8048,
-  y: 3054,
+  mapId: 'continent_01_region_1_0',
+  x: 48800,
+  y: 15906,
   label: 'Dungeon Entrance',
 };
 const DUNGEON_EXIT_MARKER = {
@@ -113,21 +162,21 @@ const DUNGEON_EXIT_MARKER = {
 };
 
 const RACE_START_MAPS = {
-  human: 'human_starting',
-  dwarf: 'dwarf_starting',
-  undead: 'undead_starting',
-  elf: 'elf_starting',
-  orc: 'orc_starting',
+  human: 'starting_human',
+  dwarf: 'starting_dwarf',
+  undead: 'starting_neutral',
+  elf: 'starting_elf',
+  orc: 'starting_orc',
+  neutral: 'starting_neutral',
 };
 const STARTING_MAP_IDS = new Set(Object.values(RACE_START_MAPS));
 
 const WORLD_LIKE_MAP_IDS = new Set([
-  'world',
-  'human_starting',
-  'dwarf_starting',
-  'undead_starting',
-  'elf_starting',
-  'orc_starting',
+  'starting_human',
+  'starting_dwarf',
+  'starting_neutral',
+  'starting_elf',
+  'starting_orc',
 ]);
 WORLD_V2_MAP_IDS.forEach((mapId) => WORLD_LIKE_MAP_IDS.add(mapId));
 
@@ -159,31 +208,31 @@ const WORLD_MAP_BIOME_COLORS = {
 };
 
 const QUEST_GIVER_PROFILES = {
-  human_starting: {
+  starting_human: {
     id: 'human-starting-warden',
     name: 'Marshal Elowen',
     title: 'Northshire Warden',
     dialogue: 'The road is not safe yet. Prove yourself here, then I will send you onward.',
   },
-  dwarf_starting: {
+  starting_dwarf: {
     id: 'dwarf-starting-warden',
     name: 'Borin Stonewatch',
     title: 'Mountain Warden',
     dialogue: 'The holds need steady hands. Clear the passes and earn your road writ.',
   },
-  elf_starting: {
+  starting_elf: {
     id: 'elf-starting-warden',
     name: 'Lethariel Moonbough',
     title: 'Grove Warden',
     dialogue: 'The forest whispers of trouble. Hunt cleanly, then carry our word beyond the boughs.',
   },
-  orc_starting: {
+  starting_orc: {
     id: 'orc-starting-warden',
     name: 'Gorvak Dustcaller',
     title: 'Clan Warden',
     dialogue: 'Strength first. Clear the hunting grounds, then take the road to the wider war.',
   },
-  undead_starting: {
+  starting_neutral: {
     id: 'undead-starting-warden',
     name: 'Mirella Gravehand',
     title: 'Crypt Warden',
@@ -198,19 +247,33 @@ const QUEST_GIVER_PROFILES = {
 };
 
 function normalizeMapId(mapId) {
-  return MAP_FILES[mapId] ? mapId : 'world';
+  const rawMapId = String(mapId ?? '').trim().replace(/\.tmj$/i, '');
+  const rawKey = rawMapId.toLowerCase();
+  const aliasedMapId = MAP_ALIASES[rawMapId] ?? MAP_ALIASES[rawKey];
+  if (aliasedMapId && MAP_FILES[aliasedMapId]) return aliasedMapId;
+  if (MAP_FILES[rawMapId]) return rawMapId;
+  return WORLD_V3_HUB_MAP_ID;
+}
+
+function hasMapIdValue(mapId) {
+  return String(mapId ?? '').trim() !== '';
 }
 
 function isWorldLikeMap(mapId) {
+  if (!hasMapIdValue(mapId)) return false;
   return WORLD_LIKE_MAP_IDS.has(normalizeMapId(mapId));
 }
 
 function isWorldV2Map(mapId) {
+  if (!hasMapIdValue(mapId)) return false;
   return WORLD_V2_MAP_ID_SET.has(normalizeMapId(mapId));
 }
 
 function getWorldGenerationIdFromMapId(mapId, fallback = 'v2') {
-  const match = String(normalizeMapId(mapId) ?? '').match(/^world_region_\d+_\d+_(v\d+)$/);
+  if (!hasMapIdValue(mapId)) return fallback;
+  const normalizedMapId = normalizeMapId(mapId);
+  if (new RegExp(`^${CONTINENT_01_REGION_PREFIX}_\\d+_\\d+$`).test(normalizedMapId)) return 'v3';
+  const match = String(normalizedMapId ?? '').match(/^world_region_\d+_\d+_(v\d+)$/);
   return WORLD_STREAM_GENERATIONS[match?.[1]] ? match[1] : fallback;
 }
 
@@ -219,20 +282,31 @@ function getWorldGenerationConfig(generationId = 'v2') {
 }
 
 function isStartingMapId(mapId) {
+  if (!hasMapIdValue(mapId)) return false;
   return STARTING_MAP_IDS.has(normalizeMapId(mapId));
 }
 
 function getRandomWorldV2MapId(generationId = 'v2') {
-  const generationMapIds = WORLD_V2_MAP_IDS.filter((mapId) => mapId.endsWith(`_${generationId}`));
-  return generationMapIds[Math.floor(Math.random() * generationMapIds.length)] ?? `world_region_2_2_${generationId}`;
+  const generation = getWorldGenerationConfig(generationId);
+  if (generation.aliasOf === 'v3' || generation.id === 'v3') {
+    return `${CONTINENT_01_REGION_PREFIX}_2_2`;
+  }
+  const generationMapIds = WORLD_V2_MAP_IDS.filter((mapId) => getWorldGenerationIdFromMapId(mapId) === generation.id);
+  return generationMapIds[Math.floor(Math.random() * generationMapIds.length)] ?? `${CONTINENT_01_REGION_PREFIX}_2_2`;
 }
 
 function getWorldV2RegionCoordsFromMapId(mapId) {
-  const match = String(mapId ?? '').match(/^world_region_(\d+)_(\d+)_(v\d+)$/);
+  if (!hasMapIdValue(mapId)) return null;
+  const normalizedMapId = normalizeMapId(mapId);
+  const continentMatch = String(normalizedMapId ?? '').match(/^continent_01_region_(\d+)_(\d+)$/);
+  const legacyMatch = String(mapId ?? '').match(/^world_region_(\d+)_(\d+)(?:_(v\d+))?$/);
+  const match = continentMatch ?? legacyMatch;
   if (!match) return null;
   const regionX = Number(match[1]);
   const regionY = Number(match[2]);
-  const generationId = WORLD_STREAM_GENERATIONS[match[3]] ? match[3] : 'v2';
+  const generationId = continentMatch
+    ? 'v3'
+    : WORLD_STREAM_GENERATIONS[match[3]] ? match[3] : 'v3';
   if (
     !Number.isInteger(regionX)
     || !Number.isInteger(regionY)
@@ -259,7 +333,10 @@ function getWorldV2MapIdFromRegionCoords(regionX, regionY, generationId = 'v2') 
   ) {
     return null;
   }
-  return `world_region_${x}_${y}_${getWorldGenerationConfig(generationId).id}`;
+  const generation = getWorldGenerationConfig(generationId);
+  return generation.id === 'v3' || generation.aliasOf === 'v3'
+    ? `${CONTINENT_01_REGION_PREFIX}_${x}_${y}`
+    : `world_region_${x}_${y}_${generation.id}`;
 }
 
 function getWorldV2RegionCoordsFromPoint(x, y) {
@@ -368,7 +445,7 @@ function getGameplayMapSpaceId(mapId) {
 }
 
 function getRaceStartMapId(raceId) {
-  return RACE_START_MAPS[String(raceId ?? '').toLowerCase()] ?? 'human_starting';
+  return RACE_START_MAPS[String(raceId ?? '').toLowerCase()] ?? 'starting_human';
 }
 
 function getCharacterTargetMapId(character) {

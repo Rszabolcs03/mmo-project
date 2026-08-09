@@ -1,0 +1,15 @@
+{
+  "version": "v4",
+  "defaultContinent": "continent_01",
+  "activeContinent": "continent_01",
+  "continents": [
+    {
+      "continentId": "continent_01",
+      "displayName": "Continent 01",
+      "manifest": "continents/continent_01/continent_01_manifest.json",
+      "registry": "continents/continent_01/continent_01_regions.json",
+      "runtimeChunkIndex": "continents/continent_01/regions/chunks/continent_01_chunks.json",
+      "status": "active"
+    }
+  ]
+}

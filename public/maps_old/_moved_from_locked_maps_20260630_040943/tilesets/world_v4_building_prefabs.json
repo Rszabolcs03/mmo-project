@@ -1,0 +1,861 @@
+{
+  "version": "v4-city-hub-1",
+  "tileSize": 32,
+  "tileset": "world_v4_buildings.tsx",
+  "columns": 32,
+  "firstgidHint": 65,
+  "prefabs": [
+    {
+      "id": "small_cottage",
+      "displayName": "Small Cottage",
+      "category": "village",
+      "role": "starter village home",
+      "startTile": 0,
+      "tilesetX": 0,
+      "tilesetY": 0,
+      "width": 3,
+      "height": 3,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 3,
+        "h": 2
+      }
+    },
+    {
+      "id": "medium_house",
+      "displayName": "Medium House",
+      "category": "village",
+      "role": "common town house",
+      "startTile": 4,
+      "tilesetX": 4,
+      "tilesetY": 0,
+      "width": 4,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 3
+      }
+    },
+    {
+      "id": "large_house",
+      "displayName": "Large House",
+      "category": "town",
+      "role": "larger town residence",
+      "startTile": 9,
+      "tilesetX": 9,
+      "tilesetY": 0,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "town_hall",
+      "displayName": "Town Hall",
+      "category": "civic",
+      "role": "large civic centerpiece",
+      "startTile": 15,
+      "tilesetX": 15,
+      "tilesetY": 0,
+      "width": 7,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 7,
+        "h": 4
+      }
+    },
+    {
+      "id": "inn_tavern",
+      "displayName": "Inn / Tavern",
+      "category": "town",
+      "role": "village inn and social hub",
+      "startTile": 23,
+      "tilesetX": 23,
+      "tilesetY": 0,
+      "width": 6,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "blacksmith",
+      "displayName": "Blacksmith",
+      "category": "crafting",
+      "role": "forge building with chimney",
+      "startTile": 224,
+      "tilesetX": 0,
+      "tilesetY": 7,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "chapel_temple",
+      "displayName": "Chapel / Temple",
+      "category": "civic",
+      "role": "small religious building",
+      "startTile": 230,
+      "tilesetX": 6,
+      "tilesetY": 7,
+      "width": 5,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 5,
+        "h": 4
+      }
+    },
+    {
+      "id": "stable",
+      "displayName": "Stable",
+      "category": "farm",
+      "role": "animal stable",
+      "startTile": 236,
+      "tilesetX": 12,
+      "tilesetY": 7,
+      "width": 6,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "warehouse",
+      "displayName": "Warehouse",
+      "category": "dock",
+      "role": "storage / trade building",
+      "startTile": 243,
+      "tilesetX": 19,
+      "tilesetY": 7,
+      "width": 6,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "farm_house",
+      "displayName": "Farm House",
+      "category": "farm",
+      "role": "rural farmhouse",
+      "startTile": 250,
+      "tilesetX": 26,
+      "tilesetY": 7,
+      "width": 4,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 3
+      }
+    },
+    {
+      "id": "barn",
+      "displayName": "Barn",
+      "category": "farm",
+      "role": "large farm barn",
+      "startTile": 448,
+      "tilesetX": 0,
+      "tilesetY": 14,
+      "width": 6,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "market_stall_set",
+      "displayName": "Market Stall Set",
+      "category": "market",
+      "role": "multi-stall market prefab",
+      "startTile": 455,
+      "tilesetX": 7,
+      "tilesetY": 14,
+      "width": 5,
+      "height": 3,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 2
+      }
+    },
+    {
+      "id": "guard_post",
+      "displayName": "Guard Post",
+      "category": "military",
+      "role": "small fortified guard hut",
+      "startTile": 461,
+      "tilesetX": 13,
+      "tilesetY": 14,
+      "width": 4,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 3
+      }
+    },
+    {
+      "id": "watchtower",
+      "displayName": "Watchtower",
+      "category": "military",
+      "role": "vertical town watchtower",
+      "startTile": 466,
+      "tilesetX": 18,
+      "tilesetY": 14,
+      "width": 3,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "id": "dock_building",
+      "displayName": "Dock Building",
+      "category": "dock",
+      "role": "coastal dock office",
+      "startTile": 470,
+      "tilesetX": 22,
+      "tilesetY": 14,
+      "width": 6,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "ruined_house_small",
+      "displayName": "Ruined House Small",
+      "category": "ruins",
+      "role": "small ruined building variant",
+      "startTile": 672,
+      "tilesetX": 0,
+      "tilesetY": 21,
+      "width": 4,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 3
+      }
+    },
+    {
+      "id": "ruined_house_large",
+      "displayName": "Ruined House Large",
+      "category": "ruins",
+      "role": "large ruined building variant",
+      "startTile": 677,
+      "tilesetX": 5,
+      "tilesetY": 21,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "city_house_row",
+      "displayName": "City House Row",
+      "category": "city",
+      "role": "dense city block / row house",
+      "startTile": 683,
+      "tilesetX": 11,
+      "tilesetY": 21,
+      "width": 8,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 4
+      }
+    },
+    {
+      "id": "gatehouse",
+      "displayName": "Gatehouse",
+      "category": "military",
+      "role": "larger town gatehouse special",
+      "startTile": 692,
+      "tilesetX": 20,
+      "tilesetY": 21,
+      "width": 7,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 7,
+        "h": 4
+      }
+    },
+    {
+      "id": "asterfall_villa",
+      "displayName": "Asterfall Villa",
+      "category": "city",
+      "role": "wealthier city residence with garden frontage",
+      "startTile": 896,
+      "tilesetX": 0,
+      "tilesetY": 28,
+      "width": 6,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "blue_roof_shop",
+      "displayName": "Blue Roof Shop",
+      "category": "city",
+      "role": "merchant shop variant for city streets",
+      "startTile": 903,
+      "tilesetX": 7,
+      "tilesetY": 28,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "apothecary_house",
+      "displayName": "Apothecary House",
+      "category": "city",
+      "role": "small specialist shop with herb sign",
+      "startTile": 909,
+      "tilesetX": 13,
+      "tilesetY": 28,
+      "width": 4,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 3
+      }
+    },
+    {
+      "id": "corner_townhouse",
+      "displayName": "Corner Townhouse",
+      "category": "city",
+      "role": "corner house for denser street blocks",
+      "startTile": 914,
+      "tilesetX": 18,
+      "tilesetY": 28,
+      "width": 5,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      }
+    },
+    {
+      "id": "guild_hall",
+      "displayName": "Guild Hall",
+      "category": "civic",
+      "role": "large guild or command hall for the city hub",
+      "startTile": 920,
+      "tilesetX": 24,
+      "tilesetY": 28,
+      "width": 7,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 7,
+        "h": 4
+      }
+    },
+    {
+      "id": "red_townhouse",
+      "displayName": "Red Townhouse",
+      "category": "city",
+      "role": "vertical townhouse variant",
+      "startTile": 1120,
+      "tilesetX": 0,
+      "tilesetY": 35,
+      "width": 4,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": "green_townhouse",
+      "displayName": "Green Townhouse",
+      "category": "city",
+      "role": "vertical townhouse variant",
+      "startTile": 1125,
+      "tilesetX": 5,
+      "tilesetY": 35,
+      "width": 4,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": "city_bakery",
+      "displayName": "City Bakery",
+      "category": "city",
+      "role": "small food shop with awning",
+      "startTile": 1130,
+      "tilesetX": 10,
+      "tilesetY": 35,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "courtyard_house",
+      "displayName": "Courtyard House",
+      "category": "city",
+      "role": "residential house with courtyard garden",
+      "startTile": 1136,
+      "tilesetX": 16,
+      "tilesetY": 35,
+      "width": 6,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "tower_house",
+      "displayName": "Tower House",
+      "category": "city",
+      "role": "narrow tall city house with small tower roof",
+      "startTile": 1143,
+      "tilesetX": 23,
+      "tilesetY": 35,
+      "width": 4,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "id": "stone_manse",
+      "displayName": "Stone Manse",
+      "category": "civic",
+      "role": "stone administrative house variant",
+      "startTile": 1147,
+      "tilesetX": 27,
+      "tilesetY": 35,
+      "width": 5,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      }
+    },
+    {
+      "id": "city_bank",
+      "displayName": "Asterfall Bank",
+      "category": "service",
+      "role": "bank building with stone frontage and secure vault feel",
+      "startTile": 1344,
+      "tilesetX": 0,
+      "tilesetY": 42,
+      "width": 7,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 7,
+        "h": 4
+      }
+    },
+    {
+      "id": "auction_house",
+      "displayName": "Auction House",
+      "category": "service",
+      "role": "large trading hall for player auctions",
+      "startTile": 1352,
+      "tilesetX": 8,
+      "tilesetY": 42,
+      "width": 8,
+      "height": 6,
+      "collision": {
+        "x": 0,
+        "y": 2,
+        "w": 8,
+        "h": 4
+      }
+    },
+    {
+      "id": "weaponsmith_shop",
+      "displayName": "Weaponsmith",
+      "category": "service",
+      "role": "weapon vendor and forge shop",
+      "startTile": 1361,
+      "tilesetX": 17,
+      "tilesetY": 42,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "armorer_shop",
+      "displayName": "Armorer",
+      "category": "service",
+      "role": "armor vendor and repair service",
+      "startTile": 1367,
+      "tilesetX": 23,
+      "tilesetY": 42,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "arcane_shop",
+      "displayName": "Arcane Shop",
+      "category": "service",
+      "role": "mage and caster item vendor",
+      "startTile": 1600,
+      "tilesetX": 0,
+      "tilesetY": 50,
+      "width": 5,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      }
+    },
+    {
+      "id": "alchemy_shop",
+      "displayName": "Alchemy Shop",
+      "category": "service",
+      "role": "potion and consumable vendor",
+      "startTile": 1606,
+      "tilesetX": 6,
+      "tilesetY": 50,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "profession_hall",
+      "displayName": "Profession Hall",
+      "category": "service",
+      "role": "profession trainer hall",
+      "startTile": 1612,
+      "tilesetX": 12,
+      "tilesetY": 50,
+      "width": 7,
+      "height": 5,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 7,
+        "h": 4
+      }
+    },
+    {
+      "id": "tailor_shop",
+      "displayName": "Tailor Shop",
+      "category": "service",
+      "role": "tailoring trainer and cloth vendor",
+      "startTile": 1620,
+      "tilesetX": 20,
+      "tilesetY": 50,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "leatherworker_shop",
+      "displayName": "Leatherworker",
+      "category": "service",
+      "role": "leatherworking trainer and workshop",
+      "startTile": 1626,
+      "tilesetX": 26,
+      "tilesetY": 50,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "fishing_lodge",
+      "displayName": "Fishing Lodge",
+      "category": "service",
+      "role": "fishing trainer lodge near water",
+      "startTile": 1792,
+      "tilesetX": 0,
+      "tilesetY": 56,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "mining_office",
+      "displayName": "Mining Office",
+      "category": "service",
+      "role": "mining trainer and ore office",
+      "startTile": 1798,
+      "tilesetX": 6,
+      "tilesetY": 56,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "city_storage",
+      "displayName": "City Storage",
+      "category": "service",
+      "role": "urban warehouse and service storage",
+      "startTile": 1804,
+      "tilesetX": 12,
+      "tilesetY": 56,
+      "width": 6,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "service_kiosk",
+      "displayName": "Service Kiosk",
+      "category": "service",
+      "role": "small plaza service kiosk",
+      "startTile": 1811,
+      "tilesetX": 19,
+      "tilesetY": 56,
+      "width": 3,
+      "height": 3,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 3,
+        "h": 2
+      }
+    },
+    {
+      "id": "canal_house",
+      "displayName": "Canal House",
+      "category": "city",
+      "role": "compact water-adjacent city house",
+      "startTile": 1815,
+      "tilesetX": 23,
+      "tilesetY": 56,
+      "width": 5,
+      "height": 4,
+      "collision": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 3
+      }
+    }
+  ],
+  "props": {
+    "barrel": {
+      "tileId": 0
+    },
+    "crate": {
+      "tileId": 1
+    },
+    "cart": {
+      "tileId": 2
+    },
+    "well": {
+      "tileId": 3
+    },
+    "fenceH": {
+      "tileId": 4
+    },
+    "fenceV": {
+      "tileId": 5
+    },
+    "lamp": {
+      "tileId": 6
+    },
+    "lampFrame2": {
+      "tileId": 7
+    },
+    "torch": {
+      "tileId": 8
+    },
+    "torchFrame2": {
+      "tileId": 9
+    },
+    "campfire": {
+      "tileId": 10
+    },
+    "campfireFrame2": {
+      "tileId": 11
+    },
+    "campfireFrame3": {
+      "tileId": 12
+    },
+    "flowerPatch": {
+      "tileId": 13
+    },
+    "sign": {
+      "tileId": 14
+    },
+    "yardBasket": {
+      "tileId": 15
+    },
+    "marketCrate": {
+      "tileId": 16
+    },
+    "marketAwning": {
+      "tileId": 17
+    },
+    "dockCrate": {
+      "tileId": 18
+    },
+    "ropeCoil": {
+      "tileId": 19
+    },
+    "hayBale": {
+      "tileId": 20
+    },
+    "trough": {
+      "tileId": 21
+    },
+    "anvil": {
+      "tileId": 22
+    },
+    "woodPile": {
+      "tileId": 23
+    },
+    "chimneySmoke": {
+      "tileId": 24
+    },
+    "chimneySmoke2": {
+      "tileId": 25
+    },
+    "chimneySmoke3": {
+      "tileId": 26
+    },
+    "smallBench": {
+      "tileId": 27
+    },
+    "dockPost": {
+      "tileId": 28
+    },
+    "sacks": {
+      "tileId": 29
+    },
+    "flowerTub": {
+      "tileId": 30
+    },
+    "trainingDummy": {
+      "tileId": 31
+    },
+    "boat": {
+      "tileId": 32
+    },
+    "dockPlanks": {
+      "tileId": 48
+    }
+  }
+}

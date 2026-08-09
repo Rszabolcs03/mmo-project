@@ -1,9 +1,9 @@
 import { deflateSync } from 'node:zlib';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const OUT_DIR = join(process.cwd(), 'public', 'assets', 'characters');
-const LAYER_DIRS = ['base', 'hair', 'beard', 'outfits', 'weapons', 'capes'];
 const FRAME = 48;
 const COLS = 6;
 const ROWS = 4;
@@ -667,8 +667,9 @@ function drawSheet(drawLayerFrame) {
   return buffer;
 }
 
-function writeLayerSheet(folder, id, drawLayerFrame) {
-  const outputPath = join(OUT_DIR, folder, `${id}.png`);
+function writeLayerSheet(pathSegments, drawLayerFrame) {
+  const outputPath = join(OUT_DIR, ...pathSegments);
+  mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, encodePng(drawSheet(drawLayerFrame)));
   console.log(`Generated ${outputPath}`);
 }
@@ -704,14 +705,14 @@ function drawBaseLayerFrame(buffer, race, gender, row, col) {
   const y = oy + bounce;
   const slim = gender === 'female';
 
-  rect(buffer, ox + 12, oy + 42, 25, 3, SHADOW, 46);
-  rect(buffer, ox + 16, oy + 37 + bounce + step, 7, 5, DEEP_OUTLINE);
-  rect(buffer, ox + 25, oy + 37 + bounce - step, 7, 5, DEEP_OUTLINE);
-  rect(buffer, ox + 18, oy + 37 + bounce + step, 3, 3, race.shade);
-  rect(buffer, ox + 27, oy + 37 + bounce - step, 3, 3, race.shade);
+  rect(buffer, ox + (slim ? 13 : 12), oy + 42, slim ? 23 : 25, 3, SHADOW, 46);
+  rect(buffer, ox + (slim ? 17 : 16), oy + 37 + bounce + step, slim ? 6 : 7, 5, DEEP_OUTLINE);
+  rect(buffer, ox + 25, oy + 37 + bounce - step, slim ? 6 : 7, 5, DEEP_OUTLINE);
+  rect(buffer, ox + (slim ? 19 : 18), oy + 37 + bounce + step, 3, 3, race.shade);
+  rect(buffer, ox + 27, oy + 37 + bounce - step, slim ? 2 : 3, 3, race.shade);
 
   if (back) {
-    rect(buffer, ox + 15, y + 7, 18, 16, OUTLINE);
+    rect(buffer, ox + (slim ? 16 : 15), y + 7, slim ? 16 : 18, 16, OUTLINE);
     rect(buffer, ox + 18, y + 10, 12, 11, race.skin);
     return;
   }
@@ -722,10 +723,10 @@ function drawBaseLayerFrame(buffer, race, gender, row, col) {
       rect(buffer, ox + hx + (side > 0 ? 15 : -2), y + 14, 4, 4, OUTLINE);
       rect(buffer, ox + hx + (side > 0 ? 16 : -1), y + 15, 2, 2, race.ear);
     }
-    rect(buffer, ox + hx, y + 7, slim ? 16 : 17, 16, OUTLINE);
-    rect(buffer, ox + hx + 3, y + 10, 11, 10, race.skin);
-    rect(buffer, ox + hx + 3, y + 19, 10, 2, race.shade);
-    rect(buffer, ox + hx + (side > 0 ? 12 : 4), y + 14, 3, 3, EYE);
+    rect(buffer, ox + hx, y + 7, slim ? 15 : 17, 16, OUTLINE);
+    rect(buffer, ox + hx + 3, y + 10, slim ? 10 : 11, 10, race.skin);
+    rect(buffer, ox + hx + 3, y + 19, slim ? 9 : 10, 2, race.shade);
+    rect(buffer, ox + hx + (side > 0 ? 11 : 4), y + 14, slim ? 2 : 3, 3, EYE);
     return;
   }
 
@@ -735,11 +736,11 @@ function drawBaseLayerFrame(buffer, race, gender, row, col) {
     rect(buffer, ox + 12, y + 15, 2, 2, race.ear);
     rect(buffer, ox + 34, y + 15, 2, 2, race.ear);
   }
-  rect(buffer, ox + 14, y + 7, 20, 17, OUTLINE);
+  rect(buffer, ox + (slim ? 15 : 14), y + 7, slim ? 18 : 20, slim ? 16 : 17, OUTLINE);
   rect(buffer, ox + 17, y + 10, 14, 11, race.skin);
-  rect(buffer, ox + 17, y + 19, 14, 3, race.shade);
-  rect(buffer, ox + 18, y + 14, 3, 3, EYE);
-  rect(buffer, ox + 27, y + 14, 3, 3, EYE);
+  rect(buffer, ox + (slim ? 18 : 17), y + 19, slim ? 12 : 14, 3, race.shade);
+  rect(buffer, ox + (slim ? 19 : 18), y + 14, slim ? 2 : 3, 3, EYE);
+  rect(buffer, ox + 27, y + 14, slim ? 2 : 3, 3, EYE);
 }
 
 function drawHairLayerFrame(buffer, style, row, col) {
@@ -896,54 +897,24 @@ function encodePng(rgba) {
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
-for (const dir of LAYER_DIRS) {
-  mkdirSync(join(OUT_DIR, dir), { recursive: true });
-}
-
-for (const [classId, classConfig] of Object.entries(CLASSES)) {
-  for (const gender of ['default', ...GENDERS]) {
-    const buffer = createCanvas();
-    const genderConfig = {
-      ...classConfig,
-      gender: gender === 'default' ? 'male' : gender,
-      femaleHair: classId === 'priest'
-        ? '#d8b4fe'
-        : classId === 'paladin'
-          ? '#facc15'
-          : classId === 'mage'
-            ? '#2563eb'
-            : classId === 'hunter'
-              ? '#6b4f2a'
-              : classConfig.hair,
-    };
-    for (let row = 0; row < ROWS; row += 1) {
-      for (let col = 0; col < COLS; col += 1) {
-        drawFrame(buffer, genderConfig, row, col);
-      }
-    }
-    const suffix = gender === 'default' ? '' : `-${gender}`;
-    const outputPath = join(OUT_DIR, `${classId}${suffix}.png`);
-    writeFileSync(outputPath, encodePng(buffer));
-    console.log(`Generated ${outputPath}`);
-  }
-}
 
 for (const [raceId, raceConfig] of Object.entries(RACES)) {
+  if (raceId === 'human') continue;
   for (const gender of GENDERS) {
-    writeLayerSheet('base', `${raceId}-${gender}`, (buffer, row, col) => {
+    writeLayerSheet(['bases', raceId, `${gender}.png`], (buffer, row, col) => {
       drawBaseLayerFrame(buffer, raceConfig, gender, row, col);
     });
   }
 }
 
 for (const style of Object.keys(HAIR_STYLES)) {
-  writeLayerSheet('hair', style, (buffer, row, col) => {
+  writeLayerSheet(['cosmetics', 'hair', `${style}.png`], (buffer, row, col) => {
     drawHairLayerFrame(buffer, style, row, col);
   });
 }
 
 for (const style of Object.keys(BEARD_STYLES)) {
-  writeLayerSheet('beard', style, (buffer, row, col) => {
+  writeLayerSheet(['cosmetics', 'beards', `${style}.png`], (buffer, row, col) => {
     drawBeardLayerFrame(buffer, style, row, col);
   });
 }
@@ -951,21 +922,25 @@ for (const style of Object.keys(BEARD_STYLES)) {
 for (const [classId, classConfig] of Object.entries(CLASSES)) {
   for (const [variantId, variant] of Object.entries(OUTFIT_VARIANTS)) {
     const cfg = mixConfig(classConfig, variant);
-    writeLayerSheet('outfits', `${classId}-${variantId}`, (buffer, row, col) => {
+    writeLayerSheet(['classes', classId, 'shared', 'outfits', `${variantId}.png`], (buffer, row, col) => {
       drawOutfitLayerFrame(buffer, cfg, row, col);
     });
   }
 
   for (const [variantId, variant] of Object.entries(WEAPON_VARIANTS)) {
     const cfg = mixConfig(classConfig, variant);
-    writeLayerSheet('weapons', `${classId}-${variantId}`, (buffer, row, col) => {
+    writeLayerSheet(['classes', classId, 'shared', 'weapons', `${variantId}.png`], (buffer, row, col) => {
       drawWeapon(buffer, col * FRAME, row * FRAME, ['down', 'left', 'right', 'up'][row], col, cfg);
     });
   }
 }
 
 for (const style of ['none', 'short', 'long']) {
-  writeLayerSheet('capes', style, (buffer, row, col) => {
+  writeLayerSheet(['cosmetics', 'capes', `${style}.png`], (buffer, row, col) => {
     drawCapeLayerFrame(buffer, style, row, col);
   });
 }
+
+execFileSync(process.execPath, [
+  join(process.cwd(), 'scripts', 'generate-human-fresh-assets.mjs'),
+], { stdio: 'inherit' });

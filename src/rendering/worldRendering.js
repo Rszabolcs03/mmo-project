@@ -10,13 +10,100 @@ import {
 } from '../game/world';
 import { PLAYER, ENEMY, SHOPKEEPER } from '../game/gameData';
 
-import { hasTileData } from '../game/mapAssets';
+import { hasTileData, resolveAssetUrl } from '../game/mapAssets';
+import { getLampLightState, getLightingForPhase } from '../systems/dayNightSystem';
 import { getNpcDisplayName, getNpcRole, getTamziaNpcPalette } from '../game/worldEntities';
 import { getAbilityVisualImage } from './abilityRendering';
 import { pixelRect } from './primitives';
 
-function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWidth, viewHeight, offsetX = 0, offsetY = 0) {
+const STREET_LAMP_TILE_WIDTH = 32;
+const STREET_LAMP_TILE_HEIGHT = 64;
+const STREET_LAMP_HEAD_OFFSET_Y = 42;
+const STREET_LAMP_SPRITES = {
+  standard: {
+    image: null,
+    src: 'assets/tilesets/tamzia_lights_v1.png',
+    tileWidth: STREET_LAMP_TILE_WIDTH,
+    tileHeight: STREET_LAMP_TILE_HEIGHT,
+    headOffsetY: STREET_LAMP_HEAD_OFFSET_Y,
+  },
+  big: {
+    image: null,
+    src: 'assets/tilesets/tamzia_lights_large_v1.png',
+    tileWidth: 64,
+    tileHeight: 128,
+    headOffsetY: 84,
+  },
+};
+const TAMZIA_FOUNTAIN_SPRITE = {
+  image: null,
+  src: 'assets/tilesets/tamzia_fountain_v1.png',
+  version: 'tamzia-fountain-v1',
+  frameWidth: 176,
+  frameHeight: 176,
+  frameCount: 6,
+  frameDuration: 140,
+};
+const TAMZIA_FOUNTAIN_GLOW_BY_PHASE = {
+  day: 0.025,
+  dawn: 0.28,
+  evening: 0.46,
+  night: 1,
+};
+const TILED_GID_MASK = 0x1fffffff;
+
+function normalizeTiledGid(rawGid) {
+  return Number(rawGid ?? 0) & TILED_GID_MASK;
+}
+
+function getTilesetForGid(tilesets = [], gid) {
+  return [...tilesets].reverse().find((candidate) => gid >= candidate.firstgid);
+}
+
+function getRenderTime(now = null) {
+  if (Number.isFinite(now)) return now;
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function getAnimatedTileGid(tileset, gid, now) {
+  const localId = gid - tileset.firstgid;
+  const animation = tileset.animations?.[localId];
+  if (!animation?.frames?.length || !(animation.totalDuration > 0)) return gid;
+  const elapsed = getRenderTime(now) % animation.totalDuration;
+  let frameTime = 0;
+  for (const frame of animation.frames) {
+    frameTime += frame.duration;
+    if (elapsed < frameTime) return tileset.firstgid + frame.tileid;
+  }
+  return tileset.firstgid + animation.frames[animation.frames.length - 1].tileid;
+}
+
+function getTileSourceRect(tileset, gid) {
+  if (!tileset?.image || !tileset.image.complete || !tileset.image.naturalWidth) return null;
+  const columns = Math.max(1, safeNumber(tileset.columns, Math.floor(tileset.image.naturalWidth / tileset.tilewidth)));
+  const localId = gid - tileset.firstgid;
+  const sourceX = (localId % columns) * tileset.tilewidth;
+  const sourceY = Math.floor(localId / columns) * tileset.tileheight;
+  if (
+    sourceX < 0
+    || sourceY < 0
+    || sourceX + tileset.tilewidth > tileset.image.naturalWidth
+    || sourceY + tileset.tileheight > tileset.image.naturalHeight
+  ) {
+    return null;
+  }
+  return {
+    sourceX,
+    sourceY,
+    sourceWidth: tileset.tilewidth,
+    sourceHeight: tileset.tileheight,
+  };
+}
+
+function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWidth, viewHeight, offsetX = 0, offsetY = 0, now = null) {
   if (layer.type !== 'tilelayer' || !hasTileData(layer) || layer.visible === false) return false;
+  const opacity = clamp(safeNumber(layer.opacity, 1), 0, 1);
+  if (opacity <= 0) return false;
 
   const localCameraX = cameraX - offsetX;
   const localCameraY = cameraY - offsetY;
@@ -27,67 +114,149 @@ function drawTiledLayer(context, layer, tilesets, map, cameraX, cameraY, viewWid
   if (startCol > endCol || startRow > endRow) return false;
 
   let drewTile = false;
-  for (let row = startRow; row <= endRow; row += 1) {
-    for (let col = startCol; col <= endCol; col += 1) {
-      const gid = layer.data[row * layer.width + col];
-      if (!gid) continue;
+  context.save();
+  try {
+    context.globalAlpha *= opacity;
+    for (let row = startRow; row <= endRow; row += 1) {
+      for (let col = startCol; col <= endCol; col += 1) {
+        const gid = normalizeTiledGid(layer.data[row * layer.width + col]);
+        if (!gid) continue;
 
-      const tileset = [...tilesets].reverse().find((candidate) => gid >= candidate.firstgid);
-      if (!tileset) continue;
-      if (!tileset.image || !tileset.image.complete || !tileset.image.naturalWidth) continue;
+        const tileset = getTilesetForGid(tilesets, gid);
+        if (!tileset) continue;
+        const sourceRect = getTileSourceRect(tileset, getAnimatedTileGid(tileset, gid, now));
+        if (!sourceRect) continue;
+        const targetX = offsetX + col * map.tilewidth;
+        const targetY = offsetY + row * map.tileheight;
 
-      const localId = gid - tileset.firstgid;
-      const sourceX = (localId % tileset.columns) * tileset.tilewidth;
-      const sourceY = Math.floor(localId / tileset.columns) * tileset.tileheight;
-      if (
-        sourceX < 0
-        || sourceY < 0
-        || sourceX + tileset.tilewidth > tileset.image.naturalWidth
-        || sourceY + tileset.tileheight > tileset.image.naturalHeight
-      ) {
-        continue;
+        if (layer.name === 'Ground') {
+          context.fillStyle = gid >= 1300 ? '#7d6b58' : '#89945e';
+          context.fillRect(targetX, targetY, map.tilewidth, map.tileheight);
+        }
+
+        context.drawImage(
+          tileset.image,
+          sourceRect.sourceX,
+          sourceRect.sourceY,
+          sourceRect.sourceWidth,
+          sourceRect.sourceHeight,
+          targetX,
+          targetY,
+          map.tilewidth,
+          map.tileheight,
+        );
+        drewTile = true;
       }
-      const targetX = offsetX + col * map.tilewidth;
-      const targetY = offsetY + row * map.tileheight;
+    }
+  } finally {
+    context.restore();
+  }
+  return drewTile;
+}
 
-      if (layer.name === 'Ground') {
-        context.fillStyle = gid >= 1300 ? '#7d6b58' : '#89945e';
-        context.fillRect(targetX, targetY, map.tilewidth, map.tileheight);
+function drawTiledObjectLayer(context, layer, tilesets, cameraX, cameraY, viewWidth, viewHeight, offsetX = 0, offsetY = 0, now = null) {
+  if (layer.type !== 'objectgroup' || layer.visible === false || !Array.isArray(layer.objects)) return false;
+
+  const opacity = clamp(safeNumber(layer.opacity, 1), 0, 1);
+  if (opacity <= 0) return false;
+
+  let drewObject = false;
+  context.save();
+  try {
+    context.globalAlpha *= opacity;
+    context.imageSmoothingEnabled = false;
+    layer.objects.forEach((object) => {
+      const gid = normalizeTiledGid(object?.gid);
+      if (!gid) return;
+
+      const tileset = getTilesetForGid(tilesets, gid);
+      if (!tileset) return;
+      const sourceRect = getTileSourceRect(tileset, getAnimatedTileGid(tileset, gid, now));
+      if (!sourceRect) return;
+
+      const targetWidth = Math.max(1, safeNumber(object.width, tileset.tilewidth));
+      const targetHeight = Math.max(1, safeNumber(object.height, tileset.tileheight));
+      const targetX = offsetX + safeNumber(object.x, 0);
+      const targetY = offsetY + safeNumber(object.y, 0) - targetHeight;
+
+      if (
+        targetX + targetWidth < cameraX
+        || targetX > cameraX + viewWidth
+        || targetY + targetHeight < cameraY
+        || targetY > cameraY + viewHeight
+      ) {
+        return;
       }
 
       context.drawImage(
         tileset.image,
-        sourceX,
-        sourceY,
-        tileset.tilewidth,
-        tileset.tileheight,
-        targetX,
-        targetY,
-        map.tilewidth,
-        map.tileheight,
+        sourceRect.sourceX,
+        sourceRect.sourceY,
+        sourceRect.sourceWidth,
+        sourceRect.sourceHeight,
+        Math.round(targetX),
+        Math.round(targetY),
+        targetWidth,
+        targetHeight,
       );
-      drewTile = true;
-    }
+      drewObject = true;
+    });
+  } finally {
+    context.restore();
   }
-  return drewTile;
+  return drewObject;
 }
 
 function drawTiledWorld(context, tiled, cameraX, cameraY, viewWidth, viewHeight, onLayerError = null, options = {}) {
   if (!tiled) return 0;
   let drawnLayers = 0;
   const activeInteriorZone = options.activeInteriorZone ?? null;
-  const isInteriorLayer = (layer) => layer?.name === 'CityInteriors';
-  const shouldDrawLayer = (layer) => !isInteriorLayer(layer) || Boolean(activeInteriorZone);
-  const shouldFadeLayer = (layer) => options.fadeBuildings && ['Buildings', 'CityRoofs'].includes(layer?.name);
+  const activeCaveEntranceZones = options.activeCaveEntranceZones ?? [];
+  const renderTime = getRenderTime(options.now);
+  const normalizeLayerName = (layer) => String(layer?.name ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const isInteriorLayer = (layer) => {
+    const name = normalizeLayerName(layer);
+    return [
+      'cityinteriors',
+      'city_interiors',
+      'caveinteriors',
+      'cave_interiors',
+      'interiordetails',
+      'interior_details',
+      'cavedetails',
+      'cave_details',
+      'caveprops',
+      'cave_props',
+      'interiorprops',
+      'interior_props',
+    ].includes(name);
+  };
+  const isCaveRoofLayer = (layer) => ['caveroofs', 'cave_roofs'].includes(normalizeLayerName(layer));
+  const isCaveEntranceLayer = (layer) => ['caveentrances', 'cave_entrances'].includes(normalizeLayerName(layer));
+  const drawInteriorOnly = Boolean(options.interiorOnly && activeInteriorZone);
+  const shouldDrawLayer = (layer) => {
+    if (isCaveRoofLayer(layer)) return false;
+    if (isCaveEntranceLayer(layer)) return Boolean(activeInteriorZone);
+    if (drawInteriorOnly) return isInteriorLayer(layer) || isCaveEntranceLayer(layer);
+    return !isInteriorLayer(layer) || Boolean(activeInteriorZone);
+  };
+  const isCollisionLayer = (layer) => normalizeLayerName(layer).includes('collision');
+  const getRoofLayerName = () => String(activeInteriorZone?.props?.roofLayer ?? '').trim();
+  const shouldFadeLayer = (layer) => {
+    if (!options.fadeBuildings || !activeInteriorZone) return false;
+    const roofLayerName = getRoofLayerName();
+    if (roofLayerName && layer?.name === roofLayerName) return true;
+    return ['Buildings', 'CityRoofs', 'CaveRoofs'].includes(layer?.name);
+  };
   const clipInteriorLayer = (layer) => {
-    if (!isInteriorLayer(layer) || !activeInteriorZone) return true;
-    const x = safeNumber(activeInteriorZone.x, 0);
-    const y = safeNumber(activeInteriorZone.y, 0);
-    const width = safeNumber(activeInteriorZone.width, 0);
-    const height = safeNumber(activeInteriorZone.height, 0);
-    if (width <= 0 || height <= 0) return false;
+    if ((!isInteriorLayer(layer) && !isCaveEntranceLayer(layer)) || !activeInteriorZone) return true;
     context.beginPath();
-    context.rect(x, y, width, height);
+    const hasInteriorPath = addObjectPath(context, activeInteriorZone);
+    activeCaveEntranceZones.forEach((zone) => {
+      addObjectPath(context, zone);
+      addCaveConnectorPath(context, getCaveConnector(activeInteriorZone, zone));
+    });
+    if (!hasInteriorPath) return false;
     context.clip();
     return true;
   };
@@ -104,40 +273,458 @@ function drawTiledWorld(context, tiled, cameraX, cameraY, viewWidth, viewHeight,
       context.restore();
     }
   };
+  const drawMapLayer = (layer, tilesets, map, offsetX = 0, offsetY = 0) => {
+    if (isCollisionLayer(layer)) return false;
+    const drawableLayer = (isInteriorLayer(layer) || isCaveEntranceLayer(layer)) ? { ...layer, visible: true } : layer;
+    if (drawableLayer.type === 'tilelayer') {
+      return drawTiledLayer(context, drawableLayer, tilesets, map, cameraX, cameraY, viewWidth, viewHeight, offsetX, offsetY, renderTime);
+    }
+    if (drawableLayer.type === 'objectgroup') {
+      return drawTiledObjectLayer(context, drawableLayer, tilesets, cameraX, cameraY, viewWidth, viewHeight, offsetX, offsetY, renderTime);
+    }
+    return false;
+  };
   const drawRegionLayer = (region, layer) => {
     drawVisibleLayer(layer, () => {
-      return drawTiledLayer(
-        context,
-        layer,
-        region.tilesets,
-        region.map,
-        cameraX,
-        cameraY,
-        viewWidth,
-        viewHeight,
-        region.offsetX,
-        region.offsetY,
-      );
+      return drawMapLayer(layer, region.tilesets, region.map, region.offsetX, region.offsetY);
     });
   };
 
   if (tiled.isRegionWorld) {
     tiled.loadedRegions.forEach((region) => {
       region.map.layers
-        .filter((layer) => layer.type === 'tilelayer' && layer.name !== 'Collision')
         .forEach((layer) => drawRegionLayer(region, layer));
     });
     return drawnLayers;
   }
 
   tiled.map?.layers
-    ?.filter((layer) => layer.type === 'tilelayer' && layer.name !== 'Collision')
     .forEach((layer) => {
       drawVisibleLayer(layer, () => {
-        return drawTiledLayer(context, layer, tiled.tilesets, tiled.map, cameraX, cameraY, viewWidth, viewHeight);
+        return drawMapLayer(layer, tiled.tilesets, tiled.map);
       });
     });
   return drawnLayers;
+}
+
+function getStreetLampSpriteImage(config = STREET_LAMP_SPRITES.standard) {
+  if (typeof Image === 'undefined') return null;
+  if (!config.image) {
+    config.image = new Image();
+    config.image.decoding = 'async';
+    config.image.src = resolveAssetUrl(config.src);
+  }
+  return config.image.complete && config.image.naturalWidth
+    ? config.image
+    : null;
+}
+
+function normalizeMarkerLabel(marker) {
+  return `${marker?.type ?? ''} ${marker?.props?.type ?? ''} ${marker?.name ?? ''}`.toLowerCase();
+}
+
+function isStreetLampMarker(marker) {
+  const label = normalizeMarkerLabel(marker);
+  return label.includes('street_lamp') || label.includes('street-lamp') || label.includes('street lamp');
+}
+
+function isBigStreetLampMarker(marker) {
+  const label = normalizeMarkerLabel(marker);
+  return label.includes('big_street_lamp') || label.includes('big-street-lamp') || label.includes('big street lamp');
+}
+
+function isCampFireMarker(marker) {
+  const label = normalizeMarkerLabel(marker);
+  return label.includes('camp_fire') || label.includes('camp-fire') || label.includes('camp fire');
+}
+
+function isStandaloneLightMarker(marker) {
+  if (isStreetLampMarker(marker) || isCampFireMarker(marker)) return false;
+  const label = normalizeMarkerLabel(marker);
+  return (
+    label.includes('light')
+    || label.includes('glow')
+    || Number.isFinite(Number(marker?.radius ?? marker?.props?.radius))
+    || Number.isFinite(Number(marker?.intensity ?? marker?.props?.intensity))
+  );
+}
+
+function isLightSourceMarker(marker) {
+  return isStreetLampMarker(marker) || isCampFireMarker(marker) || isStandaloneLightMarker(marker);
+}
+
+function getStreetLampSpriteConfig(marker) {
+  return isBigStreetLampMarker(marker) ? STREET_LAMP_SPRITES.big : STREET_LAMP_SPRITES.standard;
+}
+
+function parseHexColor(value, fallback = [255, 211, 122]) {
+  const clean = String(value ?? '').trim().replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return fallback;
+  return [
+    Number.parseInt(clean.slice(0, 2), 16),
+    Number.parseInt(clean.slice(2, 4), 16),
+    Number.parseInt(clean.slice(4, 6), 16),
+  ];
+}
+
+function rgbaFromRgb(rgb, alpha) {
+  const [red, green, blue] = rgb;
+  return `rgba(${red}, ${green}, ${blue}, ${clamp(alpha, 0, 1).toFixed(3)})`;
+}
+
+function getStreetLampDrawPosition(marker) {
+  const config = getStreetLampSpriteConfig(marker);
+  const markerWidth = safeNumber(marker?.width, 0);
+  const markerHeight = safeNumber(marker?.height, 0);
+  const isTileObject = Number(marker?.gid ?? 0) > 0;
+  const spriteWidth = isTileObject && markerWidth > 0 ? markerWidth : config.tileWidth;
+  const spriteHeight = isTileObject && markerHeight > 0 ? markerHeight : config.tileHeight;
+  const headOffsetY = config.headOffsetY * (spriteHeight / config.tileHeight);
+  const usesPlacementBounds = !isTileObject && markerWidth >= 48 && markerHeight >= config.tileHeight + 32;
+  const headX = usesPlacementBounds
+    ? safeNumber(marker?.x, safeNumber(marker?.anchorX, 0))
+    : safeNumber(marker?.anchorX, safeNumber(marker?.x, 0));
+  const headY = usesPlacementBounds
+    ? safeNumber(marker?.y, safeNumber(marker?.anchorY, 0))
+    : safeNumber(marker?.anchorY, safeNumber(marker?.y, 0)) - headOffsetY;
+  return {
+    anchorX: headX,
+    anchorY: headY + headOffsetY,
+    headX,
+    headY,
+    spriteWidth,
+    spriteHeight,
+    spriteConfig: config,
+  };
+}
+
+function getCampFireDrawPosition(marker) {
+  const markerWidth = Math.max(1, safeNumber(marker?.width, 128));
+  const markerHeight = Math.max(1, safeNumber(marker?.height, 128));
+  const anchorX = safeNumber(marker?.x, safeNumber(marker?.anchorX, 0));
+  const anchorY = safeNumber(marker?.y, safeNumber(marker?.anchorY, 0) - markerHeight / 2);
+  return {
+    anchorX,
+    anchorY,
+    headX: anchorX,
+    headY: anchorY,
+    spriteWidth: markerWidth,
+    spriteHeight: markerHeight,
+  };
+}
+
+function getPointLightDrawPosition(marker) {
+  const x = safeNumber(marker?.anchorX, safeNumber(marker?.x, 0));
+  const y = safeNumber(marker?.anchorY, safeNumber(marker?.y, 0));
+  return {
+    anchorX: x,
+    anchorY: y,
+    headX: x,
+    headY: y,
+    spriteWidth: 0,
+    spriteHeight: 0,
+  };
+}
+
+function drawStreetLampGlow(context, marker, lightState, position, options = {}) {
+  if (!lightState.active) return;
+  const radius = Math.max(48, safeNumber(lightState.radius ?? marker?.radius, 128)) * Math.max(0.1, safeNumber(options.radiusMultiplier, 1));
+  const intensity = clamp(lightState.intensity * Math.max(0, safeNumber(options.intensityMultiplier, 1)), 0, 1.4);
+  const alphaMultiplier = Math.max(0, safeNumber(options.alphaMultiplier, 1));
+  const rgb = parseHexColor(lightState.color ?? marker?.color);
+
+  context.save();
+  context.globalCompositeOperation = 'lighter';
+  const glow = context.createRadialGradient(
+    position.headX,
+    position.headY,
+    4,
+    position.headX,
+    position.headY,
+    radius,
+  );
+  glow.addColorStop(0, rgbaFromRgb(rgb, 0.34 * intensity * alphaMultiplier));
+  glow.addColorStop(0.24, rgbaFromRgb(rgb, 0.16 * intensity * alphaMultiplier));
+  glow.addColorStop(0.58, rgbaFromRgb(rgb, 0.055 * intensity * alphaMultiplier));
+  glow.addColorStop(1, rgbaFromRgb(rgb, 0));
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(position.headX, position.headY, radius, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawStreetLampFallback(context, position, active, intensity) {
+  const glowAlpha = clamp(intensity, 0, 1);
+  const scale = Math.max(0.5, Math.min(4, safeNumber(position.spriteHeight, STREET_LAMP_TILE_HEIGHT) / STREET_LAMP_TILE_HEIGHT));
+  context.save();
+  context.translate(Math.round(position.anchorX), Math.round(position.anchorY));
+  context.scale(scale, scale);
+  pixelRect(context, -9, -5, 18, 4, 'rgba(0, 0, 0, 0.2)');
+  pixelRect(context, -5, -8, 10, 5, '#332116');
+  pixelRect(context, -7, -4, 14, 3, '#1e1712');
+  pixelRect(context, -2, -40, 4, 34, '#2b1d15');
+  pixelRect(context, -1, -40, 2, 34, '#6b4527');
+  pixelRect(context, -4, -13, 8, 3, '#1b130f');
+  pixelRect(context, -8, -49, 16, 4, '#1d1510');
+  pixelRect(context, -6, -53, 12, 4, '#4a2f1e');
+  pixelRect(context, -4, -56, 8, 3, '#231811');
+  pixelRect(context, -9, -45, 18, 3, '#2b1d15');
+  pixelRect(context, -7, -42, 14, 14, '#201712');
+  pixelRect(context, -5, -41, 10, 11, active ? `rgba(255, 211, 111, ${0.85 * glowAlpha})` : '#3d4a4d');
+  pixelRect(context, -3, -40, 6, 9, active ? `rgba(255, 240, 166, ${0.9 * glowAlpha})` : '#263238');
+  pixelRect(context, -6, -40, 2, 10, '#2b1d15');
+  pixelRect(context, 4, -40, 2, 10, '#2b1d15');
+  pixelRect(context, -7, -30, 14, 3, '#1b130f');
+  pixelRect(context, -4, -27, 8, 3, '#4a2f1e');
+  context.restore();
+}
+
+function drawStreetLampSprite(context, marker, lightState, position) {
+  const active = lightState.active && lightState.intensity > 0.08;
+  const config = position.spriteConfig ?? getStreetLampSpriteConfig(marker);
+  const image = getStreetLampSpriteImage(config);
+  if (!image) {
+    drawStreetLampFallback(context, position, active, lightState.intensity);
+    return;
+  }
+
+  const frame = active ? 1 : 0;
+  const targetWidth = Math.max(1, safeNumber(position.spriteWidth, config.tileWidth));
+  const targetHeight = Math.max(1, safeNumber(position.spriteHeight, config.tileHeight));
+  context.drawImage(
+    image,
+    frame * config.tileWidth,
+    0,
+    config.tileWidth,
+    config.tileHeight,
+    Math.round(position.anchorX - targetWidth / 2),
+    Math.round(position.anchorY - targetHeight),
+    targetWidth,
+    targetHeight,
+  );
+}
+
+function drawStreetLamps(context, lightMarkers = [], cameraX = 0, cameraY = 0, viewWidth = 0, viewHeight = 0, options = {}) {
+  const glowOnly = Boolean(options.glowOnly);
+  const phaseFilter = typeof options.phaseFilter === 'string' ? options.phaseFilter : null;
+  const lightSources = lightMarkers
+    .filter((marker) => marker && isLightSourceMarker(marker))
+    .map((marker) => {
+      const lightState = getLampLightState(marker);
+      const campFire = isCampFireMarker(marker);
+      const streetLamp = isStreetLampMarker(marker);
+      const position = campFire
+        ? getCampFireDrawPosition(marker)
+        : streetLamp
+          ? getStreetLampDrawPosition(marker)
+          : getPointLightDrawPosition(marker);
+      const radius = Math.max(48, safeNumber(lightState.radius ?? marker.radius, 128));
+      return { marker, lightState, position, radius, campFire, streetLamp };
+    })
+    .filter(({ position, radius }) => (
+      position.anchorX + radius >= cameraX - 32
+      && position.anchorX - radius <= cameraX + viewWidth + 32
+      && position.anchorY + radius >= cameraY - 64
+      && position.anchorY - radius <= cameraY + viewHeight + 64
+    ));
+
+  lightSources.forEach(({ marker, lightState, position }) => {
+    if (phaseFilter && lightState.phase !== phaseFilter) return;
+    drawStreetLampGlow(context, marker, lightState, position, options);
+  });
+  if (glowOnly) return;
+  lightSources.forEach(({ marker, lightState, position, campFire, streetLamp }) => {
+    if (campFire || !streetLamp) return;
+    if (Number(marker?.gid ?? 0) > 0 && !lightState.active) return;
+    drawStreetLampSprite(context, marker, lightState, position);
+  });
+}
+
+function getTamziaFountainSpriteImage() {
+  if (typeof Image === 'undefined') return null;
+  if (!TAMZIA_FOUNTAIN_SPRITE.image) {
+    TAMZIA_FOUNTAIN_SPRITE.image = new Image();
+    TAMZIA_FOUNTAIN_SPRITE.image.decoding = 'async';
+    TAMZIA_FOUNTAIN_SPRITE.image.src = `${resolveAssetUrl(TAMZIA_FOUNTAIN_SPRITE.src)}?v=${TAMZIA_FOUNTAIN_SPRITE.version}`;
+  }
+  return TAMZIA_FOUNTAIN_SPRITE.image.complete && TAMZIA_FOUNTAIN_SPRITE.image.naturalWidth
+    ? TAMZIA_FOUNTAIN_SPRITE.image
+    : null;
+}
+
+function isTamziaFountainProp(prop) {
+  const label = [
+    prop?.props?.type,
+    prop?.props?.displayName,
+    prop?.type,
+    prop?.name,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return label.includes('tamzia') && label.includes('fountain');
+}
+
+function getTamziaFountainBounds(prop) {
+  const width = Math.max(96, safeNumber(prop?.width, 352));
+  const height = Math.max(96, safeNumber(prop?.height, width));
+  const x = safeNumber(prop?.x, 0);
+  const sourceY = safeNumber(prop?.y, 0);
+  const isTileObject = normalizeTiledGid(prop?.gid) > 0;
+  const y = isTileObject ? sourceY - height : sourceY;
+  return {
+    x,
+    y,
+    width,
+    height,
+    centerX: x + width / 2,
+    centerY: y + height / 2,
+  };
+}
+
+function isBoundsInView(bounds, cameraX, cameraY, viewWidth, viewHeight, padding = 96) {
+  return (
+    bounds.x + bounds.width >= cameraX - padding
+    && bounds.x <= cameraX + viewWidth + padding
+    && bounds.y + bounds.height >= cameraY - padding
+    && bounds.y <= cameraY + viewHeight + padding
+  );
+}
+
+function getTamziaFountainGlowIntensity(lighting, fountain, now, options = {}) {
+  const phase = lighting?.phase ?? getLightingForPhase().phase;
+  const base = TAMZIA_FOUNTAIN_GLOW_BY_PHASE[phase] ?? 0;
+  const pulse = 0.88 + Math.sin(now / 620 + safeNumber(fountain?.x, 0) * 0.003) * 0.12;
+  return clamp(base * pulse * Math.max(0, safeNumber(options.intensityMultiplier, 1)), 0, 1.25);
+}
+
+function drawTamziaFountainGlow(context, fountain, bounds, lighting, now, options = {}) {
+  const intensity = getTamziaFountainGlowIntensity(lighting, fountain, now, options);
+  if (intensity <= 0.035) return;
+
+  const radiusMultiplier = Math.max(0.1, safeNumber(options.radiusMultiplier, options.postOverlay ? 1.15 : 1));
+  const alphaMultiplier = Math.max(0, safeNumber(options.alphaMultiplier, options.postOverlay ? 1.18 : 0.72));
+  const radius = Math.max(bounds.width, bounds.height) * 0.56 * radiusMultiplier;
+  const waterRadius = Math.max(bounds.width, bounds.height) * 0.28;
+  const glowCenterY = bounds.y + bounds.height * 0.51;
+  const rgb = parseHexColor(fountain?.props?.glowColor ?? fountain?.props?.color ?? '#69f2ff', [105, 242, 255]);
+
+  context.save();
+  context.globalCompositeOperation = 'lighter';
+  const wideGlow = context.createRadialGradient(
+    bounds.centerX,
+    glowCenterY,
+    8,
+    bounds.centerX,
+    glowCenterY,
+    radius,
+  );
+  wideGlow.addColorStop(0, rgbaFromRgb(rgb, 0.25 * intensity * alphaMultiplier));
+  wideGlow.addColorStop(0.22, rgbaFromRgb(rgb, 0.14 * intensity * alphaMultiplier));
+  wideGlow.addColorStop(0.62, rgbaFromRgb(rgb, 0.045 * intensity * alphaMultiplier));
+  wideGlow.addColorStop(1, rgbaFromRgb(rgb, 0));
+  context.fillStyle = wideGlow;
+  context.fillRect(bounds.centerX - radius, glowCenterY - radius, radius * 2, radius * 2);
+
+  const waterGlow = context.createRadialGradient(
+    bounds.centerX,
+    glowCenterY,
+    4,
+    bounds.centerX,
+    glowCenterY,
+    waterRadius,
+  );
+  waterGlow.addColorStop(0, rgbaFromRgb(rgb, 0.36 * intensity * alphaMultiplier));
+  waterGlow.addColorStop(0.5, rgbaFromRgb(rgb, 0.13 * intensity * alphaMultiplier));
+  waterGlow.addColorStop(1, rgbaFromRgb(rgb, 0));
+  context.fillStyle = waterGlow;
+  context.beginPath();
+  context.ellipse(bounds.centerX, glowCenterY, bounds.width * 0.34, bounds.height * 0.22, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawTamziaFountainFallback(context, bounds, now) {
+  const pulse = Math.sin(now / 160) * 4;
+  context.save();
+  context.translate(bounds.centerX, bounds.centerY);
+  context.scale(bounds.width / 352, bounds.height / 352);
+
+  context.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  context.beginPath();
+  context.ellipse(0, 88, 142, 34, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = '#2c2b27';
+  context.beginPath();
+  context.ellipse(0, 4, 142, 104, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#9b9384';
+  context.beginPath();
+  context.ellipse(0, -4, 132, 90, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#11657a';
+  context.beginPath();
+  context.ellipse(0, -5, 96, 58, 0, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = '#bffbff';
+  context.lineWidth = 6;
+  context.beginPath();
+  context.ellipse(0, -5 + pulse * 0.2, 76, 38, 0, 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = '#a69b89';
+  context.fillRect(-14, -76, 28, 60);
+  context.fillStyle = '#e9faff';
+  context.fillRect(-3, -116 + pulse, 6, 36);
+  context.restore();
+}
+
+function drawTamziaFountainSprite(context, fountain, bounds, now) {
+  const image = getTamziaFountainSpriteImage();
+  if (!image) {
+    drawTamziaFountainFallback(context, bounds, now);
+    return;
+  }
+
+  const frame = Math.floor(now / TAMZIA_FOUNTAIN_SPRITE.frameDuration) % TAMZIA_FOUNTAIN_SPRITE.frameCount;
+  context.save();
+  context.imageSmoothingEnabled = false;
+  context.drawImage(
+    image,
+    frame * TAMZIA_FOUNTAIN_SPRITE.frameWidth,
+    0,
+    TAMZIA_FOUNTAIN_SPRITE.frameWidth,
+    TAMZIA_FOUNTAIN_SPRITE.frameHeight,
+    Math.round(bounds.x),
+    Math.round(bounds.y),
+    Math.round(bounds.width),
+    Math.round(bounds.height),
+  );
+  context.restore();
+}
+
+function drawTamziaFountains(context, props = [], cameraX = 0, cameraY = 0, viewWidth = 0, viewHeight = 0, now = performance.now(), options = {}) {
+  const lighting = options.lighting ?? getLightingForPhase();
+  const glowOnly = Boolean(options.glowOnly);
+  const fountains = props
+    .filter((prop) => prop?.visible !== false)
+    .filter(isTamziaFountainProp)
+    .map((prop) => ({ prop, bounds: getTamziaFountainBounds(prop) }))
+    .filter(({ bounds }) => isBoundsInView(bounds, cameraX, cameraY, viewWidth, viewHeight));
+
+  fountains.forEach(({ prop, bounds }) => {
+    if (glowOnly) {
+      drawTamziaFountainGlow(context, prop, bounds, lighting, now, {
+        ...options,
+        alphaMultiplier: safeNumber(options.alphaMultiplier, 1.18),
+        radiusMultiplier: safeNumber(options.radiusMultiplier, 1.15),
+      });
+      return;
+    }
+
+    drawTamziaFountainGlow(context, prop, bounds, lighting, now, options);
+    if (normalizeTiledGid(prop?.gid) <= 0) {
+      drawTamziaFountainSprite(context, prop, bounds, now);
+    }
+  });
 }
 
 function drawTiledZones(context, zones) {
@@ -159,29 +746,308 @@ function drawTiledZones(context, zones) {
   context.restore();
 }
 
-function drawInteriorFocusOverlay(context, zone, worldWidth, worldHeight, now = performance.now()) {
+function addObjectPath(context, object) {
+  const objectX = safeNumber(object?.x, 0);
+  const objectY = safeNumber(object?.y, 0);
+  const polygon = Array.isArray(object?.polygon) ? object.polygon : null;
+  if (polygon?.length >= 3) {
+    polygon.forEach((point, index) => {
+      const x = objectX + safeNumber(point.x, 0);
+      const y = objectY + safeNumber(point.y, 0);
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.closePath();
+    return true;
+  }
+
+  const width = safeNumber(object?.width, 0);
+  const height = safeNumber(object?.height, 0);
+  if (width <= 0 || height <= 0) return false;
+  context.rect(objectX, objectY, width, height);
+  return true;
+}
+
+function getObjectBounds(object) {
+  const objectX = safeNumber(object?.x, 0);
+  const objectY = safeNumber(object?.y, 0);
+  const polygon = Array.isArray(object?.polygon) ? object.polygon : null;
+  if (polygon?.length >= 3) {
+    const points = polygon.map((point) => ({
+      x: objectX + safeNumber(point.x, 0),
+      y: objectY + safeNumber(point.y, 0),
+    }));
+    const minX = Math.min(...points.map((point) => point.x));
+    const maxX = Math.max(...points.map((point) => point.x));
+    const minY = Math.min(...points.map((point) => point.y));
+    const maxY = Math.max(...points.map((point) => point.y));
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+  return {
+    x: objectX,
+    y: objectY,
+    width: Math.max(0, safeNumber(object?.width, 0)),
+    height: Math.max(0, safeNumber(object?.height, 0)),
+  };
+}
+
+function getObjectCenter(object) {
+  const bounds = getObjectBounds(object);
+  return {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  };
+}
+
+function getObjectPolygonPoints(object) {
+  const objectX = safeNumber(object?.x, 0);
+  const objectY = safeNumber(object?.y, 0);
+  return (object?.polygon ?? []).map((point) => ({
+    x: objectX + safeNumber(point.x, 0),
+    y: objectY + safeNumber(point.y, 0),
+  }));
+}
+
+function closestPointOnSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 0.0001) return { ...start };
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0, 1);
+  return {
+    x: start.x + dx * t,
+    y: start.y + dy * t,
+  };
+}
+
+function closestPointOnPolygon(point, polygon) {
+  if (!polygon.length) return null;
+  let closest = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    const candidate = closestPointOnSegment(point, start, end);
+    const dx = candidate.x - point.x;
+    const dy = candidate.y - point.y;
+    const candidateDistance = dx * dx + dy * dy;
+    if (candidateDistance < closestDistance) {
+      closest = candidate;
+      closestDistance = candidateDistance;
+    }
+  }
+  return closest;
+}
+
+function getCaveConnector(caveZone, entranceZone) {
+  if (!caveZone || !entranceZone) return null;
+  const start = getObjectCenter(entranceZone);
+  const cavePolygon = getObjectPolygonPoints(caveZone);
+  const end = closestPointOnPolygon(start, cavePolygon) ?? getObjectCenter(caveZone);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 1) return null;
+  return {
+    start,
+    end,
+    width: clamp(
+      safeNumber(entranceZone?.props?.connectorWidth ?? caveZone?.props?.connectorWidth, 280),
+      96,
+      960,
+    ),
+  };
+}
+
+function addCaveConnectorPath(context, connector) {
+  if (!connector) return false;
+  const dx = connector.end.x - connector.start.x;
+  const dy = connector.end.y - connector.start.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 1) return false;
+  const halfWidth = connector.width / 2;
+  const nx = -dy / length;
+  const ny = dx / length;
+  context.moveTo(connector.start.x + nx * halfWidth, connector.start.y + ny * halfWidth);
+  context.lineTo(connector.end.x + nx * halfWidth, connector.end.y + ny * halfWidth);
+  context.lineTo(connector.end.x - nx * halfWidth, connector.end.y - ny * halfWidth);
+  context.lineTo(connector.start.x - nx * halfWidth, connector.start.y - ny * halfWidth);
+  context.closePath();
+  return true;
+}
+
+function seededCaveNoise(seed) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawCaveStroke(context, points, width, color, alpha = 1) {
+  if (!points.length) return;
+  context.save();
+  context.globalAlpha *= alpha;
+  context.strokeStyle = color;
+  context.lineWidth = width;
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) context.moveTo(point.x, point.y);
+    else context.lineTo(point.x, point.y);
+  });
+  context.stroke();
+  context.restore();
+}
+
+function drawCaveInteriorOverlay(context, caveZone, entranceZones = [], now = performance.now()) {
+  if (!caveZone) return;
+  const bounds = getObjectBounds(caveZone);
+  if (bounds.width <= 0 || bounds.height <= 0) return;
+  const center = {
+    x: bounds.x + bounds.width * 0.5,
+    y: bounds.y + bounds.height * 0.52,
+  };
+  const entranceBounds = getObjectBounds(entranceZones[0] ?? caveZone);
+  const entrance = {
+    x: entranceBounds.x + entranceBounds.width * 0.5,
+    y: entranceBounds.y + entranceBounds.height * 0.5,
+  };
+  const connectors = entranceZones
+    .map((zone) => getCaveConnector(caveZone, zone))
+    .filter(Boolean);
+  const entryPoint = connectors[0]?.end ?? {
+    x: bounds.x + bounds.width * 0.24,
+    y: bounds.y + bounds.height * 0.43,
+  };
+  const far = {
+    x: bounds.x + bounds.width * 0.78,
+    y: bounds.y + bounds.height * 0.58,
+  };
+  const seed = Math.abs(String(caveZone.name ?? caveZone.id ?? 'cave')
+    .split('')
+    .reduce((total, char) => total + char.charCodeAt(0), 0));
+
+  context.save();
+  try {
+    context.beginPath();
+    const hasCavePath = addObjectPath(context, caveZone);
+    entranceZones.forEach((zone) => addObjectPath(context, zone));
+    connectors.forEach((connector) => addCaveConnectorPath(context, connector));
+    if (!hasCavePath) return;
+    context.clip();
+
+    context.fillStyle = '#171714';
+    context.fillRect(bounds.x - 64, bounds.y - 64, bounds.width + 128, bounds.height + 128);
+
+    const vignette = context.createRadialGradient(center.x, center.y, 32, center.x, center.y, Math.max(bounds.width, bounds.height) * 0.72);
+    vignette.addColorStop(0, 'rgba(82, 75, 61, 0.58)');
+    vignette.addColorStop(0.58, 'rgba(47, 45, 39, 0.88)');
+    vignette.addColorStop(1, 'rgba(11, 12, 12, 0.96)');
+    context.fillStyle = vignette;
+    context.fillRect(bounds.x - 64, bounds.y - 64, bounds.width + 128, bounds.height + 128);
+
+    const mainPath = [
+      entrance,
+      entryPoint,
+      center,
+      { x: bounds.x + bounds.width * 0.62, y: bounds.y + bounds.height * 0.38 },
+      far,
+    ];
+    drawCaveStroke(context, mainPath, 260, '#272720', 0.98);
+    drawCaveStroke(context, mainPath, 184, '#454133', 0.92);
+    drawCaveStroke(context, mainPath, 106, '#5c5543', 0.54);
+
+    const branches = [
+      [center, { x: bounds.x + bounds.width * 0.34, y: bounds.y + bounds.height * 0.18 }, { x: bounds.x + bounds.width * 0.18, y: bounds.y + bounds.height * 0.16 }],
+      [center, { x: bounds.x + bounds.width * 0.47, y: bounds.y + bounds.height * 0.74 }, { x: bounds.x + bounds.width * 0.37, y: bounds.y + bounds.height * 0.9 }],
+      [{ x: bounds.x + bounds.width * 0.62, y: bounds.y + bounds.height * 0.38 }, { x: bounds.x + bounds.width * 0.82, y: bounds.y + bounds.height * 0.3 }, { x: bounds.x + bounds.width * 0.92, y: bounds.y + bounds.height * 0.18 }],
+      [{ x: bounds.x + bounds.width * 0.72, y: bounds.y + bounds.height * 0.55 }, { x: bounds.x + bounds.width * 0.62, y: bounds.y + bounds.height * 0.78 }, { x: bounds.x + bounds.width * 0.68, y: bounds.y + bounds.height * 0.93 }],
+    ];
+    branches.forEach((branch, index) => {
+      drawCaveStroke(context, branch, 150 - index * 12, '#25251f', 0.94);
+      drawCaveStroke(context, branch, 88 - index * 7, '#4a4435', 0.72);
+    });
+
+    const shimmer = 0.1 + Math.sin(now / 900) * 0.03;
+    for (let index = 0; index < 90; index += 1) {
+      const x = bounds.x + seededCaveNoise(seed + index * 17) * bounds.width;
+      const y = bounds.y + seededCaveNoise(seed + index * 29) * bounds.height;
+      const size = 2 + Math.floor(seededCaveNoise(seed + index * 41) * 5);
+      const tint = seededCaveNoise(seed + index * 53) > 0.72 ? '128, 116, 84' : '35, 34, 31';
+      context.fillStyle = `rgba(${tint}, ${0.12 + shimmer})`;
+      context.fillRect(Math.round(x), Math.round(y), size, size);
+    }
+  } finally {
+    context.restore();
+  }
+
+  context.save();
+  try {
+    context.strokeStyle = 'rgba(7, 8, 8, 0.82)';
+    context.lineWidth = 16;
+    context.lineJoin = 'round';
+    context.beginPath();
+    if (addObjectPath(context, caveZone)) context.stroke();
+    context.strokeStyle = 'rgba(130, 120, 86, 0.34)';
+    context.lineWidth = 3;
+    context.setLineDash([18, 10]);
+    context.beginPath();
+    if (addObjectPath(context, caveZone)) context.stroke();
+  } finally {
+    context.restore();
+  }
+}
+
+function drawInteriorFocusOverlay(context, zone, worldWidth, worldHeight, now = performance.now(), entranceZones = []) {
   if (!zone) return;
   const x = Number(zone.x ?? 0);
   const y = Number(zone.y ?? 0);
   const width = Number(zone.width ?? 0);
   const height = Number(zone.height ?? 0);
-  if (width <= 0 || height <= 0) return;
+  const zoneKind = String(zone?.props?.type ?? zone?.props?.kind ?? zone?.type ?? zone?.name ?? '').toLowerCase();
+  const zoneInteriorId = String(zone?.props?.interiorId ?? zone?.props?.caveId ?? zone?.name ?? '').toLowerCase();
+  const isCaveFocus = zoneKind.includes('cave') || zoneInteriorId.startsWith('cave_');
 
   const pulse = 0.45 + Math.sin(now / 420) * 0.08;
   context.save();
-  context.fillStyle = 'rgba(4, 8, 13, 0.48)';
-  context.beginPath();
-  context.rect(0, 0, worldWidth, worldHeight);
-  context.rect(x - 18, y - 18, width + 36, height + 36);
-  context.fill('evenodd');
+  try {
+    if (isCaveFocus) {
+      context.beginPath();
+      context.rect(0, 0, worldWidth, worldHeight);
+      const hasCavePath = addObjectPath(context, zone);
+      if (!hasCavePath) return;
+      context.fillStyle = 'rgba(0, 0, 0, 0.96)';
+      context.fill('evenodd');
+      context.strokeStyle = `rgba(139, 233, 253, ${(pulse * 0.24).toFixed(3)})`;
+      context.lineWidth = 2;
+      context.setLineDash([18, 14]);
+      context.beginPath();
+      if (addObjectPath(context, zone)) context.stroke();
+      return;
+    }
 
-  context.fillStyle = 'rgba(246, 241, 223, 0.07)';
-  context.fillRect(x, y, width, height);
-  context.strokeStyle = `rgba(139, 233, 253, ${pulse})`;
-  context.lineWidth = 3;
-  context.setLineDash([12, 7]);
-  context.strokeRect(x - 4, y - 4, width + 8, height + 8);
-  context.restore();
+    context.fillStyle = 'rgba(8, 13, 15, 0.24)';
+    context.beginPath();
+    context.rect(0, 0, worldWidth, worldHeight);
+    let hasFocusPath = false;
+    if (width > 0 && height > 0) {
+      context.rect(x - 18, y - 18, width + 36, height + 36);
+      hasFocusPath = true;
+    } else {
+      hasFocusPath = addObjectPath(context, zone);
+    }
+    if (!hasFocusPath) return;
+    context.fill('evenodd');
+
+    if (width <= 0 || height <= 0) return;
+    context.fillStyle = 'rgba(246, 241, 223, 0.07)';
+    context.fillRect(x, y, width, height);
+    context.strokeStyle = `rgba(139, 233, 253, ${pulse})`;
+    context.lineWidth = 3;
+    context.setLineDash([12, 7]);
+    context.strokeRect(x - 4, y - 4, width + 8, height + 8);
+  } finally {
+    context.restore();
+  }
 }
 
 function getTiledWorldPixelWidth(tiledWorld) {
@@ -239,7 +1105,150 @@ function isTileBlocked(tiledWorld, x, y) {
   return Boolean(collisionLayer.data[row * collisionLayer.width + col]);
 }
 
-function canMoveTo(tiledWorld, x, y, radius) {
+function getLayerProps(layer) {
+  if (layer?.props && typeof layer.props === 'object') return layer.props;
+  if (Array.isArray(layer?.properties)) {
+    return Object.fromEntries(layer.properties.map((property) => [property.name, property.value]));
+  }
+  return {};
+}
+
+function normalizeInteriorCollisionId(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized || ['none', 'null', 'outside', 'overworld'].includes(normalized.toLowerCase())) return null;
+  return normalized;
+}
+
+function isInteriorCollisionLayer(layer) {
+  const name = String(layer?.name ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  const props = getLayerProps(layer);
+  const layerType = String(props.type ?? props.kind ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  return ['interiorcollision', 'interior_collision', 'cavecollision', 'cave_collision', 'cavecollisions', 'cave_collisions'].includes(name)
+    || ['interiorcollision', 'interior_collision', 'cavecollision', 'cave_collision'].includes(layerType)
+    || props.collision === true;
+}
+
+function isInteriorWalkableLayer(layer) {
+  const name = String(layer?.name ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  const props = getLayerProps(layer);
+  const layerType = String(props.type ?? props.kind ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  return ['caveinteriors', 'cave_interiors', 'caveentrances', 'cave_entrances', 'cityinteriors', 'city_interiors', 'interiors', 'interior_floor'].includes(name)
+    || ['caveinterior', 'cave_interior', 'caveentrance', 'cave_entrance', 'cityinterior', 'city_interior', 'interior_floor'].includes(layerType);
+}
+
+function interiorCollisionLayerMatches(layer, activeInteriorId) {
+  const normalizedInteriorId = normalizeInteriorCollisionId(activeInteriorId);
+  if (!normalizedInteriorId || !isInteriorCollisionLayer(layer)) return false;
+  const props = getLayerProps(layer);
+  const layerInteriorId = normalizeInteriorCollisionId(props.interiorId ?? props.caveId ?? props.targetInteriorId);
+  return !layerInteriorId || layerInteriorId === normalizedInteriorId;
+}
+
+function interiorWalkableLayerMatches(layer, activeInteriorId) {
+  const normalizedInteriorId = normalizeInteriorCollisionId(activeInteriorId);
+  if (!normalizedInteriorId || !isInteriorWalkableLayer(layer)) return false;
+  const props = getLayerProps(layer);
+  const layerInteriorId = normalizeInteriorCollisionId(props.interiorId ?? props.caveId ?? props.targetInteriorId);
+  return !layerInteriorId || layerInteriorId === normalizedInteriorId;
+}
+
+function isTileBlockedInLayer(layer, map, localX, localY) {
+  if (!layer?.data || !map) return false;
+  if (localX < 0 || localY < 0 || localX >= map.width * map.tilewidth || localY >= map.height * map.tileheight) return false;
+  const col = Math.floor(localX / map.tilewidth);
+  const row = Math.floor(localY / map.tileheight);
+  return Boolean(layer.data[row * layer.width + col]);
+}
+
+function getRegionAtPoint(tiledWorld, x, y) {
+  const generationId = tiledWorld.worldGenerationId ?? getWorldGenerationIdFromMapId(tiledWorld.mapId);
+  const regionMapId = getWorldV2MapIdFromPoint(x, y, generationId);
+  return tiledWorld.loadedRegionMap?.get(regionMapId) ?? null;
+}
+
+function isInteriorTileBlocked(tiledWorld, x, y, activeInteriorId) {
+  if (!normalizeInteriorCollisionId(activeInteriorId)) return false;
+
+  if (tiledWorld?.isChunkWorld) {
+    const chunkCoords = getWorldV2ChunkCoordsFromPoint(x, y);
+    const chunkId = getWorldV2ChunkId(chunkCoords.chunkX, chunkCoords.chunkY);
+    const chunk = tiledWorld.loadedChunkMap?.get(chunkId);
+    if (!chunk?.map) return false;
+    const localX = x - chunk.offsetX;
+    const localY = y - chunk.offsetY;
+    return chunk.map.layers
+      .filter((layer) => layer.type === 'tilelayer' && interiorCollisionLayerMatches(layer, activeInteriorId))
+      .some((layer) => isTileBlockedInLayer(layer, chunk.map, localX, localY));
+  }
+
+  if (tiledWorld?.isRegionWorld) {
+    const region = getRegionAtPoint(tiledWorld, x, y);
+    if (!region?.map) return false;
+    const localX = x - region.offsetX;
+    const localY = y - region.offsetY;
+    return region.map.layers
+      .filter((layer) => layer.type === 'tilelayer' && interiorCollisionLayerMatches(layer, activeInteriorId))
+      .some((layer) => isTileBlockedInLayer(layer, region.map, localX, localY));
+  }
+
+  const map = tiledWorld?.map;
+  return (map?.layers ?? [])
+    .filter((layer) => layer.type === 'tilelayer' && interiorCollisionLayerMatches(layer, activeInteriorId))
+    .some((layer) => isTileBlockedInLayer(layer, map, x, y));
+}
+
+function isInteriorWalkableTile(tiledWorld, x, y, activeInteriorId) {
+  if (!normalizeInteriorCollisionId(activeInteriorId)) return true;
+
+  if (tiledWorld?.isChunkWorld) {
+    const chunkCoords = getWorldV2ChunkCoordsFromPoint(x, y);
+    const chunkId = getWorldV2ChunkId(chunkCoords.chunkX, chunkCoords.chunkY);
+    const chunk = tiledWorld.loadedChunkMap?.get(chunkId);
+    if (!chunk?.map) return false;
+    const localX = x - chunk.offsetX;
+    const localY = y - chunk.offsetY;
+    return chunk.map.layers
+      .filter((layer) => layer.type === 'tilelayer' && interiorWalkableLayerMatches(layer, activeInteriorId))
+      .some((layer) => isTileBlockedInLayer(layer, chunk.map, localX, localY));
+  }
+
+  if (tiledWorld?.isRegionWorld) {
+    const region = getRegionAtPoint(tiledWorld, x, y);
+    if (!region?.map) return false;
+    const localX = x - region.offsetX;
+    const localY = y - region.offsetY;
+    return region.map.layers
+      .filter((layer) => layer.type === 'tilelayer' && interiorWalkableLayerMatches(layer, activeInteriorId))
+      .some((layer) => isTileBlockedInLayer(layer, region.map, localX, localY));
+  }
+
+  const map = tiledWorld?.map;
+  return (map?.layers ?? [])
+    .filter((layer) => layer.type === 'tilelayer' && interiorWalkableLayerMatches(layer, activeInteriorId))
+    .some((layer) => isTileBlockedInLayer(layer, map, x, y));
+}
+
+function getInteriorCollisionObjects(tiledWorld, activeInteriorId) {
+  if (!normalizeInteriorCollisionId(activeInteriorId)) return [];
+  const getLayerObjects = (map, offsetX = 0, offsetY = 0) => (map?.layers ?? [])
+    .filter((layer) => layer.type === 'objectgroup' && interiorCollisionLayerMatches(layer, activeInteriorId))
+    .flatMap((layer) => (layer.objects ?? []).map((object) => ({
+      ...object,
+      x: (object.x ?? 0) + offsetX,
+      y: (object.y ?? 0) + offsetY,
+    })));
+
+  if (tiledWorld?.isChunkWorld) {
+    return [...(tiledWorld.loadedChunkMap?.values() ?? [])].flatMap((chunk) => getLayerObjects(chunk.map, chunk.offsetX, chunk.offsetY));
+  }
+  if (tiledWorld?.isRegionWorld) {
+    return [...(tiledWorld.loadedRegionMap?.values() ?? [])].flatMap((region) => getLayerObjects(region.map, region.offsetX, region.offsetY));
+  }
+  return getLayerObjects(tiledWorld?.map);
+}
+
+function canMoveTo(tiledWorld, x, y, radius, options = {}) {
+  const activeInteriorId = normalizeInteriorCollisionId(options.activeInteriorId);
   const points = [
     { x, y },
     { x: x - radius, y },
@@ -248,7 +1257,11 @@ function canMoveTo(tiledWorld, x, y, radius) {
     { x, y: y + radius },
   ];
 
-  return points.every((point) => !isTileBlocked(tiledWorld, point.x, point.y));
+  if (!options.ignoreWorldCollision && points.some((point) => isTileBlocked(tiledWorld, point.x, point.y))) return false;
+  if (activeInteriorId && points.some((point) => !isInteriorWalkableTile(tiledWorld, point.x, point.y, activeInteriorId))) return false;
+  if (activeInteriorId && points.some((point) => isInteriorTileBlocked(tiledWorld, point.x, point.y, activeInteriorId))) return false;
+  return !getInteriorCollisionObjects(tiledWorld, activeInteriorId)
+    .some((object) => pointIntersectsCollisionObject(object, x, y, radius));
 }
 
 function findOpenPointNear(tiledWorld, origin, radius = PLAYER.radius) {
@@ -312,8 +1325,8 @@ function pointIntersectsCollisionObject(object, x, y, radius) {
   return Math.hypot(x - closestX, y - closestY) <= radius;
 }
 
-function canEnemyMoveTo(tiledWorld, x, y, radius) {
-  if (!canMoveTo(tiledWorld, x, y, radius)) return false;
+function canEnemyMoveTo(tiledWorld, x, y, radius, options = {}) {
+  if (!canMoveTo(tiledWorld, x, y, radius, options)) return false;
   const collisionObjects = tiledWorld?.map?.layers
     ?.find((layer) => layer.type === 'objectgroup' && layer.name === 'Collision')
     ?.objects ?? [];
@@ -322,22 +1335,25 @@ function canEnemyMoveTo(tiledWorld, x, y, radius) {
 
 function moveEnemyWithCollision(tiledWorld, enemy, nextX, nextY, bounds = null) {
   const radius = enemy.radius ?? ENEMY.radius;
+  const interiorId = normalizeInteriorCollisionId(enemy?.interiorId);
+  const collisionOptions = interiorId ? { activeInteriorId: interiorId, ignoreWorldCollision: true } : {};
   const worldWidth = getTiledWorldPixelWidth(tiledWorld);
   const worldHeight = getTiledWorldPixelHeight(tiledWorld);
-  const minX = bounds ? bounds.x + radius : radius;
-  const maxX = bounds ? bounds.x + bounds.width - radius : worldWidth - radius;
-  const minY = bounds ? bounds.y + radius : radius;
-  const maxY = bounds ? bounds.y + bounds.height - radius : worldHeight - radius;
+  const movementBounds = bounds ?? (interiorId ? enemy.spawnBounds : null);
+  const minX = movementBounds ? movementBounds.x + radius : radius;
+  const maxX = movementBounds ? movementBounds.x + movementBounds.width - radius : worldWidth - radius;
+  const minY = movementBounds ? movementBounds.y + radius : radius;
+  const maxY = movementBounds ? movementBounds.y + movementBounds.height - radius : worldHeight - radius;
   const targetX = clamp(nextX, minX, maxX);
   const targetY = clamp(nextY, minY, maxY);
 
-  if (canEnemyMoveTo(tiledWorld, targetX, targetY, radius)) {
+  if (canEnemyMoveTo(tiledWorld, targetX, targetY, radius, collisionOptions)) {
     return { x: targetX, y: targetY, blocked: false };
   }
-  if (canEnemyMoveTo(tiledWorld, targetX, enemy.y, radius)) {
+  if (canEnemyMoveTo(tiledWorld, targetX, enemy.y, radius, collisionOptions)) {
     return { x: targetX, y: enemy.y, blocked: true };
   }
-  if (canEnemyMoveTo(tiledWorld, enemy.x, targetY, radius)) {
+  if (canEnemyMoveTo(tiledWorld, enemy.x, targetY, radius, collisionOptions)) {
     return { x: enemy.x, y: targetY, blocked: true };
   }
   return { x: enemy.x, y: enemy.y, blocked: true };
@@ -573,8 +1589,12 @@ function drawTamziaNpcAt(context, npc, now = performance.now()) {
 
 export {
   drawTiledLayer,
+  drawTiledObjectLayer,
   drawTiledWorld,
+  drawStreetLamps,
+  drawTamziaFountains,
   drawTiledZones,
+  drawCaveInteriorOverlay,
   drawInteriorFocusOverlay,
   getTiledWorldPixelWidth,
   getTiledWorldPixelHeight,
